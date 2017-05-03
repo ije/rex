@@ -11,19 +11,13 @@ import (
 
 var debugPort = 9000
 
-type Build struct {
-	Time  time.Time
-	Stats string
-	Error error
-}
-
 type App struct {
 	root         string
-	packMode     string
+	packingMode  string
 	debuging     bool
 	debugProcess *os.Process
 	building     bool
-	buildLog     []*Build
+	buildLog     []string
 }
 
 func initApp(root string) (app *App, err error) {
@@ -34,9 +28,9 @@ func initApp(root string) (app *App, err error) {
 	}
 
 	var needNodeJs bool
-	var packMode string
+	var packingMode string
 	if _, err := os.Lstat(path.Join(root, "webpack.config.js")); err == nil || os.IsExist(err) {
-		packMode = "webpack"
+		packingMode = "webpack"
 		needNodeJs = true
 	}
 
@@ -67,7 +61,7 @@ func initApp(root string) (app *App, err error) {
 		}
 	}
 
-	switch packMode {
+	switch packingMode {
 	case "webpack":
 		_, err = exec.LookPath("webpack")
 		if err == nil && config.Debug {
@@ -96,8 +90,8 @@ func initApp(root string) (app *App, err error) {
 	}
 
 	app = &App{
-		root:     root,
-		packMode: packMode,
+		root:        root,
+		packingMode: packingMode,
 	}
 
 	if config.Debug {
@@ -113,11 +107,7 @@ func (app *App) Root() string {
 	return app.root
 }
 
-func (app *App) Building() bool {
-	return app.building
-}
-
-func (app *App) BuildLog() []*Build {
+func (app *App) BuildLog() []string {
 	return app.buildLog
 }
 
@@ -142,7 +132,7 @@ func (app *App) Debug() (err error) {
 		debugPort++
 	}
 
-	switch app.packMode {
+	switch app.packingMode {
 	case "webpack":
 		cmd := exec.Command("webpack-dev-server", "--hot", "--host=127.0.0.1", strf("--port=%d", debugPort))
 		cmd.Env = append(os.Environ(), "NODE_ENV=development")
@@ -174,14 +164,23 @@ func (app *App) Build() (err error) {
 		app.building = false
 	}()
 
-	switch app.packMode {
+	switch app.packingMode {
 	case "webpack":
 		cmd := exec.Command("webpack", "--hide-modules", "--color=false")
 		cmd.Env = append(os.Environ(), "NODE_ENV=production")
 		cmd.Dir = app.root
 		var output []byte
+		var level string
+		var msg string
 		output, err = cmd.CombinedOutput()
-		app.buildLog = append(app.buildLog, &Build{Time: time.Now(), Stats: string(output), Error: err})
+		if err != nil {
+			level = "error"
+			msg = err.Error()
+		} else {
+			level = "info"
+			msg = string(output)
+		}
+		app.buildLog = append(app.buildLog, strf(`%s [%s] %s`, time.Now().Format("2006/01/02 15:04:05"), level, msg))
 	}
 
 	return
