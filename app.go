@@ -122,6 +122,11 @@ func (app *App) BuildLog() []*Build {
 }
 
 func (app *App) Debug() (err error) {
+	if app.debuging {
+		err = errf("app is debuging")
+		return
+	}
+
 	app.debuging = true
 	defer func() {
 		app.debugProcess = nil
@@ -158,7 +163,12 @@ func (app *App) Debug() (err error) {
 	return
 }
 
-func (app *App) Build() {
+func (app *App) Build() (err error) {
+	if app.building {
+		err = errf("app is building")
+		return
+	}
+
 	app.building = true
 	defer func() {
 		app.building = false
@@ -169,7 +179,10 @@ func (app *App) Build() {
 		cmd := exec.Command("webpack", "--hide-modules", "--color=false")
 		cmd.Env = append(os.Environ(), "NODE_ENV=production")
 		cmd.Dir = app.root
-		ouput, err := cmd.CombinedOutput()
-		app.buildLog = append(app.buildLog, &Build{Time: time.Now(), Stats: string(ouput), Error: err})
+		var output []byte
+		output, err = cmd.CombinedOutput()
+		app.buildLog = append(app.buildLog, &Build{Time: time.Now(), Stats: string(output), Error: err})
 	}
+
+	return
 }
