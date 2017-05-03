@@ -113,6 +113,10 @@ func (ctx *Context) LoginedUser() *user.User {
 		return ctx.user
 	}
 
+	if xs.Users == nil {
+		return nil
+	}
+
 	_, err := ctx.Cookie("x-session")
 	if err != nil {
 		if _, err = ctx.Cookie("x-token"); err != nil {

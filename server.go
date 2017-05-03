@@ -28,11 +28,6 @@ func Serve(appRoot string, serverConfig *ServerConfig) {
 		config.Port = 80
 	}
 
-	if xs.Users == nil {
-		fmt.Println("server shutdown: missing Users(user.Manager) of XService")
-		return
-	}
-
 	if xs.Session == nil {
 		xs.Session = session.NewMemorySessionManager(time.Hour / 2)
 	}
