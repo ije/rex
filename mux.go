@@ -87,39 +87,47 @@ func (mux *HttpServerMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		endpoint := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api"), "/")
 		if len(endpoint) == 0 {
-			var a []interface{}
-			for method, handlers := range xapis {
-				var apis []string
-				for endpoint, _ := range handlers {
-					apis = append(apis, strf("%s /api/%s", method, endpoint))
-				}
-				a = append(a, struct {
-					Method string
-					Apis   []string
-				}{method, apis})
-			}
-			ctx.JSON(a)
+			ctx.PlainText(400, "Bad Request")
 			return
 		}
 
 		handlers, ok := xapis[r.Method]
 		if !ok {
-			ctx.End(405)
+			ctx.PlainText(405, "Method Not Allowed")
 			return
 		}
 
 		handler, ok := handlers[endpoint]
 		if !ok {
-			ctx.End(404)
+			ctx.PlainText(400, "Bad Request")
 			return
 		}
 
 		if handler.privileges > 0 && (!ctx.Logined() || ctx.LoginedUser().Privileges&handler.privileges == 0) {
-			ctx.End(401)
+			ctx.PlainText(401, "Unauthorized")
 			return
 		}
 
-		handler.handle(ctx, xs)
+		switch v := handler.handle.(type) {
+		case func():
+			v()
+		case func() []byte:
+			ctx.w.Write(v())
+		case func() string:
+			ctx.w.Write([]byte(v()))
+		case func() (int, []byte):
+			i, b := v()
+			ctx.w.WriteHeader(i)
+			ctx.w.Write(b)
+		case func() (int, string):
+			i, s := v()
+			ctx.w.WriteHeader(i)
+			ctx.w.Write([]byte(s))
+		case func(*Context):
+			v(ctx)
+		case func(*Context, *XService):
+			v(ctx, xs)
+		}
 		return
 	}
 
@@ -144,9 +152,9 @@ Stat:
 	fi, err := os.Stat(filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			ctx.End(404)
+			ctx.PlainText(404, "File Not Found")
 		} else {
-			ctx.End(500)
+			ctx.PlainText(500, "Internal Server Error")
 		}
 		return
 	}
