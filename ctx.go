@@ -1,11 +1,9 @@
 package webx
 
 import (
-	"bytes"
 	"compress/gzip"
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -158,40 +156,36 @@ func (ctx *Context) LoginedUser() *user.User {
 	return ctx.user
 }
 
-func (ctx *Context) Text(status int, contentType string, data []byte) {
+func (ctx *Context) PlainText(status int, text string) {
+	ctx.w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	ctx.w.WriteHeader(status)
+	ctx.w.Write([]byte(text))
+}
+
+func (ctx *Context) JSON(status int, data interface{}) (n int, err error) {
+	var jdata []byte
+	if config.Debug {
+		jdata, err = json.MarshalIndent(data, "", "\t")
+	} else {
+		jdata, err = json.Marshal(data)
+	}
+	if err != nil {
+		ctx.Error(err)
+		return
+	}
+
 	var wr io.Writer = ctx.w
 	wh := ctx.w.Header()
-	if len(data) > 1024 && strings.Index(ctx.r.Header.Get("Accept-Encoding"), "gzip") > -1 {
+	if len(jdata) > 1024 && strings.Index(ctx.r.Header.Get("Accept-Encoding"), "gzip") > -1 {
 		wh.Set("Content-Encoding", "gzip")
 		wh.Set("Vary", "Accept-Encoding")
 		gz, _ := gzip.NewWriterLevel(ctx.w, gzip.BestSpeed)
 		defer gz.Close()
 		wr = gz
 	}
-	wh.Set("Content-Type", contentType)
+	wh.Set("Content-Type", "application/json; charset=utf-8")
 	ctx.w.WriteHeader(status)
-	wr.Write(data)
-}
-
-func (ctx *Context) PlainText(status int, text string) {
-	ctx.Text(status, "text/plain; charset=utf-8", []byte(text))
-}
-
-func (ctx *Context) JSON(data interface{}) {
-	buf := bytes.NewBuffer(nil)
-	if err := json.NewEncoder(buf).Encode(data); err != nil {
-		ctx.Error(err)
-	}
-
-	ctx.Text(200, "application/json; charset=utf-8", buf.Bytes())
-}
-
-func (ctx *Context) End(status int, a ...interface{}) {
-	text := strings.TrimSpace(fmt.Sprintln(a...))
-	if len(text) == 0 {
-		text = http.StatusText(status)
-	}
-	ctx.PlainText(status, text)
+	return wr.Write(jdata)
 }
 
 func (ctx *Context) Error(err error) {
