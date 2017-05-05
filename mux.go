@@ -87,46 +87,42 @@ func (mux *HttpServerMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		endpoint := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api"), "/")
 		if len(endpoint) == 0 {
-			ctx.PlainText(400, "Bad Request")
+			ctx.End(400, "Bad Request")
 			return
 		}
 
 		handlers, ok := xapis[r.Method]
 		if !ok {
-			ctx.PlainText(405, "Method Not Allowed")
+			ctx.End(405, "Method Not Allowed")
 			return
 		}
 
 		handler, ok := handlers[endpoint]
 		if !ok {
-			ctx.PlainText(400, "Bad Request")
+			ctx.End(400, "Bad Request")
 			return
 		}
 
 		if handler.privileges > 0 && (!ctx.Logined() || ctx.LoginedUser().Privileges&handler.privileges == 0) {
-			ctx.PlainText(401, "Unauthorized")
+			ctx.End(401, "Unauthorized")
 			return
+		}
+
+		switch v := handler.handle.(type) {
+
 		}
 
 		switch v := handler.handle.(type) {
 		case func():
 			v()
-		case func() []byte:
-			ctx.w.Write(v())
-		case func() string:
-			ctx.w.Write([]byte(v()))
-		case func() (int, []byte):
-			i, b := v()
-			ctx.w.WriteHeader(i)
-			ctx.w.Write(b)
-		case func() (int, string):
-			i, s := v()
-			ctx.w.WriteHeader(i)
-			ctx.w.Write([]byte(s))
 		case func(*Context):
 			v(ctx)
+		case func(*XService):
+			v(xs)
 		case func(*Context, *XService):
 			v(ctx, xs)
+		case func(*XService, *Context):
+			v(xs, ctx)
 		}
 		return
 	}
@@ -156,9 +152,9 @@ Stat:
 				filePath = topIndexHtml
 				goto Stat
 			}
-			ctx.PlainText(404, "Not Found")
+			ctx.End(404, "Not Found")
 		} else {
-			ctx.PlainText(500, "Internal Server Error")
+			ctx.End(500, "Internal Server Error")
 		}
 		return
 	}

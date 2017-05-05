@@ -33,7 +33,7 @@ func (s APIService) Delete(endpoint string, handler interface{}, privileges user
 
 func (s APIService) register(method string, endpoint string, handler interface{}, privileges user.Privileges) {
 	switch v := handler.(type) {
-	case func(), func() string, func() (int, string), func(*Context), func(*Context, *XService), func(*XService, *Context):
+	case func(), func(*Context), func(*XService), func(*Context, *XService), func(*XService, *Context):
 		if s[method] == nil {
 			s[method] = map[string]apiHandler{}
 		}
