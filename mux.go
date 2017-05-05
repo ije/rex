@@ -152,7 +152,11 @@ Stat:
 	fi, err := os.Stat(filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			ctx.PlainText(404, "File Not Found")
+			if topIndexHtml := path.Join(xs.App.root, "index.html"); filePath != topIndexHtml {
+				filePath = topIndexHtml
+				goto Stat
+			}
+			ctx.PlainText(404, "Not Found")
 		} else {
 			ctx.PlainText(500, "Internal Server Error")
 		}
