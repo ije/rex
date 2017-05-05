@@ -160,8 +160,10 @@ func (ctx *Context) LoginedUser() *user.User {
 	return ctx.user
 }
 
-func (ctx *Context) PlainText(status int, text string) {
-	ctx.w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+func (ctx *Context) End(status int, text string) {
+	if ctx.w.Header().Get("Content-Type") == "" {
+		ctx.w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	}
 	ctx.w.WriteHeader(status)
 	ctx.w.Write([]byte(text))
 }
@@ -194,9 +196,9 @@ func (ctx *Context) JSON(status int, data interface{}) (n int, err error) {
 
 func (ctx *Context) Error(err error) {
 	if config.Debug {
-		ctx.PlainText(500, err.Error())
+		ctx.End(500, err.Error())
 	} else {
-		ctx.PlainText(500, "Internal Server Error")
+		ctx.End(500, "Internal Server Error")
 	}
 }
 
