@@ -3,6 +3,7 @@ package webx
 import (
 	"fmt"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/ije/gox/utils"
@@ -51,15 +52,19 @@ func Serve(appRoot string, serverConfig *ServerConfig) {
 		WriteTimeout:   time.Duration(config.WriteTimeout) * time.Second,
 		MaxHeaderBytes: config.MaxHeaderBytes,
 	}
-	utils.CatchExit(func() {
+
+	go func() {
+		err = serv.ListenAndServe()
+		if err != nil {
+			fmt.Println("server shutdown:", err)
+		}
+	}()
+
+	utils.WaitExit(func(signal os.Signal) bool {
 		if xs.App.debugProcess != nil {
 			xs.App.debugProcess.Kill()
 		}
 		serv.Shutdown(nil)
+		return true
 	})
-
-	err = serv.ListenAndServe()
-	if err != nil {
-		fmt.Println("server shutdown:", err)
-	}
 }
