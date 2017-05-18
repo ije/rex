@@ -6,7 +6,7 @@ import (
 
 type Session interface {
 	SID() string
-	Values() map[string]interface{}
+	Store() map[string]interface{}
 	Get(key string) (value interface{}, ok bool)
 	Set(key string, value interface{})
 	Delete(key string)
@@ -15,7 +15,6 @@ type Session interface {
 
 type Manager interface {
 	Get(sid string) (Session, error)
-	PutBack(session Session) error
 	Destroy(sid string) error
 	SetGCLifetime(lifetime time.Duration) error
 	GC() error

@@ -9,46 +9,45 @@ import (
 
 type MemorySession struct {
 	sid     string
-	values  map[string]interface{}
+	store   map[string]interface{}
 	expires time.Time
+	manager *MemorySessionManager
 }
 
 func (ms *MemorySession) SID() string {
 	return ms.sid
 }
 
-func (ms *MemorySession) Values() map[string]interface{} {
-	return ms.values
+func (ms *MemorySession) Store() (store map[string]interface{}) {
+	store = ms.store
+	ms.activate()
+	return
 }
 
 func (ms *MemorySession) Get(key string) (value interface{}, ok bool) {
-	if ms.values == nil {
-		return
-	}
-
-	value, ok = ms.values[key]
+	value, ok = ms.store[key]
+	ms.activate()
 	return
 }
 
 func (ms *MemorySession) Set(key string, value interface{}) {
-	if ms.values == nil {
-		ms.values = map[string]interface{}{}
-	}
-	ms.values[key] = value
+	ms.store[key] = value
+	ms.activate()
 }
 
 func (ms *MemorySession) Delete(key string) {
-	if ms.values == nil {
-		return
-	}
-
-	delete(ms.values, key)
+	delete(ms.store, key)
+	ms.activate()
 	return
 }
 
 func (ms *MemorySession) Flush() {
-	ms.values = map[string]interface{}{}
-	return
+	ms.store = map[string]interface{}{}
+	ms.activate()
+}
+
+func (ms *MemorySession) activate() {
+	ms.expires = time.Now().Add(ms.manager.gcLifetime)
 }
 
 type MemorySessionManager struct {
@@ -59,58 +58,58 @@ type MemorySessionManager struct {
 }
 
 func NewMemorySessionManager(gcLifetime time.Duration) *MemorySessionManager {
-	sp := &MemorySessionManager{
+	manager := &MemorySessionManager{
 		sessions: map[string]*MemorySession{},
 	}
-	sp.SetGCLifetime(gcLifetime)
-	go func(sp *MemorySessionManager) {
+	manager.SetGCLifetime(gcLifetime)
+	go func(manager *MemorySessionManager) {
 		for {
-			sp.lock.RLock()
-			ticker := sp.gcTicker
-			sp.lock.RUnlock()
+			manager.lock.RLock()
+			ticker := manager.gcTicker
+			manager.lock.RUnlock()
 
 			if ticker != nil {
 				<-ticker.C
-				sp.GC()
+				manager.GC()
 			}
 		}
-	}(sp)
+	}(manager)
 
-	return sp
+	return manager
 }
 
-func (sp *MemorySessionManager) SetGCLifetime(lifetime time.Duration) error {
+func (manager *MemorySessionManager) SetGCLifetime(lifetime time.Duration) error {
 	if lifetime < time.Second {
 		return nil
 	}
 
-	sp.lock.Lock()
-	defer sp.lock.Unlock()
+	manager.lock.Lock()
+	defer manager.lock.Unlock()
 
-	if sp.gcTicker != nil {
-		sp.gcTicker.Stop()
+	if manager.gcTicker != nil {
+		manager.gcTicker.Stop()
 	}
-	sp.gcLifetime = lifetime
-	sp.gcTicker = time.NewTicker(lifetime)
+	manager.gcLifetime = lifetime
+	manager.gcTicker = time.NewTicker(lifetime)
 
 	return nil
 }
 
-func (sp *MemorySessionManager) Get(sid string) (session Session, err error) {
+func (manager *MemorySessionManager) Get(sid string) (session Session, err error) {
 	now := time.Now()
 	ok := len(sid) == 64
 
 	var ms *MemorySession
 	if ok {
-		sp.lock.RLock()
-		ms, ok = sp.sessions[sid]
-		sp.lock.RUnlock()
+		manager.lock.RLock()
+		ms, ok = manager.sessions[sid]
+		manager.lock.RUnlock()
 	}
 
 	if ok && ms.expires.Before(now) {
-		sp.lock.Lock()
-		delete(sp.sessions, sid)
-		sp.lock.Unlock()
+		manager.lock.Lock()
+		delete(manager.sessions, sid)
+		manager.lock.Unlock()
 
 		ms = nil
 	}
@@ -118,67 +117,52 @@ func (sp *MemorySessionManager) Get(sid string) (session Session, err error) {
 	if ms == nil {
 	NEWSID:
 		sid = rs.Base64.String(64)
-		sp.lock.RLock()
-		_, ok := sp.sessions[sid]
-		sp.lock.RUnlock()
+		manager.lock.RLock()
+		_, ok := manager.sessions[sid]
+		manager.lock.RUnlock()
 		if ok {
 			goto NEWSID
 		}
 
 		ms = &MemorySession{
-			sid:    sid,
-			values: map[string]interface{}{},
+			sid:     sid,
+			store:   map[string]interface{}{},
+			manager: manager,
 		}
-		sp.lock.Lock()
-		sp.sessions[sid] = ms
-		sp.lock.Unlock()
+		manager.lock.Lock()
+		manager.sessions[sid] = ms
+		manager.lock.Unlock()
 	}
 
-	sp.lock.Lock()
-	ms.expires = now.Add(sp.gcLifetime)
-	sp.lock.Unlock()
+	manager.lock.Lock()
+	ms.expires = now.Add(manager.gcLifetime)
+	manager.lock.Unlock()
 
 	session = ms
 	return
 }
 
-func (sp *MemorySessionManager) PutBack(session Session) error {
-	sp.lock.RLock()
-	sess, ok := sp.sessions[session.SID()]
-	sp.lock.RUnlock()
+func (manager *MemorySessionManager) Destroy(sid string) error {
+	manager.lock.Lock()
+	defer manager.lock.Unlock()
 
-	if !ok {
-		return nil
-	}
-
-	sp.lock.Lock()
-	sess.values = session.Values()
-	sess.expires = time.Now().Add(sp.gcLifetime)
-	sp.lock.Unlock()
+	delete(manager.sessions, sid)
 	return nil
 }
 
-func (sp *MemorySessionManager) Destroy(sid string) error {
-	sp.lock.Lock()
-	defer sp.lock.Unlock()
-
-	delete(sp.sessions, sid)
-	return nil
-}
-
-func (sp *MemorySessionManager) GC() error {
+func (manager *MemorySessionManager) GC() error {
 	now := time.Now()
 
-	sp.lock.RLock()
-	defer sp.lock.RUnlock()
+	manager.lock.RLock()
+	defer manager.lock.RUnlock()
 
-	for sid, session := range sp.sessions {
+	for sid, session := range manager.sessions {
 		if session.expires.Before(now) {
-			sp.lock.RUnlock()
-			sp.lock.Lock()
-			delete(sp.sessions, sid)
-			sp.lock.Unlock()
-			sp.lock.RLock()
+			manager.lock.RUnlock()
+			manager.lock.Lock()
+			delete(manager.sessions, sid)
+			manager.lock.Unlock()
+			manager.lock.RLock()
 		}
 	}
 
