@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"path"
 	"time"
+
+	"github.com/ije/gox/utils"
 )
 
 var debugPort = 9000
@@ -27,14 +29,14 @@ func initApp(root string) (app *App, err error) {
 		return
 	}
 
-	var needNodeJs bool
+	var needNodeJS bool
 	var packingMode string
 	if _, err := os.Lstat(path.Join(root, "webpack.config.js")); err == nil || os.IsExist(err) {
 		packingMode = "webpack"
-		needNodeJs = true
+		needNodeJS = true
 	}
 
-	if needNodeJs {
+	if needNodeJS {
 		// specail node version
 		if binDir := os.Getenv("NODEBINDIR"); len(binDir) > 0 {
 			os.Setenv("PATH", strf("%s:%s", binDir, os.Getenv("PATH")))
@@ -42,21 +44,38 @@ func initApp(root string) (app *App, err error) {
 
 		_, err = exec.LookPath("npm")
 		if err != nil {
-			err = errf("server shutdown: missing nodejs environment")
+			err = errf("missing nodejs environment")
 			return
 		}
 
-		if _, e := os.Lstat(path.Join(root, "package.json")); e == nil || os.IsExist(e) {
-			cmd := exec.Command("npm", "install")
-			cmd.Dir = root
-			if config.Debug {
-				cmd.Stderr = os.Stderr
-				cmd.Stdout = os.Stdout
-				fmt.Println("[npm] check/install dependencies...")
-			}
-			err = cmd.Run()
+		if fi, e := os.Lstat(path.Join(root, "package.json")); e == nil && !fi.IsDir() {
+			var m map[string]interface{}
+			err = utils.UnmarshalJSONFile(path.Join(root, "package.json"), &m)
 			if err != nil {
+				err = errf("parse package.json: %v", err)
 				return
+			}
+
+			_, ok := m["dependencies"]
+			if !ok {
+				_, ok = m["devDependencies"]
+			}
+			if ok {
+				cmd := exec.Command("npm", "install")
+				if !config.Debug {
+					cmd.Args = append(cmd.Args, "--production")
+				}
+				cmd.Dir = root
+				if config.Debug {
+					cmd.Stderr = os.Stderr
+					cmd.Stdout = os.Stdout
+					fmt.Println("[npm] check/install dependencies...")
+				}
+				err = cmd.Run()
+				if err != nil {
+					return
+				}
+				os.Setenv("PATH", strf("%s:%s", path.Join(root, "node_modules/.bin"), os.Getenv("PATH")))
 			}
 		}
 	}
@@ -68,18 +87,16 @@ func initApp(root string) (app *App, err error) {
 			_, err = exec.LookPath("webpack-dev-server")
 		}
 		if err != nil {
-			args := []string{"install", "-g", "webpack"}
+			cmd := exec.Command("npm", "-g", "webpack")
 			if config.Debug {
-				args = append(args, "webpack-dev-server")
-			}
-			cmd := exec.Command("npm", args...)
-			if config.Debug {
+				cmd.Args = append(cmd.Args, "webpack-dev-server")
 				cmd.Stderr = os.Stderr
 				cmd.Stdout = os.Stdout
 				fmt.Println("[npm] install webpack/webpack-dev-server...")
 			}
 			cmd.Run()
 		}
+
 		_, err = exec.LookPath("webpack")
 		if err == nil && config.Debug {
 			_, err = exec.LookPath("webpack-dev-server")
@@ -99,7 +116,6 @@ func initApp(root string) (app *App, err error) {
 	} else {
 		go app.Build()
 	}
-
 	return
 }
 
