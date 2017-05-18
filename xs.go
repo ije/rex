@@ -29,7 +29,7 @@ func InitLogger(path string, buffer int, maxFileSize int) (err error) {
 	return
 }
 
-func InitSession(sessionManager session.Manager) {
+func InitSessionManager(sessionManager session.Manager) {
 	if sessionManager != nil {
 		xs.Session = sessionManager
 	}
