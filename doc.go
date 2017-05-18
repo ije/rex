@@ -1,6 +1,6 @@
-// Package webx provides a API server to run a SPA(single page appliaction).
+// webx provides a restful API server that can debug, build and host a SPA(single page appliaction).
 /*
-webx provides a API server to process data. With nodejs, webx can debug,build&host a SPA(single page appliaction).
+webx provides a API server to process data. With nodejs, webx can debug, build and host a SPA(single page appliaction).
 
 
 APIService
