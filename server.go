@@ -27,6 +27,9 @@ func Serve(appRoot string, serverConfig *ServerConfig) {
 	if config.Port == 0 {
 		config.Port = 80
 	}
+	if ev := os.Getenv("WEBX_DEBUG"); ev == "1" || ev == "true" {
+		config.Debug = true
+	}
 
 	if appRoot != "" {
 		fi, err := os.Lstat(appRoot)
