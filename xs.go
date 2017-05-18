@@ -1,18 +1,27 @@
 package webx
 
 import (
+	"time"
+
 	"github.com/ije/gox/log"
 	"github.com/ije/webx/session"
 	"github.com/ije/webx/user"
 )
 
-var xs = &XService{Log: &log.Logger{}}
+var xs = &XService{
+	Session: session.NewMemorySessionManager(time.Hour / 2),
+	Log:     &log.Logger{},
+}
 
 type XService struct {
 	App     *App
-	Log     *log.Logger
 	Session session.Manager
 	Users   user.Manager
+	Log     *log.Logger
+}
+
+func (xs *XService) clone() *XService {
+	return &XService{xs.App, xs.Session, xs.Users, xs.Log}
 }
 
 func InitLogger(path string, buffer int, maxFileSize int) (err error) {

@@ -109,26 +109,27 @@ func (mux *HttpServerMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 		switch v := handler.handle.(type) {
-
-		}
-
-		switch v := handler.handle.(type) {
 		case func():
 			v()
 		case func(*Context):
 			v(ctx)
 		case func(*XService):
-			v(xs)
+			v(xs.clone())
 		case func(*Context, *XService):
-			v(ctx, xs)
+			v(ctx, xs.clone())
 		case func(*XService, *Context):
-			v(xs, ctx)
+			v(xs.clone(), ctx)
 		}
 		return
 	}
 
 	// todo: add/remove `www` in href
 	// todo: ssr for seo
+
+	if xs.App == nil {
+		ctx.End(400, "Missing App")
+		return
+	}
 
 	if xs.App.debuging {
 		remote, err := url.Parse(strf("http://127.0.0.1:%d", debugPort))

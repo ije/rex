@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/ije/gox/utils"
-	"github.com/ije/webx/session"
 )
 
 var config = &ServerConfig{}
@@ -29,16 +28,23 @@ func Serve(appRoot string, serverConfig *ServerConfig) {
 		config.Port = 80
 	}
 
-	if xs.Session == nil {
-		xs.Session = session.NewMemorySessionManager(time.Hour / 2)
-	}
+	if appRoot != "" {
+		fi, err := os.Lstat(appRoot)
+		if err == nil && !fi.IsDir() {
+			err = errf("invalid directory")
+		}
+		if err != nil {
+			fmt.Printf("incorrect appRoot '%s': %v\n", appRoot, err)
+			return
+		}
 
-	app, err := initApp(appRoot)
-	if err != nil {
-		fmt.Println("server shutdown: init app failed:", err)
-		return
+		app, err := initApp(appRoot)
+		if err != nil {
+			fmt.Println("initialize app failed:", err)
+			return
+		}
+		xs.App = app
 	}
-	xs.App = app
 
 	if !config.Debug {
 		xs.Log.SetLevelByName("info")
@@ -54,10 +60,11 @@ func Serve(appRoot string, serverConfig *ServerConfig) {
 	}
 
 	go func() {
-		err = serv.ListenAndServe()
+		err := serv.ListenAndServe()
 		if err != nil {
 			fmt.Println("server shutdown:", err)
 		}
+		os.Exit(1)
 	}()
 
 	utils.WaitExit(func(signal os.Signal) bool {
