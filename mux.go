@@ -48,9 +48,6 @@ func (mux *HttpServerMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			xs.Log.Error("[panic]", v, buf.String())
 			ctx.Error(errf(buf.String()))
 		}
-		if ctx.session != nil {
-			xs.Session.PutBack(ctx.session)
-		}
 		r.Body.Close()
 	}()
 
