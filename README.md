@@ -1,6 +1,7 @@
 WEBX
 ====
-webx provides a restful API server that can debug, build and host a SPA(single page appliaction).
+webx provides a restful API server by [golang](https://golang.org/) that can debug, build and host a SPA(single page appliaction).
+
 [![GoDoc](https://godoc.org/github.com/ije/webx?status.svg)](https://godoc.org/github.com/ije/webx)
 
 
