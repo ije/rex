@@ -160,12 +160,27 @@ func (ctx *Context) LoginedUser() *user.User {
 	return ctx.user
 }
 
-func (ctx *Context) End(status int, text string) {
-	if ctx.w.Header().Get("Content-Type") == "" {
-		ctx.w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+func (ctx *Context) End(status int, a ...string) {
+	wh := ctx.w.Header()
+	if wh.Get("Content-Type") == "" {
+		wh.Set("Content-Type", "text/plain; charset=utf-8")
 	}
 	ctx.w.WriteHeader(status)
+	var text string
+	if len(a) > 0 {
+		text = strings.Join(a, " ")
+	} else {
+		text = http.StatusText(status)
+	}
 	ctx.w.Write([]byte(text))
+}
+
+func (ctx *Context) Error(err error) {
+	if config.Debug {
+		ctx.End(500, err.Error())
+	} else {
+		ctx.End(500)
+	}
 }
 
 func (ctx *Context) JSON(status int, data interface{}) (n int, err error) {
@@ -192,14 +207,6 @@ func (ctx *Context) JSON(status int, data interface{}) (n int, err error) {
 	wh.Set("Content-Type", "application/json; charset=utf-8")
 	ctx.w.WriteHeader(status)
 	return wr.Write(jdata)
-}
-
-func (ctx *Context) Error(err error) {
-	if config.Debug {
-		ctx.End(500, err.Error())
-	} else {
-		ctx.End(500, "Internal Server Error")
-	}
 }
 
 func (ctx *Context) Write(p []byte) (n int, err error) {
@@ -304,29 +311,24 @@ func (ctx *Context) RemoteIp() (ip string) {
 	return
 }
 
-func (ctx *Context) Authenticate(realm string, authHandle func(user string, password string) (ok bool, err error)) (status int) {
-	authField := ctx.r.Header.Get("Authorization")
-	if len(authField) > 0 {
-		authType, combination := utils.SplitByFirstByte(authField, ' ')
-		if authType == "Basic" && len(combination) > 0 {
-			authInfo, err := base64.StdEncoding.DecodeString(combination)
-			if err == nil {
-				user, password := utils.SplitByFirstByte(string(authInfo), ':')
-				ok, err := authHandle(user, password)
-				if err != nil {
-					status = 500
+func (ctx *Context) Authenticate(realm string, authHandle func(user string, password string) (ok bool, err error)) (ok bool, err error) {
+	if authField := ctx.r.Header.Get("Authorization"); len(authField) > 0 {
+		if authType, combination := utils.SplitByFirstByte(authField, ' '); len(combination) > 0 {
+			switch authType {
+			case "Basic":
+				authInfo, e := base64.StdEncoding.DecodeString(combination)
+				if e != nil {
 					return
 				}
-				if ok {
-					status = 200
-				} else {
-					status = 401
-				}
+
+				user, password := utils.SplitByFirstByte(string(authInfo), ':')
+				ok, err = authHandle(user, password)
+				return
 			}
 		}
 	}
 
 	ctx.w.Header().Set("WWW-Authenticate", strf("Basic realm=\"%s\"", realm))
-	status = 401
+	ctx.w.WriteHeader(401)
 	return
 }
