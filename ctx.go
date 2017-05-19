@@ -162,7 +162,7 @@ func (ctx *Context) LoginedUser() *user.User {
 
 func (ctx *Context) End(status int, a ...string) {
 	wh := ctx.w.Header()
-	if wh.Get("Content-Type") == "" {
+	if _, ok := wh["Content-Type"]; !ok {
 		wh.Set("Content-Type", "text/plain; charset=utf-8")
 	}
 	ctx.w.WriteHeader(status)
@@ -184,11 +184,11 @@ func (ctx *Context) Error(err error) {
 }
 
 func (ctx *Context) JSON(status int, data interface{}) (n int, err error) {
-	var jdata []byte
+	var jsonData []byte
 	if config.Debug {
-		jdata, err = json.MarshalIndent(data, "", "\t")
+		jsonData, err = json.MarshalIndent(data, "", "\t")
 	} else {
-		jdata, err = json.Marshal(data)
+		jsonData, err = json.Marshal(data)
 	}
 	if err != nil {
 		ctx.Error(err)
@@ -197,7 +197,7 @@ func (ctx *Context) JSON(status int, data interface{}) (n int, err error) {
 
 	var wr io.Writer = ctx.w
 	wh := ctx.w.Header()
-	if len(jdata) > 1024 && strings.Index(ctx.r.Header.Get("Accept-Encoding"), "gzip") > -1 {
+	if len(jsonData) > 1024 && strings.Index(ctx.r.Header.Get("Accept-Encoding"), "gzip") > -1 {
 		wh.Set("Content-Encoding", "gzip")
 		wh.Set("Vary", "Accept-Encoding")
 		gz, _ := gzip.NewWriterLevel(ctx.w, gzip.BestSpeed)
@@ -206,7 +206,7 @@ func (ctx *Context) JSON(status int, data interface{}) (n int, err error) {
 	}
 	wh.Set("Content-Type", "application/json; charset=utf-8")
 	ctx.w.WriteHeader(status)
-	return wr.Write(jdata)
+	return wr.Write(jsonData)
 }
 
 func (ctx *Context) Write(p []byte) (n int, err error) {
@@ -288,7 +288,7 @@ func (ctx *Context) FormInt(key string) (i int, err error) {
 	return
 }
 
-func (ctx *Context) FormJson(key string) (value map[string]interface{}, err error) {
+func (ctx *Context) FormJSON(key string) (value map[string]interface{}, err error) {
 	if s := strings.TrimSpace(ctx.FormString(key)); len(s) > 0 {
 		err = json.Unmarshal([]byte(s), &value)
 	}
