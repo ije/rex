@@ -52,8 +52,10 @@ func (mux *HttpServerMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	wh := w.Header()
-	for key, val := range config.CustomHttpHeaders {
-		wh.Set(key, val)
+	if len(config.CustomHttpHeaders) > 0 {
+		for key, val := range config.CustomHttpHeaders {
+			wh.Set(key, val)
+		}
 	}
 	wh.Set("Connection", "keep-alive")
 	wh.Set("Server", "webx-server")
@@ -84,24 +86,24 @@ func (mux *HttpServerMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		endpoint := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api"), "/")
 		if len(endpoint) == 0 {
-			ctx.End(400, "Bad Request")
+			ctx.End(400)
 			return
 		}
 
 		handlers, ok := xapis[r.Method]
 		if !ok {
-			ctx.End(405, "Method Not Allowed")
+			ctx.End(405)
 			return
 		}
 
 		handler, ok := handlers[endpoint]
 		if !ok {
-			ctx.End(400, "Bad Request")
+			ctx.End(400)
 			return
 		}
 
 		if handler.privileges > 0 && (!ctx.Logined() || ctx.LoginedUser().Privileges&handler.privileges == 0) {
-			ctx.End(401, "Unauthorized")
+			ctx.End(401)
 			return
 		}
 
@@ -150,9 +152,9 @@ Stat:
 				filePath = topIndexHtml
 				goto Stat
 			}
-			ctx.End(404, "Not Found")
+			ctx.End(404)
 		} else {
-			ctx.End(500, "Internal Server Error")
+			ctx.End(500)
 		}
 		return
 	}
@@ -165,36 +167,31 @@ Stat:
 	if fi.Size() > 1024 && strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
 		wh.Set("Content-Encoding", "gzip")
 		wh.Set("Vary", "Accept-Encoding")
-		gw := NewGzipResponseWriter(w)
-		defer gw.Close()
-		w = gw
+		gzw, err := gzip.NewWriterLevel(w, gzip.BestSpeed)
+		if err != nil {
+			ctx.End(500)
+			return
+		}
+		defer gzw.Close()
+		w = &gzipResponseWriter{w, gzw}
 	}
 
 	http.ServeFile(w, r, filePath)
 }
 
-type GzipResponseWriter struct {
-	gzWriter          io.WriteCloser
+type gzipResponseWriter struct {
 	rawResponseWriter http.ResponseWriter
+	gzWriter          io.WriteCloser
 }
 
-func NewGzipResponseWriter(w http.ResponseWriter) *GzipResponseWriter {
-	gzw, _ := gzip.NewWriterLevel(w, gzip.BestSpeed)
-	return &GzipResponseWriter{gzw, w}
-}
-
-func (w *GzipResponseWriter) Header() http.Header {
+func (w *gzipResponseWriter) Header() http.Header {
 	return w.rawResponseWriter.Header()
 }
 
-func (w *GzipResponseWriter) Write(p []byte) (int, error) {
-	return w.gzWriter.Write(p)
-}
-
-func (w *GzipResponseWriter) WriteHeader(status int) {
+func (w *gzipResponseWriter) WriteHeader(status int) {
 	w.rawResponseWriter.WriteHeader(status)
 }
 
-func (w *GzipResponseWriter) Close() error {
-	return w.gzWriter.Close()
+func (w *gzipResponseWriter) Write(p []byte) (int, error) {
+	return w.gzWriter.Write(p)
 }
