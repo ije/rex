@@ -17,6 +17,7 @@ type ServerConfig struct {
 	WriteTimeout      int
 	MaxHeaderBytes    int
 	CustomHttpHeaders map[string]string
+	PlainAPIServer    bool
 	Debug             bool
 }
 
@@ -56,7 +57,7 @@ func Serve(appRoot string, serverConfig *ServerConfig) {
 
 	serv := &http.Server{
 		Addr:           strf((":%d"), config.Port),
-		Handler:        &HttpServerMux{},
+		Handler:        &HttpServerMux{config.CustomHttpHeaders, config.PlainAPIServer},
 		ReadTimeout:    time.Duration(config.ReadTimeout) * time.Second,
 		WriteTimeout:   time.Duration(config.WriteTimeout) * time.Second,
 		MaxHeaderBytes: config.MaxHeaderBytes,

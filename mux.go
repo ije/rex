@@ -16,7 +16,10 @@ import (
 	"github.com/ije/gox/utils"
 )
 
-type HttpServerMux struct{}
+type HttpServerMux struct {
+	CustomHttpHeaders map[string]string
+	PlainAPIServer    bool
+}
 
 func (mux *HttpServerMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := &Context{w: w, r: r, host: r.Host}
@@ -52,8 +55,8 @@ func (mux *HttpServerMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	wh := w.Header()
-	if len(config.CustomHttpHeaders) > 0 {
-		for key, val := range config.CustomHttpHeaders {
+	if len(mux.CustomHttpHeaders) > 0 {
+		for key, val := range mux.CustomHttpHeaders {
 			wh.Set(key, val)
 		}
 	}
@@ -62,44 +65,78 @@ func (mux *HttpServerMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// filter aliyun slb health check connect
 	if r.Method == "HEAD" && r.RequestURI == "/slb-check" {
-		w.WriteHeader(200)
+		w.WriteHeader(204)
 		return
 	}
 
 	// fix http method
 	if m := r.Header.Get("X-Method"); len(m) > 0 {
 		switch m = strings.ToUpper(m); m {
-		case "HEAD", "GET", "POST", "PUT", "DELETE":
+		case "HEAD", "GET", "POST", "PUT", "PATCH", "DELETE":
 			r.Method = m
 		}
 	}
 
-	if strings.HasPrefix(r.URL.Path, "/api") {
-		wh.Set("Access-Control-Allow-Origin", "*")
-		if r.Method == "OPTIONS" {
-			wh.Set("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE")
-			wh.Set("Access-Control-Allow-Headers", "Accept,Accept-Encoding,Accept-Lang,Content-Type,Authorization,X-Requested-With,X-Method")
-			wh.Set("Access-Control-Allow-Credentials", "true")
-			wh.Set("Access-Control-Max-Age", "60")
-			return
+	if mux.PlainAPIServer || strings.HasPrefix(r.URL.Path, "/api") {
+		var handlers map[string]apiHandler
+		var ok bool
+		var prefix string
+		for _, apis := range xapis {
+			handlers, ok = apis[r.Method]
+			if ok {
+				prefix = apis.getConfig("prefix")
+				break
+			}
 		}
-
-		endpoint := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api"), "/")
-		if len(endpoint) == 0 {
-			ctx.End(400)
-			return
-		}
-
-		handlers, ok := xapis[r.Method]
 		if !ok {
 			ctx.End(405)
 			return
 		}
 
+		var endpoint string
+		if mux.PlainAPIServer {
+			endpoint = r.URL.Path
+		} else {
+			endpoint = strings.TrimPrefix(r.URL.Path, "/api")
+		}
+		endpoint = strings.Trim(endpoint, "/")
+		if len(prefix) > 0 {
+			endpoint = strings.TrimPrefix(endpoint, strf("%s/", strings.Trim(prefix, "/")))
+		}
+		if len(endpoint) == 0 {
+			ctx.End(400)
+			return
+		}
+
 		handler, ok := handlers[endpoint]
+		if !ok {
+			handler, ok = handlers["*"]
+		}
 		if !ok {
 			ctx.End(400)
 			return
+		}
+
+		if r.Method == "options" {
+			switch v := handler.handle.(type) {
+			case func() *CORS:
+				cors := v()
+				if cors == nil {
+					ctx.End(400)
+					return
+				}
+
+				wh.Set("Access-Control-Allow-Origin", cors.Origin)
+				wh.Set("Access-Control-Allow-Methods", cors.Methods)
+				wh.Set("Access-Control-Allow-Headers", cors.Headers)
+				if cors.Credentials {
+					wh.Set("Access-Control-Allow-Credentials", "true")
+				}
+				if cors.MaxAge > 0 {
+					wh.Set("Access-Control-Max-Age", strf("%d", cors.MaxAge))
+				}
+				w.WriteHeader(204)
+			}
 		}
 
 		if handler.privileges > 0 && (!ctx.Logined() || ctx.LoginedUser().Privileges&handler.privileges == 0) {
@@ -110,14 +147,18 @@ func (mux *HttpServerMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		switch v := handler.handle.(type) {
 		case func():
 			v()
-		case func(*Context):
-			v(ctx)
+			w.WriteHeader(204)
 		case func(*XService):
 			v(xs.clone())
+			w.WriteHeader(204)
+		case func(*Context):
+			v(ctx)
 		case func(*Context, *XService):
 			v(ctx, xs.clone())
 		case func(*XService, *Context):
 			v(xs.clone(), ctx)
+		default:
+			ctx.End(400)
 		}
 		return
 	}
