@@ -4,6 +4,7 @@ import (
 	"compress/gzip"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -11,18 +12,29 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ije/gox/crypto/rs"
 	"github.com/ije/gox/utils"
 	"github.com/ije/webx/session"
-	"github.com/ije/webx/user"
+	"github.com/julienschmidt/httprouter"
 )
 
+var globalSessionManager session.Manager = session.NewMemorySessionManager(time.Hour / 2)
+
+func InitSessionManager(manager session.Manager) {
+	if manager != nil {
+		globalSessionManager = manager
+	}
+}
+
 type Context struct {
+	URL     *URL
 	w       http.ResponseWriter
 	r       *http.Request
-	host    string
 	session session.Session
-	user    *user.User
+}
+
+type URL struct {
+	Params httprouter.Params
+	*url.URL
 }
 
 func (ctx *Context) ResponseWriter() http.ResponseWriter {
@@ -37,180 +49,48 @@ func (ctx *Context) Cookie(name string) (cookie *http.Cookie, err error) {
 	return ctx.r.Cookie(name)
 }
 
-func (ctx *Context) SetCookie(name, value string, expires time.Time, httpOnly bool, extra ...string) (cookie *http.Cookie) {
-	cookie = &http.Cookie{
-		Name:     name,
-		Value:    value,
-		Expires:  expires,
-		Path:     "/",
-		Domain:   ctx.host,
-		HttpOnly: httpOnly,
+func (ctx *Context) SetCookie(cookie *http.Cookie) {
+	if cookie != nil {
+		ctx.w.Header().Add("Set-Cookie", cookie.String())
 	}
-	if el := len(extra); el > 0 {
-		cookie.Path = extra[0]
-		if el > 1 {
-			cookie.Domain = extra[1]
-		}
-	}
-	ctx.w.Header().Add("Set-Cookie", cookie.String())
-	return
 }
 
-func (ctx *Context) RemoveCookie(name string, extra ...string) {
-	cookie := &http.Cookie{
-		Name:    name,
-		Value:   "-",
-		Path:    "/",
-		Domain:  ctx.host,
-		Expires: time.Now().Add(-time.Second),
+func (ctx *Context) RemoveCookie(cookie *http.Cookie) {
+	if cookie != nil {
+		cookie.Expires = time.Now().Add(-time.Second)
+		ctx.w.Header().Add("Set-Cookie", cookie.String())
 	}
-	if el := len(extra); el > 0 {
-		cookie.Path = extra[0]
-		if el > 1 {
-			cookie.Domain = extra[1]
-		}
-	}
-	ctx.w.Header().Add("Set-Cookie", cookie.String())
-	return
 }
 
-func (ctx *Context) Session() session.Session {
-	if ctx.session != nil {
-		return ctx.session
+func (ctx *Context) Session() (sess session.Session, err error) {
+	sessionCookieName := "x-session"
+	if xs.App != nil && len(xs.App.sessionCookieName) > 0 {
+		sessionCookieName = xs.App.sessionCookieName
 	}
 
 	var sid string
-	if c, err := ctx.Cookie("x-session"); err == nil {
+	if c, err := ctx.Cookie(sessionCookieName); err == nil {
 		sid = c.Value
 	}
 
-	sess, err := xs.Session.Get(sid)
-	if err != nil {
-		panic("ctx: get session failed: " + err.Error())
+	sess = ctx.session
+	if sess == nil {
+		sess, err = globalSessionManager.Get(sid)
+		if err != nil {
+			return
+		}
+		ctx.session = sess
 	}
 
 	if sid != sess.SID() {
-		cookie := &http.Cookie{
-			Name:     "x-session",
-			Value:    strf("%s:%s", ctx.host, sess.SID),
-			Path:     "/",
-			Domain:   ctx.host,
+		ctx.SetCookie(&http.Cookie{
+			Name:     sessionCookieName,
+			Value:    sess.SID(),
 			HttpOnly: true,
-		}
-		ctx.w.Header().Add("Set-Cookie", cookie.String())
+		})
 	}
 
-	ctx.session = sess
-	return sess
-}
-
-func (ctx *Context) Logined() bool {
-	return ctx.LoginedUser() != nil
-}
-
-func (ctx *Context) LoginedUser() *user.User {
-	if ctx.user != nil {
-		return ctx.user
-	}
-
-	if xs.Users == nil {
-		return nil
-	}
-
-	_, err := ctx.Cookie("x-session")
-	if err != nil {
-		if _, err = ctx.Cookie("x-token"); err != nil {
-			return nil
-		}
-	}
-
-	if id, ok := ctx.Session().Get("LOGINED_USER"); ok {
-		ctx.user, err = xs.Users.Get(id)
-		if err != nil {
-			panic(strf("ctx.LoginedUser: xs.Users.Get(%d): %v", id, err.Error()))
-		}
-	}
-
-	if ctx.user == nil {
-		if cookie, err := ctx.Cookie("x-token"); err == nil && len(cookie.Value) > 0 {
-			user, err := xs.Users.CheckLoginToken(cookie.Value)
-			if err != nil {
-				panic(strf("ctx.LoginedUser: xs.Users.CheckLoginToken(\"***\"): %v", err))
-			}
-
-			if user != nil {
-				newToken := rs.Base64.String(64)
-				err = xs.Users.UpdateLoginToken(user.ID, newToken)
-				if err != nil {
-					panic(strf("ctx.LoginedUser: xs.Users.UpdateLoginToken(%d, \"***\"): %v", user.ID, err))
-				}
-
-				err = xs.Users.Update(user.ID, map[string]interface{}{"Logined": time.Now()})
-				if err != nil {
-					panic(strf("ctx.LoginedUser: xs.Users.Update(%d): %v", user.ID, err.Error()))
-				}
-
-				ctx.session.Set("USER", user.ID)
-				ctx.SetCookie("x-token", newToken, time.Now().Add(7*24*time.Hour), true, "/", ctx.host)
-				ctx.user = user
-			}
-		}
-	}
-
-	return ctx.user
-}
-
-func (ctx *Context) End(status int, a ...string) {
-	wh := ctx.w.Header()
-	if _, ok := wh["Content-Type"]; !ok {
-		wh.Set("Content-Type", "text/plain; charset=utf-8")
-	}
-	ctx.w.WriteHeader(status)
-	var text string
-	if len(a) > 0 {
-		text = strings.Join(a, " ")
-	} else {
-		text = http.StatusText(status)
-	}
-	ctx.w.Write([]byte(text))
-}
-
-func (ctx *Context) Error(err error) {
-	if config.Debug {
-		ctx.End(500, err.Error())
-	} else {
-		ctx.End(500)
-	}
-}
-
-func (ctx *Context) JSON(status int, data interface{}) (n int, err error) {
-	var jsonData []byte
-	if config.Debug {
-		jsonData, err = json.MarshalIndent(data, "", "\t")
-	} else {
-		jsonData, err = json.Marshal(data)
-	}
-	if err != nil {
-		ctx.Error(err)
-		return
-	}
-
-	var wr io.Writer = ctx.w
-	wh := ctx.w.Header()
-	if len(jsonData) > 1024 && strings.Index(ctx.r.Header.Get("Accept-Encoding"), "gzip") > -1 {
-		wh.Set("Content-Encoding", "gzip")
-		wh.Set("Vary", "Accept-Encoding")
-		gz, _ := gzip.NewWriterLevel(ctx.w, gzip.BestSpeed)
-		defer gz.Close()
-		wr = gz
-	}
-	wh.Set("Content-Type", "application/json; charset=utf-8")
-	ctx.w.WriteHeader(status)
-	return wr.Write(jsonData)
-}
-
-func (ctx *Context) Write(p []byte) (n int, err error) {
-	return ctx.w.Write(p)
+	return
 }
 
 func (ctx *Context) ParseMultipartForm(maxMemoryBytes int64) {
@@ -228,7 +108,7 @@ func (ctx *Context) ParseMultipartForm(maxMemoryBytes int64) {
 				case string:
 					form.Set(key, v)
 				default:
-					form.Set(key, strf("%v", value))
+					form.Set(key, fmt.Sprintf("%v", value))
 				}
 			}
 			ctx.r.Form = form
@@ -328,7 +208,60 @@ func (ctx *Context) Authenticate(realm string, authHandle func(user string, pass
 		}
 	}
 
-	ctx.w.Header().Set("WWW-Authenticate", strf("Basic realm=\"%s\"", realm))
+	ctx.w.Header().Set("WWW-Authenticate", fmt.Sprintf("Basic realm=\"%s\"", realm))
 	ctx.w.WriteHeader(401)
 	return
+}
+
+func (ctx *Context) Write(p []byte) (n int, err error) {
+	return ctx.w.Write(p)
+}
+
+func (ctx *Context) WriteJSON(status int, data interface{}) (n int, err error) {
+	var jsonData []byte
+	if config.Debug {
+		jsonData, err = json.MarshalIndent(data, "", "\t")
+	} else {
+		jsonData, err = json.Marshal(data)
+	}
+	if err != nil {
+		ctx.Error(err)
+		return
+	}
+
+	var wr io.Writer = ctx.w
+	wh := ctx.w.Header()
+	if len(jsonData) > 1024 && strings.Index(ctx.r.Header.Get("Accept-Encoding"), "gzip") > -1 {
+		wh.Set("Content-Encoding", "gzip")
+		wh.Set("Vary", "Accept-Encoding")
+		gz, _ := gzip.NewWriterLevel(ctx.w, gzip.BestSpeed)
+		defer gz.Close()
+		wr = gz
+	}
+	wh.Set("Content-Type", "application/json; charset=utf-8")
+	ctx.w.WriteHeader(status)
+	return wr.Write(jsonData)
+}
+
+func (ctx *Context) End(status int, a ...string) {
+	wh := ctx.w.Header()
+	if _, ok := wh["Content-Type"]; !ok {
+		wh.Set("Content-Type", "text/plain; charset=utf-8")
+	}
+	ctx.w.WriteHeader(status)
+	var text string
+	if len(a) > 0 {
+		text = strings.Join(a, " ")
+	} else {
+		text = http.StatusText(status)
+	}
+	ctx.w.Write([]byte(text))
+}
+
+func (ctx *Context) Error(err error) {
+	if config.Debug {
+		ctx.End(500, err.Error())
+	} else {
+		ctx.End(500)
+	}
 }

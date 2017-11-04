@@ -1,7 +1,6 @@
 package webx
 
 import (
-	"bytes"
 	"compress/gzip"
 	"fmt"
 	"io"
@@ -10,171 +9,115 @@ import (
 	"net/url"
 	"os"
 	"path"
-	"runtime"
 	"strings"
 
 	"github.com/ije/gox/utils"
+	"github.com/julienschmidt/httprouter"
 )
 
-type HttpServerMux struct {
-	CustomHttpHeaders map[string]string
-	PlainAPIServer    bool
+type ApisMux struct {
+	router *httprouter.Router
 }
 
-func (mux *HttpServerMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	ctx := &Context{w: w, r: r, host: r.Host}
+func (mux *ApisMux) Register(apis *APIService) {
+	if apis == nil {
+		return
+	}
 
-	defer func() {
-		if v := recover(); v != nil {
-			var (
-				j    int
-				pc   uintptr
-				file string
-				line int
-				ok   bool
-			)
-			i := 2
-			buf := bytes.NewBuffer(nil)
-			for {
-				pc, file, line, ok = runtime.Caller(i)
-				if ok {
-					buf.WriteByte('\n')
-					for j = 0; j < 34; j++ {
-						buf.WriteByte(' ')
-					}
-					fmt.Fprint(buf, "> ", runtime.FuncForPC(pc).Name(), " ", file, ":", line)
-				} else {
-					break
-				}
-				i++
-			}
-			xs.Log.Error("[panic]", v, buf.String())
-			ctx.Error(errf(buf.String()))
+	if mux.router == nil {
+		mux.router = httprouter.New()
+		if len(config.AppRoot) > 0 {
+			mux.router.NotFound = &AppMux{}
 		}
-		r.Body.Close()
-	}()
+	}
 
+	for method, route := range apis.route {
+		for endpoint, handler := range route {
+			var routerHandler func(string, httprouter.Handle)
+			switch method {
+			case "OPTIONS":
+				routerHandler = mux.router.OPTIONS
+			case "HEAD":
+				routerHandler = mux.router.HEAD
+			case "GET":
+				routerHandler = mux.router.GET
+			case "POST":
+				routerHandler = mux.router.POST
+			case "PUT":
+				routerHandler = mux.router.PUT
+			case "PATCH":
+				routerHandler = mux.router.PATCH
+			case "DELETE":
+				routerHandler = mux.router.DELETE
+			}
+			if routerHandler == nil {
+				continue
+			}
+			if len(apis.Prefix) > 0 {
+				endpoint = path.Join("/"+strings.Trim(apis.Prefix, "/"), endpoint)
+			}
+			if len(config.AppRoot) > 0 {
+				endpoint = path.Join("/api", endpoint)
+			}
+			routerHandler(endpoint, func(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
+				ctx := &Context{
+					w:   w,
+					r:   r,
+					URL: &URL{params, r.URL},
+				}
+
+				handler.handle(ctx, xs.clone())
+			})
+		}
+	}
+}
+
+func (mux *ApisMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	wh := w.Header()
-	if len(mux.CustomHttpHeaders) > 0 {
-		for key, val := range mux.CustomHttpHeaders {
+	if xs.App == nil && len(xs.App.customHTTPHeaders) > 0 {
+		for key, val := range xs.App.customHTTPHeaders {
 			wh.Set(key, val)
 		}
 	}
 	wh.Set("Connection", "keep-alive")
 	wh.Set("Server", "webx-server")
 
-	// filter aliyun slb health check connect
-	if r.Method == "HEAD" && r.RequestURI == "/slb-check" {
-		w.WriteHeader(204)
-		return
+	if xs.App != nil {
+		code := 301 // Permanent redirect, request with GET method
+		if r.Method != "GET" {
+			// Temporary redirect, request with same method
+			// As of Go 1.3, Go does not support status code 308.
+			code = 307
+		}
+
+		if xs.App.hostRedirect == "force-www" && !strings.HasPrefix(r.Host, "www.") {
+			http.Redirect(w, r, path.Join("www."+r.Host, r.URL.String()), code)
+			return
+		} else if xs.App.hostRedirect == "non-www" && strings.HasPrefix(r.Host, "www.") {
+			http.Redirect(w, r, path.Join(strings.TrimPrefix(r.Host, ".www"), r.URL.String()), code)
+			return
+		}
 	}
 
-	// fix http method
-	if m := r.Header.Get("X-Method"); len(m) > 0 {
-		switch m = strings.ToUpper(m); m {
-		case "HEAD", "GET", "POST", "PUT", "PATCH", "DELETE":
-			r.Method = m
-		}
+	if mux.router != nil {
+		mux.router.ServeHTTP(w, r)
 	}
+}
 
-	if mux.PlainAPIServer || strings.HasPrefix(r.URL.Path, "/api") {
-		var handlers map[string]apiHandler
-		var ok bool
-		var prefix string
-		for _, apis := range xapis {
-			handlers, ok = apis[r.Method]
-			if ok {
-				prefix = apis.getConfig("prefix")
-				break
-			}
-		}
-		if !ok {
-			ctx.End(405)
-			return
-		}
+type AppMux struct{}
 
-		var endpoint string
-		if mux.PlainAPIServer {
-			endpoint = r.URL.Path
-		} else {
-			endpoint = strings.TrimPrefix(r.URL.Path, "/api")
-		}
-		endpoint = strings.Trim(endpoint, "/")
-		if len(prefix) > 0 {
-			endpoint = strings.TrimPrefix(endpoint, strf("%s/", strings.Trim(prefix, "/")))
-		}
-		if len(endpoint) == 0 {
-			ctx.End(400)
-			return
-		}
-
-		handler, ok := handlers[endpoint]
-		if !ok {
-			handler, ok = handlers["*"]
-		}
-		if !ok {
-			ctx.End(400)
-			return
-		}
-
-		if r.Method == "options" {
-			switch v := handler.handle.(type) {
-			case func() *CORS:
-				cors := v()
-				if cors == nil {
-					ctx.End(400)
-					return
-				}
-
-				wh.Set("Access-Control-Allow-Origin", cors.Origin)
-				wh.Set("Access-Control-Allow-Methods", cors.Methods)
-				wh.Set("Access-Control-Allow-Headers", cors.Headers)
-				if cors.Credentials {
-					wh.Set("Access-Control-Allow-Credentials", "true")
-				}
-				if cors.MaxAge > 0 {
-					wh.Set("Access-Control-Max-Age", strf("%d", cors.MaxAge))
-				}
-				w.WriteHeader(204)
-			}
-		}
-
-		if handler.privileges > 0 && (!ctx.Logined() || ctx.LoginedUser().Privileges&handler.privileges == 0) {
-			ctx.End(401)
-			return
-		}
-
-		switch v := handler.handle.(type) {
-		case func():
-			v()
-			w.WriteHeader(204)
-		case func(*XService):
-			v(xs.clone())
-			w.WriteHeader(204)
-		case func(*Context):
-			v(ctx)
-		case func(*Context, *XService):
-			v(ctx, xs.clone())
-		case func(*XService, *Context):
-			v(xs.clone(), ctx)
-		default:
-			ctx.End(400)
-		}
-		return
-	}
-
-	// todo: add/remove `www` in href
-	// todo: ssr for seo
-
+func (mux *AppMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if xs.App == nil {
-		ctx.End(400, "Missing App")
+		http.Error(w, "Missing App", 400)
 		return
 	}
+
+	// todo: app ssr
 
 	if xs.App.debuging {
-		remote, err := url.Parse(strf("http://127.0.0.1:%d", debugPort))
+		remote, err := url.Parse(fmt.Sprintf("http://127.0.0.1:%d", xs.App.debugPort))
 		if err != nil {
-			ctx.Error(err)
+			http.Error(w, err.Error(), 500)
 			return
 		}
 
@@ -184,18 +127,18 @@ func (mux *HttpServerMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Serve File
-	filePath := utils.CleanPath(path.Join(xs.App.root, r.URL.Path), false)
+	filePath := utils.CleanPath(path.Join(xs.App.root, r.URL.Path))
 Stat:
 	fi, err := os.Stat(filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			if topIndexHtml := path.Join(xs.App.root, "index.html"); filePath != topIndexHtml {
-				filePath = topIndexHtml
+			if topIndexHTML := path.Join(xs.App.root, "index.html"); filePath != topIndexHTML {
+				filePath = topIndexHTML
 				goto Stat
 			}
-			ctx.End(404)
+			http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 		} else {
-			ctx.End(500)
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		}
 		return
 	}
@@ -205,34 +148,48 @@ Stat:
 		goto Stat
 	}
 
+	// compress file
 	if fi.Size() > 1024 && strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
-		wh.Set("Content-Encoding", "gzip")
-		wh.Set("Vary", "Accept-Encoding")
-		gzw, err := gzip.NewWriterLevel(w, gzip.BestSpeed)
+		w.Header().Set("Content-Encoding", "gzip")
+		w.Header().Set("Vary", "Accept-Encoding")
+		w, err = newGzipResponseWriter(w, gzip.BestSpeed)
 		if err != nil {
-			ctx.End(500)
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
-		defer gzw.Close()
-		w = &gzipResponseWriter{w, gzw}
+		defer w.(*GzipResponseWriter).Close()
 	}
 
 	http.ServeFile(w, r, filePath)
 }
 
-type gzipResponseWriter struct {
+type GzipResponseWriter struct {
 	rawResponseWriter http.ResponseWriter
 	gzWriter          io.WriteCloser
 }
 
-func (w *gzipResponseWriter) Header() http.Header {
+func newGzipResponseWriter(w http.ResponseWriter, speed int) (grw *GzipResponseWriter, err error) {
+	gzipWriter, err := gzip.NewWriterLevel(w, speed)
+	if err != nil {
+		return
+	}
+
+	grw = &GzipResponseWriter{w, gzipWriter}
+	return
+}
+
+func (w *GzipResponseWriter) Header() http.Header {
 	return w.rawResponseWriter.Header()
 }
 
-func (w *gzipResponseWriter) WriteHeader(status int) {
+func (w *GzipResponseWriter) WriteHeader(status int) {
 	w.rawResponseWriter.WriteHeader(status)
 }
 
-func (w *gzipResponseWriter) Write(p []byte) (int, error) {
+func (w *GzipResponseWriter) Write(p []byte) (int, error) {
 	return w.gzWriter.Write(p)
+}
+
+func (w *GzipResponseWriter) Close() error {
+	return w.gzWriter.Close()
 }

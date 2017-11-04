@@ -12,20 +12,23 @@ package main
 
 import (
 	"github.com/ije/webx"
-	"github.com/ije/webx/user"
 )
 
 func main() {
-	var apis = web.APIService{}
+	var apis = &web.APIService{}
 
-	apis.Get("hello", func(ctx *webx.Context) {
-		ctx.JSON(200, map[string]string{
-			"message": "Hello, " + ctx.FormString("name"),
+	apis.Get("/hello/:name", func(ctx *webx.Context, xs *webx.XService) {
+		ctx.WriteJSON(200, map[string]string{
+			"message": "Hello, " + ctx.URL.Params.ByName("name"),
 		})
-	}, user.Privilege_Open)
+	}, "privilegeId")
 
 	webx.Register(apis)
-	webx.Serve("/var/www/spa-app", nil)
+
+	webx.Serve(&webx.ServerConfig{
+		AppRoot: "/var/www/spa-app",
+		Port: 8080,
+	})
 }
 ```
 
@@ -33,9 +36,9 @@ func main() {
 Features
 --------
 * Restful API Server
-* SPA Templates (React,Angular,Vue,ect...)
+* Debug and Build SPA
 
 
 Node.js
 -------
-In most cases, you need install the [nodejs](https://nodejs.org/) to test and build the SPA.
+If you run the webx with a SPA, you need install the [nodejs](https://nodejs.org/) to debug and build the App.

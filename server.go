@@ -10,18 +10,18 @@ import (
 )
 
 var config = &ServerConfig{}
+var apisMux = &ApisMux{}
 
 type ServerConfig struct {
-	Port              uint16
-	ReadTimeout       int
-	WriteTimeout      int
-	MaxHeaderBytes    int
-	CustomHttpHeaders map[string]string
-	PlainAPIServer    bool
-	Debug             bool
+	AppRoot        string
+	Port           uint16
+	ReadTimeout    int
+	WriteTimeout   int
+	MaxHeaderBytes int
+	Debug          bool
 }
 
-func Serve(appRoot string, serverConfig *ServerConfig) {
+func Serve(serverConfig *ServerConfig) {
 	if serverConfig != nil {
 		config = serverConfig
 	}
@@ -32,17 +32,17 @@ func Serve(appRoot string, serverConfig *ServerConfig) {
 		config.Debug = true
 	}
 
-	if appRoot != "" {
-		fi, err := os.Lstat(appRoot)
+	if len(config.AppRoot) > 0 {
+		fi, err := os.Lstat(config.AppRoot)
 		if err == nil && !fi.IsDir() {
-			err = errf("invalid directory")
+			err = fmt.Errorf("invalid directory")
 		}
 		if err != nil {
-			fmt.Printf("incorrect appRoot '%s': %v\n", appRoot, err)
+			fmt.Printf("incorrect AppRoot '%s': %v\n", config.AppRoot, err)
 			return
 		}
 
-		app, err := initApp(appRoot)
+		app, err := initApp(config.AppRoot)
 		if err != nil {
 			fmt.Println("initialize app failed:", err)
 			return
@@ -56,8 +56,8 @@ func Serve(appRoot string, serverConfig *ServerConfig) {
 	}
 
 	serv := &http.Server{
-		Addr:           strf((":%d"), config.Port),
-		Handler:        &HttpServerMux{config.CustomHttpHeaders, config.PlainAPIServer},
+		Addr:           fmt.Sprintf((":%d"), config.Port),
+		Handler:        apisMux,
 		ReadTimeout:    time.Duration(config.ReadTimeout) * time.Second,
 		WriteTimeout:   time.Duration(config.WriteTimeout) * time.Second,
 		MaxHeaderBytes: config.MaxHeaderBytes,
@@ -76,6 +76,6 @@ func Serve(appRoot string, serverConfig *ServerConfig) {
 			xs.App.debugProcess.Kill()
 		}
 		serv.Shutdown(nil)
-		return true
+		return false // exit main process by shutdown the http server
 	})
 }

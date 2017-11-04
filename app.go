@@ -11,76 +11,100 @@ import (
 	"github.com/ije/gox/utils"
 )
 
-var debugPort = 9000
-
 type App struct {
-	root         string
-	packingMode  string
-	debuging     bool
-	debugProcess *os.Process
-	building     bool
-	buildLog     []string
+	customHTTPHeaders map[string]string
+	hostRedirect      string
+	sessionCookieName string
+	root              string
+	packMode          string
+	debuging          bool
+	debugPort         int
+	debugProcess      *os.Process
+	building          bool
+	buildLog          []string
 }
 
 func initApp(root string) (app *App, err error) {
 	fi, err := os.Lstat(root)
 	if (err != nil && os.IsNotExist(err)) || (err == nil && !fi.IsDir()) {
-		err = errf("root(%s) is not a valid directory", root)
+		err = fmt.Errorf("root(%s) is not a valid directory", root)
 		return
 	}
 
-	var needNodeJS bool
-	var packingMode string
-	if _, err := os.Lstat(path.Join(root, "webpack.config.js")); err == nil || os.IsExist(err) {
-		packingMode = "webpack"
-		needNodeJS = true
+	// specail node version
+	if binDir := os.Getenv("NODEBINDIR"); len(binDir) > 0 {
+		os.Setenv("PATH", fmt.Sprintf("%s:%s", binDir, os.Getenv("PATH")))
 	}
 
-	if needNodeJS {
-		// specail node version
-		if binDir := os.Getenv("NODEBINDIR"); len(binDir) > 0 {
-			os.Setenv("PATH", strf("%s:%s", binDir, os.Getenv("PATH")))
-		}
+	_, err = exec.LookPath("npm")
+	if err != nil {
+		err = fmt.Errorf("missing nodejs environment")
+		return
+	}
 
-		_, err = exec.LookPath("npm")
+	fi, err = os.Lstat(path.Join(root, "package.json"))
+	if (err != nil && os.IsNotExist(err)) || (err == nil && !fi.IsDir()) {
+		err = fmt.Errorf("missing package.json")
+		return
+	}
+
+	var m map[string]interface{}
+	err = utils.ParseJSONFile(path.Join(root, "package.json"), &m)
+	if err != nil {
+		err = fmt.Errorf("can't parse package.json: %v", err)
+		return
+	}
+
+	var customHTTPHeaders map[string]string
+	if v, ok := m["customHTTPHeaders"]; ok {
+		if m, ok = v.(map[string]interface{}); ok && len(m) > 0 {
+			customHTTPHeaders = map[string]string{}
+			for key, val := range m {
+				if valStr, ok := val.(string); ok {
+					customHTTPHeaders[key] = valStr
+				}
+			}
+		}
+	}
+
+	var hostRedirect string
+	if v, ok := m["hostRedirect"]; ok {
+		hostRedirect, ok = v.(string)
+	}
+
+	var sessionCookieName string
+	if v, ok := m["sessionCookieName"]; ok {
+		sessionCookieName, ok = v.(string)
+	}
+
+	_, ok := m["dependencies"]
+	if !ok {
+		_, ok = m["devDependencies"]
+	}
+	if ok {
+		cmd := exec.Command("npm", "install")
+		if !config.Debug {
+			cmd.Args = append(cmd.Args, "--production")
+		}
+		cmd.Dir = root
+		if config.Debug {
+			cmd.Stderr = os.Stderr
+			cmd.Stdout = os.Stdout
+			fmt.Println("[npm] check/install dependencies...")
+		}
+		err = cmd.Run()
 		if err != nil {
-			err = errf("missing nodejs environment")
 			return
 		}
-
-		if fi, e := os.Lstat(path.Join(root, "package.json")); e == nil && !fi.IsDir() {
-			var m map[string]interface{}
-			err = utils.UnmarshalJSONFile(path.Join(root, "package.json"), &m)
-			if err != nil {
-				err = errf("parse package.json: %v", err)
-				return
-			}
-
-			_, ok := m["dependencies"]
-			if !ok {
-				_, ok = m["devDependencies"]
-			}
-			if ok {
-				cmd := exec.Command("npm", "install")
-				if !config.Debug {
-					cmd.Args = append(cmd.Args, "--production")
-				}
-				cmd.Dir = root
-				if config.Debug {
-					cmd.Stderr = os.Stderr
-					cmd.Stdout = os.Stdout
-					fmt.Println("[npm] check/install dependencies...")
-				}
-				err = cmd.Run()
-				if err != nil {
-					return
-				}
-				os.Setenv("PATH", strf("%s:%s", path.Join(root, "node_modules/.bin"), os.Getenv("PATH")))
-			}
-		}
+		os.Setenv("PATH", fmt.Sprintf("%s:%s", path.Join(root, "node_modules/.bin"), os.Getenv("PATH")))
 	}
 
-	switch packingMode {
+	var packMode string
+	if _, err := os.Lstat(path.Join(root, "webpack.config.js")); err == nil && !fi.IsDir() {
+		packMode = "webpack"
+	}
+
+	switch packMode {
 	case "webpack":
 		_, err = exec.LookPath("webpack")
 		if err == nil && config.Debug {
@@ -107,8 +131,11 @@ func initApp(root string) (app *App, err error) {
 	}
 
 	app = &App{
-		root:        root,
-		packingMode: packingMode,
+		customHTTPHeaders: customHTTPHeaders,
+		hostRedirect:      hostRedirect,
+		sessionCookieName: sessionCookieName,
+		root:              root,
+		packMode:          packMode,
 	}
 
 	if config.Debug {
@@ -129,7 +156,7 @@ func (app *App) BuildLog() []string {
 
 func (app *App) Debug() (err error) {
 	if app.debuging {
-		err = errf("app is debuging")
+		err = fmt.Errorf("app is debuging")
 		return
 	}
 
@@ -139,8 +166,9 @@ func (app *App) Debug() (err error) {
 		app.debuging = false
 	}()
 
+	debugPort := 9000
 	for {
-		l, err := net.Listen("tcp", strf(":%d", debugPort))
+		l, err := net.Listen("tcp", fmt.Sprintf(":%d", debugPort))
 		if err == nil {
 			l.Close()
 			break
@@ -148,9 +176,9 @@ func (app *App) Debug() (err error) {
 		debugPort++
 	}
 
-	switch app.packingMode {
+	switch app.packMode {
 	case "webpack":
-		cmd := exec.Command("webpack-dev-server", "--hot", "--host=127.0.0.1", strf("--port=%d", debugPort))
+		cmd := exec.Command("webpack-dev-server", "--hot", "--host=127.0.0.1", fmt.Sprintf("--port=%d", debugPort))
 		cmd.Env = append(os.Environ(), "NODE_ENV=development")
 		cmd.Dir = app.root
 		cmd.Stderr = os.Stderr
@@ -162,6 +190,7 @@ func (app *App) Debug() (err error) {
 			return err
 		}
 
+		app.debugPort = debugPort
 		app.debugProcess = cmd.Process
 		err = cmd.Wait()
 	}
@@ -171,7 +200,7 @@ func (app *App) Debug() (err error) {
 
 func (app *App) Build() (err error) {
 	if app.building {
-		err = errf("app is building")
+		err = fmt.Errorf("app is building")
 		return
 	}
 
@@ -180,7 +209,7 @@ func (app *App) Build() (err error) {
 		app.building = false
 	}()
 
-	switch app.packingMode {
+	switch app.packMode {
 	case "webpack":
 		cmd := exec.Command("webpack", "--hide-modules", "--color=false")
 		cmd.Env = append(os.Environ(), "NODE_ENV=production")
@@ -196,7 +225,7 @@ func (app *App) Build() (err error) {
 			level = "info"
 			msg = string(output)
 		}
-		app.buildLog = append(app.buildLog, strf(`%s [%s] %s`, time.Now().Format("2006/01/02 15:04:05"), level, msg))
+		app.buildLog = append(app.buildLog, fmt.Sprintf(`%s [%s] %s`, time.Now().Format("2006/01/02 15:04:05"), level, msg))
 	}
 
 	return
