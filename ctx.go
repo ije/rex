@@ -13,23 +13,25 @@ import (
 	"time"
 
 	"github.com/ije/gox/utils"
+	"github.com/ije/webx/acl"
 	"github.com/ije/webx/session"
 	"github.com/julienschmidt/httprouter"
 )
 
 var globalSessionManager session.Manager = session.NewMemorySessionManager(time.Hour / 2)
 
-func InitSessionManager(manager session.Manager) {
+func SetSessionManager(manager session.Manager) {
 	if manager != nil {
 		globalSessionManager = manager
 	}
 }
 
 type Context struct {
-	URL     *URL
-	w       http.ResponseWriter
-	r       *http.Request
-	session session.Session
+	URL            *URL
+	User           *acl.User
+	ResponseWriter http.ResponseWriter
+	Request        *http.Request
+	session        session.Session
 }
 
 type URL struct {
@@ -37,47 +39,40 @@ type URL struct {
 	*url.URL
 }
 
-func (ctx *Context) ResponseWriter() http.ResponseWriter {
-	return ctx.w
-}
-
-func (ctx *Context) Request() *http.Request {
-	return ctx.r
-}
-
 func (ctx *Context) Cookie(name string) (cookie *http.Cookie, err error) {
-	return ctx.r.Cookie(name)
+	return ctx.Request.Cookie(name)
 }
 
 func (ctx *Context) SetCookie(cookie *http.Cookie) {
 	if cookie != nil {
-		ctx.w.Header().Add("Set-Cookie", cookie.String())
+		ctx.ResponseWriter.Header().Add("Set-Cookie", cookie.String())
 	}
 }
 
 func (ctx *Context) RemoveCookie(cookie *http.Cookie) {
 	if cookie != nil {
 		cookie.Expires = time.Now().Add(-time.Second)
-		ctx.w.Header().Add("Set-Cookie", cookie.String())
+		ctx.ResponseWriter.Header().Add("Set-Cookie", cookie.String())
 	}
 }
 
-func (ctx *Context) Session() (sess session.Session, err error) {
+func (ctx *Context) Session() (sess session.Session) {
 	sessionCookieName := "x-session"
-	if xs.App != nil && len(xs.App.sessionCookieName) > 0 {
-		sessionCookieName = xs.App.sessionCookieName
+	if len(config.SessionCookieName) > 0 {
+		sessionCookieName = config.SessionCookieName
 	}
 
 	var sid string
-	if c, err := ctx.Cookie(sessionCookieName); err == nil {
-		sid = c.Value
+	cookie, err := ctx.Cookie(sessionCookieName)
+	if err == nil {
+		sid = cookie.Value
 	}
 
 	sess = ctx.session
 	if sess == nil {
 		sess, err = globalSessionManager.Get(sid)
 		if err != nil {
-			return
+			panic(fmt.Errorf("Context.Session(): %v", err))
 		}
 		ctx.session = sess
 	}
@@ -94,9 +89,9 @@ func (ctx *Context) Session() (sess session.Session, err error) {
 }
 
 func (ctx *Context) ParseMultipartForm(maxMemoryBytes int64) {
-	if strings.Contains(ctx.r.Header.Get("Content-Type"), "json") {
+	if strings.Contains(ctx.Request.Header.Get("Content-Type"), "json") {
 		var values map[string]interface{}
-		if json.NewDecoder(ctx.r.Body).Decode(&values) == nil {
+		if json.NewDecoder(ctx.Request.Body).Decode(&values) == nil {
 			form := url.Values{}
 			for key, value := range values {
 				switch v := value.(type) {
@@ -111,21 +106,21 @@ func (ctx *Context) ParseMultipartForm(maxMemoryBytes int64) {
 					form.Set(key, fmt.Sprintf("%v", value))
 				}
 			}
-			ctx.r.Form = form
+			ctx.Request.Form = form
 			return
 		}
 	} else {
-		ctx.r.ParseMultipartForm(maxMemoryBytes)
+		ctx.Request.ParseMultipartForm(maxMemoryBytes)
 	}
 }
 
 func (ctx *Context) FormValues(key string) (values []string) {
-	if ctx.r.Form == nil {
+	if ctx.Request.Form == nil {
 		ctx.ParseMultipartForm(32 << 20) // 32m in memory
 	}
-	values, ok := ctx.r.Form[key]
+	values, ok := ctx.Request.Form[key]
 	if !ok {
-		values, _ = ctx.r.Form[key+"[]"]
+		values, _ = ctx.Request.Form[key+"[]"]
 	}
 	return
 }
@@ -176,14 +171,14 @@ func (ctx *Context) FormJSON(key string) (value map[string]interface{}, err erro
 }
 
 func (ctx *Context) RemoteIp() (ip string) {
-	ip = ctx.r.Header.Get("X-Real-IP")
+	ip = ctx.Request.Header.Get("X-Real-IP")
 	if len(ip) == 0 {
-		ip = ctx.r.Header.Get("X-Forwarded-For")
+		ip = ctx.Request.Header.Get("X-Forwarded-For")
 		if len(ip) > 0 {
 			ip, _ = utils.SplitByFirstByte(ip, ',')
 			ip = strings.TrimSpace(ip)
 		} else {
-			ip = ctx.r.RemoteAddr
+			ip = ctx.Request.RemoteAddr
 		}
 	}
 
@@ -192,7 +187,7 @@ func (ctx *Context) RemoteIp() (ip string) {
 }
 
 func (ctx *Context) Authenticate(realm string, authHandle func(user string, password string) (ok bool, err error)) (ok bool, err error) {
-	if authField := ctx.r.Header.Get("Authorization"); len(authField) > 0 {
+	if authField := ctx.Request.Header.Get("Authorization"); len(authField) > 0 {
 		if authType, combination := utils.SplitByFirstByte(authField, ' '); len(combination) > 0 {
 			switch authType {
 			case "Basic":
@@ -208,13 +203,13 @@ func (ctx *Context) Authenticate(realm string, authHandle func(user string, pass
 		}
 	}
 
-	ctx.w.Header().Set("WWW-Authenticate", fmt.Sprintf("Basic realm=\"%s\"", realm))
-	ctx.w.WriteHeader(401)
+	ctx.ResponseWriter.Header().Set("WWW-Authenticate", fmt.Sprintf("Basic realm=\"%s\"", realm))
+	ctx.ResponseWriter.WriteHeader(401)
 	return
 }
 
 func (ctx *Context) Write(p []byte) (n int, err error) {
-	return ctx.w.Write(p)
+	return ctx.ResponseWriter.Write(p)
 }
 
 func (ctx *Context) WriteJSON(status int, data interface{}) (n int, err error) {
@@ -229,39 +224,39 @@ func (ctx *Context) WriteJSON(status int, data interface{}) (n int, err error) {
 		return
 	}
 
-	var wr io.Writer = ctx.w
-	wh := ctx.w.Header()
-	if len(jsonData) > 1024 && strings.Index(ctx.r.Header.Get("Accept-Encoding"), "gzip") > -1 {
+	var wr io.Writer = ctx.ResponseWriter
+	wh := ctx.ResponseWriter.Header()
+	if len(jsonData) > 1024 && strings.Index(ctx.Request.Header.Get("Accept-Encoding"), "gzip") > -1 {
 		wh.Set("Content-Encoding", "gzip")
 		wh.Set("Vary", "Accept-Encoding")
-		gz, _ := gzip.NewWriterLevel(ctx.w, gzip.BestSpeed)
+		gz, _ := gzip.NewWriterLevel(ctx.ResponseWriter, gzip.BestSpeed)
 		defer gz.Close()
 		wr = gz
 	}
 	wh.Set("Content-Type", "application/json; charset=utf-8")
-	ctx.w.WriteHeader(status)
+	ctx.ResponseWriter.WriteHeader(status)
 	return wr.Write(jsonData)
 }
 
 func (ctx *Context) End(status int, a ...string) {
-	wh := ctx.w.Header()
+	wh := ctx.ResponseWriter.Header()
 	if _, ok := wh["Content-Type"]; !ok {
 		wh.Set("Content-Type", "text/plain; charset=utf-8")
 	}
-	ctx.w.WriteHeader(status)
+	ctx.ResponseWriter.WriteHeader(status)
 	var text string
 	if len(a) > 0 {
 		text = strings.Join(a, " ")
 	} else {
 		text = http.StatusText(status)
 	}
-	ctx.w.Write([]byte(text))
+	ctx.ResponseWriter.Write([]byte(text))
 }
 
 func (ctx *Context) Error(err error) {
 	if config.Debug {
-		ctx.End(500, err.Error())
+		ctx.End(http.StatusInternalServerError, err.Error())
 	} else {
-		ctx.End(500)
+		ctx.End(http.StatusInternalServerError)
 	}
 }

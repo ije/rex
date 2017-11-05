@@ -12,16 +12,13 @@ import (
 )
 
 type App struct {
-	customHTTPHeaders map[string]string
-	hostRedirect      string
-	sessionCookieName string
-	root              string
-	packMode          string
-	debuging          bool
-	debugPort         int
-	debugProcess      *os.Process
-	building          bool
-	buildLog          []string
+	root         string
+	packMode     string
+	debuging     bool
+	debugPort    int
+	debugProcess *os.Process
+	building     bool
+	buildLog     []string
 }
 
 func initApp(root string) (app *App, err error) {
@@ -31,77 +28,55 @@ func initApp(root string) (app *App, err error) {
 		return
 	}
 
-	// specail node version
-	if binDir := os.Getenv("NODEBINDIR"); len(binDir) > 0 {
-		os.Setenv("PATH", fmt.Sprintf("%s:%s", binDir, os.Getenv("PATH")))
-	}
-
-	_, err = exec.LookPath("npm")
-	if err != nil {
-		err = fmt.Errorf("missing nodejs environment")
-		return
-	}
-
-	fi, err = os.Lstat(path.Join(root, "package.json"))
-	if (err != nil && os.IsNotExist(err)) || (err == nil && !fi.IsDir()) {
-		err = fmt.Errorf("missing package.json")
-		return
-	}
-
-	var m map[string]interface{}
-	err = utils.ParseJSONFile(path.Join(root, "package.json"), &m)
-	if err != nil {
-		err = fmt.Errorf("can't parse package.json: %v", err)
-		return
-	}
-
-	var customHTTPHeaders map[string]string
-	if v, ok := m["customHTTPHeaders"]; ok {
-		if m, ok = v.(map[string]interface{}); ok && len(m) > 0 {
-			customHTTPHeaders = map[string]string{}
-			for key, val := range m {
-				if valStr, ok := val.(string); ok {
-					customHTTPHeaders[key] = valStr
-				}
-			}
-		}
-	}
-
-	var hostRedirect string
-	if v, ok := m["hostRedirect"]; ok {
-		hostRedirect, ok = v.(string)
-	}
-
-	var sessionCookieName string
-	if v, ok := m["sessionCookieName"]; ok {
-		sessionCookieName, ok = v.(string)
-	}
-
-	_, ok := m["dependencies"]
-	if !ok {
-		_, ok = m["devDependencies"]
-	}
-	if ok {
-		cmd := exec.Command("npm", "install")
-		if !config.Debug {
-			cmd.Args = append(cmd.Args, "--production")
-		}
-		cmd.Dir = root
-		if config.Debug {
-			cmd.Stderr = os.Stderr
-			cmd.Stdout = os.Stdout
-			fmt.Println("[npm] check/install dependencies...")
-		}
-		err = cmd.Run()
-		if err != nil {
-			return
-		}
-		os.Setenv("PATH", fmt.Sprintf("%s:%s", path.Join(root, "node_modules/.bin"), os.Getenv("PATH")))
-	}
-
+	var requireNode bool
 	var packMode string
 	if _, err := os.Lstat(path.Join(root, "webpack.config.js")); err == nil && !fi.IsDir() {
+		requireNode = true
 		packMode = "webpack"
+	}
+
+	if requireNode {
+		// specail node version
+		if binDir := os.Getenv("NODEBINDIR"); len(binDir) > 0 {
+			os.Setenv("PATH", fmt.Sprintf("%s:%s", binDir, os.Getenv("PATH")))
+		}
+
+		_, err = exec.LookPath("npm")
+		if err != nil {
+			err = fmt.Errorf("missing nodejs environment")
+			return
+		}
+
+		if fi, e := os.Lstat(path.Join(root, "package.json")); e == nil && !fi.IsDir() {
+			var m map[string]interface{}
+			err = utils.ParseJSONFile(path.Join(root, "package.json"), &m)
+			if err != nil {
+				err = fmt.Errorf("parse package.json: %v", err)
+				return
+			}
+
+			_, ok := m["dependencies"]
+			if !ok {
+				_, ok = m["devDependencies"]
+			}
+			if ok {
+				cmd := exec.Command("npm", "install")
+				if !config.Debug {
+					cmd.Args = append(cmd.Args, "--production")
+				}
+				cmd.Dir = root
+				if config.Debug {
+					cmd.Stderr = os.Stderr
+					cmd.Stdout = os.Stdout
+					fmt.Println("[npm] check/install dependencies...")
+				}
+				err = cmd.Run()
+				if err != nil {
+					return
+				}
+				os.Setenv("PATH", fmt.Sprintf("%s:%s", path.Join(root, "node_modules/.bin"), os.Getenv("PATH")))
+			}
+		}
 	}
 
 	switch packMode {
@@ -131,11 +106,8 @@ func initApp(root string) (app *App, err error) {
 	}
 
 	app = &App{
-		customHTTPHeaders: customHTTPHeaders,
-		hostRedirect:      hostRedirect,
-		sessionCookieName: sessionCookieName,
-		root:              root,
-		packMode:          packMode,
+		root:     root,
+		packMode: packMode,
 	}
 
 	if config.Debug {

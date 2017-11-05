@@ -1,6 +1,7 @@
 package webx
 
 import (
+	"bytes"
 	"compress/gzip"
 	"fmt"
 	"io"
@@ -9,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"runtime"
 	"strings"
 
 	"github.com/ije/gox/utils"
@@ -19,17 +21,61 @@ type ApisMux struct {
 	router *httprouter.Router
 }
 
+func (mux *ApisMux) initRouter() {
+	if mux.router != nil {
+		return
+	}
+
+	mux.router = httprouter.New()
+
+	mux.router.PanicHandler = func(w http.ResponseWriter, r *http.Request, v interface{}) {
+		if config.Debug {
+			http.Error(w, fmt.Sprintf("%v", v), http.StatusInternalServerError)
+		} else {
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		}
+
+		if err, ok := v.(error); ok && strings.HasPrefix(err.Error(), "[Context.Session(): ") {
+			xs.Log.Error(err)
+			return
+		}
+
+		var (
+			i    = 2
+			j    int
+			pc   uintptr
+			file string
+			line int
+			ok   bool
+			buf  = bytes.NewBuffer(nil)
+		)
+		for {
+			pc, file, line, ok = runtime.Caller(i)
+			if ok {
+				buf.WriteByte('\n')
+				for j = 0; j < 34; j++ {
+					buf.WriteByte(' ')
+				}
+				fmt.Fprint(buf, "> ", runtime.FuncForPC(pc).Name(), " ", file, ":", line)
+			} else {
+				break
+			}
+			i++
+		}
+		xs.Log.Error("[panic]", v, buf.String())
+	}
+
+	if len(config.AppRoot) > 0 {
+		mux.router.NotFound = &AppMux{}
+	}
+}
+
 func (mux *ApisMux) Register(apis *APIService) {
 	if apis == nil {
 		return
 	}
 
-	if mux.router == nil {
-		mux.router = httprouter.New()
-		if len(config.AppRoot) > 0 {
-			mux.router.NotFound = &AppMux{}
-		}
-	}
+	mux.initRouter()
 
 	for method, route := range apis.route {
 		for endpoint, handler := range route {
@@ -61,9 +107,45 @@ func (mux *ApisMux) Register(apis *APIService) {
 			}
 			routerHandler(endpoint, func(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
 				ctx := &Context{
-					w:   w,
-					r:   r,
-					URL: &URL{params, r.URL},
+					URL:            &URL{params, r.URL},
+					ResponseWriter: w,
+					Request:        r,
+				}
+
+				if len(apis.middlewares) > 0 {
+					for _, handle := range apis.middlewares {
+						handle(ctx, xs.clone())
+					}
+				}
+
+				if ctx.URL == nil {
+					ctx.URL = &URL{params, r.URL}
+				}
+				if ctx.ResponseWriter == nil {
+					ctx.ResponseWriter = w
+				}
+				if ctx.Request == nil {
+					ctx.Request = r
+				}
+
+				if len(handler.privileges) > 0 {
+					var isGranted bool
+					if ctx.User != nil && len(ctx.User.Privileges) > 0 {
+						for _, hp := range handler.privileges {
+							for _, up := range ctx.User.Privileges {
+								isGranted = hp.Match(up)
+								if isGranted {
+									break
+								}
+							}
+							if isGranted {
+								break
+							}
+						}
+					}
+					if !isGranted {
+						ctx.End(http.StatusUnauthorized)
+					}
 				}
 
 				handler.handle(ctx, xs.clone())
@@ -74,15 +156,15 @@ func (mux *ApisMux) Register(apis *APIService) {
 
 func (mux *ApisMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	wh := w.Header()
-	if xs.App == nil && len(xs.App.customHTTPHeaders) > 0 {
-		for key, val := range xs.App.customHTTPHeaders {
+	if len(config.CustomHTTPHeaders) > 0 {
+		for key, val := range config.CustomHTTPHeaders {
 			wh.Set(key, val)
 		}
 	}
 	wh.Set("Connection", "keep-alive")
 	wh.Set("Server", "webx-server")
 
-	if xs.App != nil {
+	if len(config.HostRedirect) > 0 {
 		code := 301 // Permanent redirect, request with GET method
 		if r.Method != "GET" {
 			// Temporary redirect, request with same method
@@ -90,10 +172,10 @@ func (mux *ApisMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			code = 307
 		}
 
-		if xs.App.hostRedirect == "force-www" && !strings.HasPrefix(r.Host, "www.") {
+		if config.HostRedirect == "force-www" && !strings.HasPrefix(r.Host, "www.") {
 			http.Redirect(w, r, path.Join("www."+r.Host, r.URL.String()), code)
 			return
-		} else if xs.App.hostRedirect == "non-www" && strings.HasPrefix(r.Host, "www.") {
+		} else if config.HostRedirect == "non-www" && strings.HasPrefix(r.Host, "www.") {
 			http.Redirect(w, r, path.Join(strings.TrimPrefix(r.Host, ".www"), r.URL.String()), code)
 			return
 		}
@@ -101,6 +183,8 @@ func (mux *ApisMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if mux.router != nil {
 		mux.router.ServeHTTP(w, r)
+	} else {
+		new(AppMux).ServeHTTP(w, r)
 	}
 }
 
@@ -148,16 +232,21 @@ Stat:
 		goto Stat
 	}
 
-	// compress file
-	if fi.Size() > 1024 && strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
-		w.Header().Set("Content-Encoding", "gzip")
-		w.Header().Set("Vary", "Accept-Encoding")
-		w, err = newGzipResponseWriter(w, gzip.BestSpeed)
-		if err != nil {
-			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-			return
+	// compress text file when the size is greater than 1024 bytes
+	if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+		switch strings.ToLower(utils.FileExt(filePath)) {
+		case "js", "css", "html", "htm", "xml", "svg", "json", "text":
+			if fi.Size() > 1024 {
+				w.Header().Set("Content-Encoding", "gzip")
+				w.Header().Set("Vary", "Accept-Encoding")
+				w, err = newGzipResponseWriter(w, gzip.BestSpeed)
+				if err != nil {
+					http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+					return
+				}
+				defer w.(*GzipResponseWriter).Close()
+			}
 		}
-		defer w.(*GzipResponseWriter).Close()
 	}
 
 	http.ServeFile(w, r, filePath)

@@ -17,7 +17,7 @@ func (xs *XService) clone() *XService {
 	return &XService{xs.App, xs.Log}
 }
 
-func InitLogger(logger *log.Logger) {
+func SetLogger(logger *log.Logger) {
 	if logger != nil {
 		xs.Log = logger
 	}

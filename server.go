@@ -13,12 +13,15 @@ var config = &ServerConfig{}
 var apisMux = &ApisMux{}
 
 type ServerConfig struct {
-	AppRoot        string
-	Port           uint16
-	ReadTimeout    int
-	WriteTimeout   int
-	MaxHeaderBytes int
-	Debug          bool
+	AppRoot           string
+	Port              uint16
+	CustomHTTPHeaders map[string]string
+	HostRedirect      string
+	SessionCookieName string
+	ReadTimeout       int
+	WriteTimeout      int
+	MaxHeaderBytes    int
+	Debug             bool
 }
 
 func Serve(serverConfig *ServerConfig) {

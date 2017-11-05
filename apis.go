@@ -8,65 +8,80 @@ import (
 )
 
 type APIService struct {
-	Prefix string
-	route  map[string]map[string]*apiHandler
+	Prefix      string
+	middlewares []APIHandle
+	route       map[string]map[string]*apiHandler
 }
 
 type apiHandler struct {
-	handle    APIHandle
-	privilege *acl.Privilege
+	handle     APIHandle
+	privileges map[string]*acl.Privilege
 }
 
 type APIHandle func(*Context, *XService)
 
+func (s *APIService) Use(middleware APIHandle) {
+	s.middlewares = append(s.middlewares, middleware)
+}
+
 // Options
 // apis.Options('_private_endpoint', &webx.CORS{Origin: "*"})
-func (s APIService) Options(endpoint string, cors *CORS) {
+func (s *APIService) OPTIONS(endpoint string, cors *CORS) {
 	if cors == nil {
 		return
 	}
 
 	s.register("OPTIONS", endpoint, func(ctx *Context, xs *XService) {
-		w := ctx.ResponseWriter()
-		wh := ctx.ResponseWriter().Header()
-		wh.Set("Access-Control-Allow-Origin", cors.Origin)
-		wh.Set("Access-Control-Allow-Methods", strings.Join(cors.Methods, ","))
-		wh.Set("Access-Control-Allow-Headers", strings.Join(cors.Headers, ","))
-		if cors.Credentials {
-			wh.Set("Access-Control-Allow-Credentials", "true")
+		w := ctx.ResponseWriter
+		wh := w.Header()
+
+		if len(cors.Origin) > 0 {
+			wh.Set("Access-Control-Allow-Origin", cors.Origin)
+			wh.Set("Vary", "Origin")
+
+			if len(cors.Methods) > 0 {
+				wh.Set("Access-Control-Allow-Methods", strings.Join(cors.Methods, ", "))
+			}
+			if len(cors.Headers) > 0 {
+				wh.Set("Access-Control-Allow-Headers", strings.Join(cors.Headers, ", "))
+			}
+			if cors.Credentials {
+				wh.Set("Access-Control-Allow-Credentials", "true")
+			}
+			if cors.MaxAge > 0 {
+				wh.Set("Access-Control-Max-Age", strconv.Itoa(cors.MaxAge))
+			}
 		}
-		if cors.MaxAge > 0 {
-			wh.Set("Access-Control-Max-Age", strconv.Itoa(cors.MaxAge))
-		}
+
 		w.WriteHeader(204)
-	}, "")
+	}, nil)
 }
 
-func (s APIService) Head(endpoint string, handle APIHandle, privilegeId string) {
-	s.register("HEAD", endpoint, handle, privilegeId)
+func (s *APIService) HEAD(endpoint string, handle APIHandle, privilegeIds ...string) {
+	s.register("HEAD", endpoint, handle, privilegeIds)
 }
 
-func (s APIService) Get(endpoint string, handle APIHandle, privilegeId string) {
-	s.register("GET", endpoint, handle, privilegeId)
+func (s *APIService) GET(endpoint string, handle APIHandle, privilegeIds ...string) {
+	s.register("GET", endpoint, handle, privilegeIds)
 }
 
-func (s APIService) Post(endpoint string, handle APIHandle, privilegeId string) {
-	s.register("POST", endpoint, handle, privilegeId)
+func (s *APIService) POST(endpoint string, handle APIHandle, privilegeIds ...string) {
+	s.register("POST", endpoint, handle, privilegeIds)
 }
 
-func (s APIService) Put(endpoint string, handle APIHandle, privilegeId string) {
-	s.register("PUT", endpoint, handle, privilegeId)
+func (s *APIService) PUT(endpoint string, handle APIHandle, privilegeIds ...string) {
+	s.register("PUT", endpoint, handle, privilegeIds)
 }
 
-func (s APIService) Patch(endpoint string, handle APIHandle, privilegeId string) {
-	s.register("PATCH", endpoint, handle, privilegeId)
+func (s *APIService) PATCH(endpoint string, handle APIHandle, privilegeIds ...string) {
+	s.register("PATCH", endpoint, handle, privilegeIds)
 }
 
-func (s APIService) Delete(endpoint string, handle APIHandle, privilegeId string) {
-	s.register("DELETE", endpoint, handle, privilegeId)
+func (s *APIService) DELETE(endpoint string, handle APIHandle, privilegeIds ...string) {
+	s.register("DELETE", endpoint, handle, privilegeIds)
 }
 
-func (s APIService) register(method string, endpoint string, handle APIHandle, privilegeId string) {
+func (s *APIService) register(method string, endpoint string, handle APIHandle, privilegeIds []string) {
 	if handle == nil {
 		return
 	}
@@ -75,15 +90,20 @@ func (s APIService) register(method string, endpoint string, handle APIHandle, p
 		return
 	}
 
-	var privilege *acl.Privilege = nil
-	if len(privilegeId) > 0 {
-		privilege = acl.NewPrivilege(privilegeId)
+	var privileges map[string]*acl.Privilege
+	if len(privilegeIds) > 0 {
+		privileges = map[string]*acl.Privilege{}
+		for _, pid := range privilegeIds {
+			if len(pid) > 0 {
+				privileges[pid] = acl.NewPrivilege(pid)
+			}
+		}
 	}
 
 	if s.route[method] == nil {
 		s.route[method] = map[string]*apiHandler{}
 	}
-	s.route[method][endpoint] = &apiHandler{privilege: privilege, handle: handle}
+	s.route[method][endpoint] = &apiHandler{privileges: privileges, handle: handle}
 }
 
 func Register(apis *APIService) {
