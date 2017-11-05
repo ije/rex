@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
 	"time"
 
 	"github.com/ije/gox/utils"
@@ -22,6 +23,11 @@ type App struct {
 }
 
 func initApp(root string) (app *App, err error) {
+	root, err = filepath.Abs(root)
+	if err != nil {
+		return
+	}
+
 	fi, err := os.Lstat(root)
 	if (err != nil && os.IsNotExist(err)) || (err == nil && !fi.IsDir()) {
 		err = fmt.Errorf("root(%s) is not a valid directory", root)
