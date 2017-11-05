@@ -30,7 +30,7 @@ func initApp(root string) (app *App, err error) {
 
 	var requireNode bool
 	var packMode string
-	if _, err := os.Lstat(path.Join(root, "webpack.config.js")); err == nil && !fi.IsDir() {
+	if fi, err := os.Lstat(path.Join(root, "webpack.config.js")); err == nil && !fi.IsDir() {
 		requireNode = true
 		packMode = "webpack"
 	}

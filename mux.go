@@ -19,13 +19,16 @@ import (
 
 type ApisMux struct {
 	router *httprouter.Router
+	apiss  []*APIService
+}
+
+func (mux *ApisMux) Register(apis *APIService) {
+	if apis != nil {
+		mux.apiss = append(mux.apiss, apis)
+	}
 }
 
 func (mux *ApisMux) initRouter() {
-	if mux.router != nil {
-		return
-	}
-
 	mux.router = httprouter.New()
 
 	mux.router.PanicHandler = func(w http.ResponseWriter, r *http.Request, v interface{}) {
@@ -65,91 +68,85 @@ func (mux *ApisMux) initRouter() {
 		xs.Log.Error("[panic]", v, buf.String())
 	}
 
-	if len(config.AppRoot) > 0 {
-		mux.router.NotFound = &AppMux{}
-	}
-}
-
-func (mux *ApisMux) Register(apis *APIService) {
-	if apis == nil {
-		return
+	if xs.App != nil {
+		apisMux.router.NotFound = &AppMux{}
 	}
 
-	mux.initRouter()
-
-	for method, route := range apis.route {
-		for endpoint, handler := range route {
-			var routerHandler func(string, httprouter.Handle)
-			switch method {
-			case "OPTIONS":
-				routerHandler = mux.router.OPTIONS
-			case "HEAD":
-				routerHandler = mux.router.HEAD
-			case "GET":
-				routerHandler = mux.router.GET
-			case "POST":
-				routerHandler = mux.router.POST
-			case "PUT":
-				routerHandler = mux.router.PUT
-			case "PATCH":
-				routerHandler = mux.router.PATCH
-			case "DELETE":
-				routerHandler = mux.router.DELETE
-			}
-			if routerHandler == nil {
-				continue
-			}
-			if len(apis.Prefix) > 0 {
-				endpoint = path.Join("/"+strings.Trim(apis.Prefix, "/"), endpoint)
-			}
-			if len(config.AppRoot) > 0 {
-				endpoint = path.Join("/api", endpoint)
-			}
-			routerHandler(endpoint, func(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
-				ctx := &Context{
-					URL:            &URL{params, r.URL},
-					ResponseWriter: w,
-					Request:        r,
+	for _, apis := range mux.apiss {
+		for method, route := range apis.route {
+			for endpoint, handler := range route {
+				var routerHandler func(string, httprouter.Handle)
+				switch method {
+				case "OPTIONS":
+					routerHandler = mux.router.OPTIONS
+				case "HEAD":
+					routerHandler = mux.router.HEAD
+				case "GET":
+					routerHandler = mux.router.GET
+				case "POST":
+					routerHandler = mux.router.POST
+				case "PUT":
+					routerHandler = mux.router.PUT
+				case "PATCH":
+					routerHandler = mux.router.PATCH
+				case "DELETE":
+					routerHandler = mux.router.DELETE
 				}
-
-				if len(apis.middlewares) > 0 {
-					for _, handle := range apis.middlewares {
-						handle(ctx, xs.clone())
+				if routerHandler == nil {
+					continue
+				}
+				if len(apis.Prefix) > 0 {
+					endpoint = path.Join("/"+strings.Trim(apis.Prefix, "/"), endpoint)
+				}
+				if xs.App != nil {
+					endpoint = path.Join("/api", endpoint)
+				}
+				routerHandler(endpoint, func(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
+					ctx := &Context{
+						URL:            &URL{params, r.URL},
+						ResponseWriter: w,
+						Request:        r,
 					}
-				}
 
-				if ctx.URL == nil {
-					ctx.URL = &URL{params, r.URL}
-				}
-				if ctx.ResponseWriter == nil {
-					ctx.ResponseWriter = w
-				}
-				if ctx.Request == nil {
-					ctx.Request = r
-				}
+					if len(apis.middlewares) > 0 {
+						for _, handle := range apis.middlewares {
+							handle(ctx, xs.clone())
+						}
+					}
 
-				if len(handler.privileges) > 0 {
-					var isGranted bool
-					if ctx.User != nil && len(ctx.User.Privileges) > 0 {
-						for _, hp := range handler.privileges {
-							for _, up := range ctx.User.Privileges {
-								isGranted = hp.Match(up)
+					if ctx.URL == nil {
+						ctx.URL = &URL{params, r.URL}
+					}
+					if ctx.ResponseWriter == nil {
+						ctx.ResponseWriter = w
+					}
+					if ctx.Request == nil {
+						ctx.Request = r
+					}
+
+					if len(handler.privileges) > 0 {
+						var isGranted bool
+						if ctx.User != nil && len(ctx.User.Privileges) > 0 {
+							for _, hp := range handler.privileges {
+								for _, up := range ctx.User.Privileges {
+									isGranted = hp.Match(up)
+									if isGranted {
+										break
+									}
+								}
 								if isGranted {
 									break
 								}
 							}
-							if isGranted {
-								break
-							}
+						}
+						if !isGranted {
+							ctx.End(http.StatusUnauthorized)
 						}
 					}
-					if !isGranted {
-						ctx.End(http.StatusUnauthorized)
-					}
-				}
 
-				handler.handle(ctx, xs.clone())
-			})
+					handler.handle(ctx, xs.clone())
+				})
+			}
 		}
 	}
 }
@@ -216,6 +213,7 @@ Stat:
 	fi, err := os.Stat(filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
+			// 404s will fallback to /index.html
 			if topIndexHTML := path.Join(xs.App.root, "index.html"); filePath != topIndexHTML {
 				filePath = topIndexHTML
 				goto Stat

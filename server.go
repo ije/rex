@@ -31,9 +31,6 @@ func Serve(serverConfig *ServerConfig) {
 	if config.Port == 0 {
 		config.Port = 80
 	}
-	if ev := os.Getenv("WEBX_DEBUG"); ev == "1" || ev == "true" {
-		config.Debug = true
-	}
 
 	if len(config.AppRoot) > 0 {
 		fi, err := os.Lstat(config.AppRoot)
@@ -50,8 +47,11 @@ func Serve(serverConfig *ServerConfig) {
 			fmt.Println("initialize app failed:", err)
 			return
 		}
+
 		xs.App = app
 	}
+
+	apisMux.initRouter()
 
 	if !config.Debug {
 		xs.Log.SetLevelByName("info")

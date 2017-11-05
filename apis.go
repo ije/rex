@@ -100,6 +100,9 @@ func (s *APIService) register(method string, endpoint string, handle APIHandle, 
 		}
 	}
 
+	if s.route == nil {
+		s.route = map[string]map[string]*apiHandler{}
+	}
 	if s.route[method] == nil {
 		s.route[method] = map[string]*apiHandler{}
 	}
