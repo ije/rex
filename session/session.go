@@ -6,11 +6,11 @@ import (
 
 type Session interface {
 	SID() string
-	Store() map[string]interface{}
-	Get(key string) (value interface{}, ok bool)
-	Set(key string, value interface{})
-	Delete(key string)
-	Flush()
+	Values(keys ...string) (values map[string]interface{}, err error)
+	Get(key string) (value interface{}, ok bool, err error)
+	Set(key string, value interface{}) error
+	Delete(key string) error
+	Flush() error
 }
 
 type Manager interface {

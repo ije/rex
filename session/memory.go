@@ -4,46 +4,73 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ije/gox/utils"
+
 	"github.com/ije/gox/crypto/rs"
 )
 
 type MemorySession struct {
-	sid     string
-	store   map[string]interface{}
-	expires time.Time
-	manager *MemorySessionManager
+	sid       string
+	storeLock sync.RWMutex
+	store     map[string]interface{}
+	expires   time.Time
+	manager   *MemorySessionManager
 }
 
 func (ms *MemorySession) SID() string {
 	return ms.sid
 }
 
-func (ms *MemorySession) Store() (store map[string]interface{}) {
-	store = ms.store
+func (ms *MemorySession) Values(keys ...string) (values map[string]interface{}, err error) {
+	ms.storeLock.RLock()
+	if len(ms.store) > 0 {
+		values = map[string]interface{}{}
+		for key, value := range ms.store {
+			if len(keys) == 0 || utils.ContainsString(keys, key) {
+				values[key] = value
+			}
+		}
+	}
+	ms.storeLock.RUnlock()
+
 	ms.activate()
 	return
 }
 
-func (ms *MemorySession) Get(key string) (value interface{}, ok bool) {
+func (ms *MemorySession) Get(key string) (value interface{}, ok bool, err error) {
+	ms.storeLock.RLock()
 	value, ok = ms.store[key]
+	ms.storeLock.RUnlock()
+
 	ms.activate()
 	return
 }
 
-func (ms *MemorySession) Set(key string, value interface{}) {
+func (ms *MemorySession) Set(key string, value interface{}) error {
+	ms.storeLock.Lock()
 	ms.store[key] = value
+	ms.storeLock.Unlock()
+
 	ms.activate()
+	return nil
 }
 
-func (ms *MemorySession) Delete(key string) {
+func (ms *MemorySession) Delete(key string) error {
+	ms.storeLock.Lock()
 	delete(ms.store, key)
+	ms.storeLock.Unlock()
+
 	ms.activate()
-	return
+	return nil
 }
 
-func (ms *MemorySession) Flush() {
+func (ms *MemorySession) Flush() error {
+	ms.storeLock.Lock()
 	ms.store = map[string]interface{}{}
+	ms.storeLock.Unlock()
+
 	ms.activate()
+	return nil
 }
 
 func (ms *MemorySession) activate() {
@@ -54,7 +81,7 @@ type MemorySessionManager struct {
 	lock       sync.RWMutex
 	sessions   map[string]*MemorySession
 	gcLifetime time.Duration
-	gcTicker   *time.Ticker
+	gcTimer    *time.Timer
 }
 
 func NewMemorySessionManager(gcLifetime time.Duration) *MemorySessionManager {
@@ -62,37 +89,8 @@ func NewMemorySessionManager(gcLifetime time.Duration) *MemorySessionManager {
 		sessions: map[string]*MemorySession{},
 	}
 	manager.SetGCLifetime(gcLifetime)
-	go func(manager *MemorySessionManager) {
-		for {
-			manager.lock.RLock()
-			ticker := manager.gcTicker
-			manager.lock.RUnlock()
-
-			if ticker != nil {
-				<-ticker.C
-				manager.GC()
-			}
-		}
-	}(manager)
 
 	return manager
-}
-
-func (manager *MemorySessionManager) SetGCLifetime(lifetime time.Duration) error {
-	if lifetime < time.Second {
-		return nil
-	}
-
-	manager.lock.Lock()
-	defer manager.lock.Unlock()
-
-	if manager.gcTicker != nil {
-		manager.gcTicker.Stop()
-	}
-	manager.gcLifetime = lifetime
-	manager.gcTicker = time.NewTicker(lifetime)
-
-	return nil
 }
 
 func (manager *MemorySessionManager) Get(sid string) (session Session, err error) {
@@ -144,10 +142,32 @@ func (manager *MemorySessionManager) Get(sid string) (session Session, err error
 
 func (manager *MemorySessionManager) Destroy(sid string) error {
 	manager.lock.Lock()
-	defer manager.lock.Unlock()
-
 	delete(manager.sessions, sid)
+	manager.lock.Unlock()
+
 	return nil
+}
+
+func (manager *MemorySessionManager) SetGCLifetime(lifetime time.Duration) error {
+	if lifetime < time.Second {
+		return nil
+	}
+
+	manager.gcLifetime = lifetime
+	manager.gcTime()
+
+	return nil
+}
+
+func (manager *MemorySessionManager) gcTime() {
+	if manager.gcTimer != nil {
+		manager.gcTimer.Stop()
+	}
+
+	manager.gcTimer = time.AfterFunc(manager.gcLifetime, func() {
+		manager.GC()
+		manager.gcTime()
+	})
 }
 
 func (manager *MemorySessionManager) GC() error {
