@@ -126,9 +126,9 @@ func (mux *ApisMux) initRouter() {
 
 					if len(handler.privileges) > 0 {
 						var isGranted bool
-						if ctx.User != nil && len(ctx.User.Privileges) > 0 {
+						if ctx.User != nil && len(ctx.User.Privileges()) > 0 {
 							for _, hp := range handler.privileges {
-								for _, up := range ctx.User.Privileges {
+								for _, up := range ctx.User.Privileges() {
 									isGranted = hp.Match(up)
 									if isGranted {
 										break

@@ -28,7 +28,7 @@ func SetSessionManager(manager session.Manager) {
 
 type Context struct {
 	URL            *URL
-	User           *acl.User
+	User           acl.User
 	ResponseWriter http.ResponseWriter
 	Request        *http.Request
 	session        session.Session

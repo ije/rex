@@ -15,7 +15,7 @@ type APIService struct {
 
 type apiHandler struct {
 	handle     APIHandle
-	privileges map[string]*acl.Privilege
+	privileges map[string]acl.Privilege
 }
 
 type APIHandle func(*Context, *XService)
@@ -24,8 +24,6 @@ func (s *APIService) Use(middleware APIHandle) {
 	s.middlewares = append(s.middlewares, middleware)
 }
 
-// Options
-// apis.Options('_private_endpoint', &webx.CORS{Origin: "*"})
 func (s *APIService) OPTIONS(endpoint string, cors *CORS) {
 	if cors == nil {
 		return
@@ -90,12 +88,12 @@ func (s *APIService) register(method string, endpoint string, handle APIHandle, 
 		return
 	}
 
-	var privileges map[string]*acl.Privilege
+	var privileges map[string]acl.Privilege
 	if len(privilegeIds) > 0 {
-		privileges = map[string]*acl.Privilege{}
+		privileges = map[string]acl.Privilege{}
 		for _, pid := range privilegeIds {
 			if len(pid) > 0 {
-				privileges[pid] = acl.NewPrivilege(pid)
+				privileges[pid] = acl.NewStdPrivilege(pid)
 			}
 		}
 	}

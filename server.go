@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"syscall"
 	"time"
 
 	"github.com/ije/gox/utils"
@@ -76,7 +77,7 @@ func Serve(serverConfig *ServerConfig) {
 
 	utils.WaitExit(func(signal os.Signal) bool {
 		if xs.App.debugProcess != nil {
-			xs.App.debugProcess.Kill()
+			xs.App.debugProcess.Signal(syscall.SIGTERM)
 		}
 		serv.Shutdown(nil)
 		return false // exit main process by shutdown the http server
