@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	logx "github.com/ije/gox/log"
 	"github.com/ije/gox/utils"
 	"github.com/ije/webx/acl"
 	"github.com/ije/webx/session"
@@ -27,11 +28,17 @@ func SetSessionManager(manager session.Manager) {
 }
 
 type Context struct {
-	URL            *URL
+	App            *App
 	User           acl.User
 	ResponseWriter http.ResponseWriter
 	Request        *http.Request
+	URL            *URL
+	XServices      *XServices
 	session        session.Session
+}
+
+type XServices struct {
+	Log *logx.Logger
 }
 
 type URL struct {
@@ -56,6 +63,10 @@ func (ctx *Context) RemoveCookie(cookie *http.Cookie) {
 	}
 }
 
+type initSessionError struct {
+	msg string
+}
+
 func (ctx *Context) Session() (sess session.Session) {
 	sessionCookieName := "x-session"
 	if len(config.SessionCookieName) > 0 {
@@ -72,17 +83,16 @@ func (ctx *Context) Session() (sess session.Session) {
 	if sess == nil {
 		sess, err = globalSessionManager.Get(sid)
 		if err != nil {
-			panic(fmt.Errorf("Context.Session(): %v", err))
+			panic(&initSessionError{err.Error()})
+		}
+		if sess.SID() != sid {
+			ctx.SetCookie(&http.Cookie{
+				Name:     sessionCookieName,
+				Value:    sess.SID(),
+				HttpOnly: true,
+			})
 		}
 		ctx.session = sess
-	}
-
-	if sid != sess.SID() {
-		ctx.SetCookie(&http.Cookie{
-			Name:     sessionCookieName,
-			Value:    sess.SID(),
-			HttpOnly: true,
-		})
 	}
 
 	return
