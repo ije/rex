@@ -22,24 +22,30 @@ type ApisMux struct {
 	apiss  []*APIService
 }
 
-func (mux *ApisMux) Register(apis *APIService) {
-	if apis != nil {
-		mux.apiss = append(mux.apiss, apis)
+func (mux *ApisMux) RegisterApis(apis *APIService) {
+	if apis == nil {
+		return
 	}
+
+	mux.apiss = append(mux.apiss, apis)
 }
 
-func (mux *ApisMux) initRouter() {
-	mux.router = httprouter.New()
+func (mux *ApisMux) InitRouter(app *App) {
+	if mux.router != nil {
+		return
+	}
 
-	mux.router.PanicHandler = func(w http.ResponseWriter, r *http.Request, v interface{}) {
+	router := httprouter.New()
+	mux.router = router
+	router.PanicHandler = func(w http.ResponseWriter, r *http.Request, v interface{}) {
 		if config.Debug {
 			http.Error(w, fmt.Sprintf("%v", v), http.StatusInternalServerError)
 		} else {
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		}
 
-		if err, ok := v.(error); ok && strings.HasPrefix(err.Error(), "[Context.Session(): ") {
-			xs.Log.Error(err)
+		if err, ok := v.(*initSessionError); ok {
+			log.Errorf("Init session: %s", err.msg)
 			return
 		}
 
@@ -65,75 +71,65 @@ func (mux *ApisMux) initRouter() {
 			}
 			i++
 		}
-		xs.Log.Error("[panic]", v, buf.String())
+		log.Error("[panic]", v, buf.String())
 	}
-
-	if xs.App != nil {
-		apisMux.router.NotFound = &AppMux{}
+	if app != nil {
+		router.NotFound = &AppMux{app}
 	}
 
 	for _, apis := range mux.apiss {
 		for method, route := range apis.route {
 			for endpoint, handler := range route {
-				var routerHandler func(string, httprouter.Handle)
+				var routerHandle func(string, httprouter.Handle)
 				switch method {
 				case "OPTIONS":
-					routerHandler = mux.router.OPTIONS
+					routerHandle = router.OPTIONS
 				case "HEAD":
-					routerHandler = mux.router.HEAD
+					routerHandle = router.HEAD
 				case "GET":
-					routerHandler = mux.router.GET
+					routerHandle = router.GET
 				case "POST":
-					routerHandler = mux.router.POST
+					routerHandle = router.POST
 				case "PUT":
-					routerHandler = mux.router.PUT
+					routerHandle = router.PUT
 				case "PATCH":
-					routerHandler = mux.router.PATCH
+					routerHandle = router.PATCH
 				case "DELETE":
-					routerHandler = mux.router.DELETE
+					routerHandle = router.DELETE
 				}
-				if routerHandler == nil {
+				if routerHandle == nil {
 					continue
 				}
 				if len(apis.Prefix) > 0 {
 					endpoint = path.Join("/"+strings.Trim(apis.Prefix, "/"), endpoint)
 				}
-				if xs.App != nil {
+				if app != nil {
 					endpoint = path.Join("/api", endpoint)
 				}
-				routerHandler(endpoint, func(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
+				routerHandle(endpoint, func(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
 					ctx := &Context{
-						URL:            &URL{params, r.URL},
+						App:            app,
 						ResponseWriter: w,
 						Request:        r,
+						URL:            &URL{params, r.URL},
 					}
 
 					if len(apis.middlewares) > 0 {
-						for _, handle := range apis.middlewares {
-							handle(ctx, xs.clone())
+						for _, use := range apis.middlewares {
+							use(ctx)
 						}
 					}
 
-					if ctx.URL == nil {
-						ctx.URL = &URL{params, r.URL}
-					}
-					if ctx.ResponseWriter == nil {
-						ctx.ResponseWriter = w
-					}
-					if ctx.Request == nil {
-						ctx.Request = r
-					}
+					ctx.App = app
+					ctx.ResponseWriter = w
+					ctx.Request = r
+					ctx.URL = &URL{params, r.URL}
 
 					if len(handler.privileges) > 0 {
 						var isGranted bool
-						if ctx.User != nil && len(ctx.User.Privileges()) > 0 {
-							for _, hp := range handler.privileges {
-								for _, up := range ctx.User.Privileges() {
-									isGranted = hp.Match(up)
-									if isGranted {
-										break
-									}
-								}
+						if ctx.User != nil {
+							for _, pid := range ctx.User.Privileges() {
+								_, isGranted = handler.privileges[pid]
 								if isGranted {
 									break
 								}
@@ -144,7 +140,7 @@ func (mux *ApisMux) initRouter() {
 						}
 					}
 
-					handler.handle(ctx, xs.clone())
+					handler.handle(ctx)
 				})
 			}
 		}
@@ -169,34 +165,40 @@ func (mux *ApisMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			code = 307
 		}
 
-		if config.HostRedirect == "force-www" && !strings.HasPrefix(r.Host, "www.") {
-			http.Redirect(w, r, path.Join("www."+r.Host, r.URL.String()), code)
-			return
-		} else if config.HostRedirect == "non-www" && strings.HasPrefix(r.Host, "www.") {
-			http.Redirect(w, r, path.Join(strings.TrimPrefix(r.Host, ".www"), r.URL.String()), code)
-			return
+		if config.HostRedirect == "force-www" {
+			if !strings.HasPrefix(r.Host, "www.") {
+				http.Redirect(w, r, path.Join("www."+r.Host, r.URL.String()), code)
+				return
+			}
+		} else if config.HostRedirect == "non-www" {
+			if strings.HasPrefix(r.Host, "www.") {
+				http.Redirect(w, r, path.Join(strings.TrimPrefix(r.Host, "www."), r.URL.String()), code)
+				return
+			}
 		}
 	}
 
 	if mux.router != nil {
 		mux.router.ServeHTTP(w, r)
 	} else {
-		new(AppMux).ServeHTTP(w, r)
+		http.Error(w, http.StatusText(404), 404)
 	}
 }
 
-type AppMux struct{}
+type AppMux struct {
+	app *App
+}
 
 func (mux *AppMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if xs.App == nil {
-		http.Error(w, "Missing App", 400)
+	if mux.app == nil {
+		http.Error(w, "App Not Found", 404)
 		return
 	}
 
 	// todo: app ssr
 
-	if xs.App.debuging {
-		remote, err := url.Parse(fmt.Sprintf("http://127.0.0.1:%d", xs.App.debugPort))
+	if mux.app.debuging {
+		remote, err := url.Parse(fmt.Sprintf("http://127.0.0.1:%d", mux.app.debugPort))
 		if err != nil {
 			http.Error(w, err.Error(), 500)
 			return
@@ -208,13 +210,13 @@ func (mux *AppMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Serve File
-	filePath := utils.CleanPath(path.Join(xs.App.root, r.URL.Path))
+	filePath := utils.CleanPath(path.Join(mux.app.root, r.URL.Path))
 Stat:
 	fi, err := os.Stat(filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// 404s will fallback to /index.html
-			if topIndexHTML := path.Join(xs.App.root, "index.html"); filePath != topIndexHTML {
+			if topIndexHTML := path.Join(mux.app.root, "index.html"); filePath != topIndexHTML {
 				filePath = topIndexHTML
 				goto Stat
 			}
@@ -233,7 +235,7 @@ Stat:
 	// compress text file when the size is greater than 1024 bytes
 	if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
 		switch strings.ToLower(utils.FileExt(filePath)) {
-		case "js", "css", "html", "htm", "xml", "svg", "json", "text":
+		case "js", "css", "html", "htm", "xml", "svg", "json", "txt":
 			if fi.Size() > 1024 {
 				w.Header().Set("Content-Encoding", "gzip")
 				w.Header().Set("Vary", "Accept-Encoding")

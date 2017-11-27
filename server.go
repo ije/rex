@@ -7,22 +7,31 @@ import (
 	"syscall"
 	"time"
 
+	logx "github.com/ije/gox/log"
 	"github.com/ije/gox/utils"
 )
 
 var config = &ServerConfig{}
+var log = &logx.Logger{}
 var apisMux = &ApisMux{}
 
 type ServerConfig struct {
-	AppRoot           string
-	Port              uint16
-	CustomHTTPHeaders map[string]string
-	HostRedirect      string
-	SessionCookieName string
-	ReadTimeout       int
-	WriteTimeout      int
-	MaxHeaderBytes    int
-	Debug             bool
+	AppRoot           string            `json:"appRoot"`
+	Port              uint16            `json:"port"`
+	CustomHTTPHeaders map[string]string `json:"customHTTPHeaders"`
+	HostRedirect      string            `json:"hostRedirect"`
+	SessionCookieName string            `json:"sessionCookieName"`
+	ReadTimeout       int               `json:"readTimeout"`
+	WriteTimeout      int               `json:"writeTimeout"`
+	MaxHeaderBytes    int               `json:"maxHeaderBytes"`
+	AccessLog         string            `json:"accessLog"`
+	Debug             bool              `json:"debug"`
+}
+
+func SetLogger(logger *logx.Logger) {
+	if logger != nil {
+		log = logger
+	}
 }
 
 func Serve(serverConfig *ServerConfig) {
@@ -33,31 +42,32 @@ func Serve(serverConfig *ServerConfig) {
 		config.Port = 80
 	}
 
+	if log == nil {
+		log = &logx.Logger{}
+	}
+	if !config.Debug {
+		log.SetLevelByName("info")
+		log.SetQuite(true)
+	}
+
+	var app *App
 	if len(config.AppRoot) > 0 {
 		fi, err := os.Lstat(config.AppRoot)
 		if err == nil && !fi.IsDir() {
 			err = fmt.Errorf("invalid directory")
 		}
 		if err != nil {
-			fmt.Printf("incorrect AppRoot '%s': %v\n", config.AppRoot, err)
+			log.Errorf("initialize app: incorrect root '%s': %v", config.AppRoot, err)
 			return
 		}
 
-		app, err := initApp(config.AppRoot)
+		app, err = initApp(config.AppRoot)
 		if err != nil {
-			fmt.Println("initialize app failed:", err)
+			log.Error("initialize app:", err)
 			return
 		}
-
-		xs.App = app
 	}
-
-	apisMux.initRouter()
-
-	if !config.Debug {
-		xs.Log.SetLevelByName("info")
-		xs.Log.SetQuite(true)
-	}
+	apisMux.InitRouter(app)
 
 	serv := &http.Server{
 		Addr:           fmt.Sprintf((":%d"), config.Port),
@@ -76,8 +86,8 @@ func Serve(serverConfig *ServerConfig) {
 	}()
 
 	utils.WaitExit(func(signal os.Signal) bool {
-		if xs.App.debugProcess != nil {
-			xs.App.debugProcess.Signal(syscall.SIGTERM)
+		if app.debugProcess != nil {
+			app.debugProcess.Signal(syscall.SIGTERM)
 		}
 		serv.Shutdown(nil)
 		return false // exit main process by shutdown the http server
