@@ -46,6 +46,7 @@ func initApp(root string) (app *App, err error) {
 		if binDir := os.Getenv("NODEBINDIR"); len(binDir) > 0 {
 			os.Setenv("PATH", fmt.Sprintf("%s:%s", binDir, os.Getenv("PATH")))
 		}
+		os.Setenv("PATH", fmt.Sprintf("%s:%s", path.Join(root, "node_modules/.bin"), os.Getenv("PATH")))
 
 		_, err = exec.LookPath("npm")
 		if err != nil {
@@ -80,7 +81,6 @@ func initApp(root string) (app *App, err error) {
 				if err != nil {
 					return
 				}
-				os.Setenv("PATH", fmt.Sprintf("%s:%s", path.Join(root, "node_modules/.bin"), os.Getenv("PATH")))
 			}
 		}
 	}
@@ -92,13 +92,13 @@ func initApp(root string) (app *App, err error) {
 			_, err = exec.LookPath("webpack-dev-server")
 		}
 		if err != nil {
-			cmd := exec.Command("npm", "-g", "webpack")
+			cmd := exec.Command("npm", "install", "webpack")
 			if config.Debug {
 				cmd.Args = append(cmd.Args, "webpack-dev-server")
 				cmd.Stderr = os.Stderr
 				cmd.Stdout = os.Stdout
-				fmt.Println("[npm] install webpack/webpack-dev-server...")
 			}
+			fmt.Println("[npm] install webpack/webpack-dev-server...")
 			cmd.Run()
 		}
 
