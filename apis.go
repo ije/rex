@@ -3,22 +3,22 @@ package webx
 import (
 	"strconv"
 	"strings"
-
-	"github.com/ije/webx/acl"
 )
 
 type APIService struct {
 	Prefix      string
+	Exclusive   bool
+	registered  bool
 	middlewares []APIHandle
 	route       map[string]map[string]*apiHandler
 }
 
 type apiHandler struct {
 	handle     APIHandle
-	privileges map[string]acl.Privilege
+	privileges map[string]struct{}
 }
 
-type APIHandle func(*Context, *XService)
+type APIHandle func(*Context)
 
 func (s *APIService) Use(middleware APIHandle) {
 	s.middlewares = append(s.middlewares, middleware)
@@ -29,7 +29,7 @@ func (s *APIService) OPTIONS(endpoint string, cors *CORS) {
 		return
 	}
 
-	s.register("OPTIONS", endpoint, func(ctx *Context, xs *XService) {
+	s.register("OPTIONS", endpoint, func(ctx *Context) {
 		w := ctx.ResponseWriter
 		wh := w.Header()
 
@@ -80,20 +80,16 @@ func (s *APIService) DELETE(endpoint string, handle APIHandle, privilegeIds ...s
 }
 
 func (s *APIService) register(method string, endpoint string, handle APIHandle, privilegeIds []string) {
-	if handle == nil {
+	if len(endpoint) == 0 || handle == nil {
 		return
 	}
 
-	if len(endpoint) == 0 {
-		return
-	}
-
-	var privileges map[string]acl.Privilege
+	var privileges map[string]struct{}
 	if len(privilegeIds) > 0 {
-		privileges = map[string]acl.Privilege{}
+		privileges = map[string]struct{}{}
 		for _, pid := range privilegeIds {
 			if len(pid) > 0 {
-				privileges[pid] = acl.NewStdPrivilege(pid)
+				privileges[pid] = struct{}{}
 			}
 		}
 	}
@@ -105,8 +101,9 @@ func (s *APIService) register(method string, endpoint string, handle APIHandle, 
 		s.route[method] = map[string]*apiHandler{}
 	}
 	s.route[method][endpoint] = &apiHandler{privileges: privileges, handle: handle}
-}
 
-func Register(apis *APIService) {
-	apisMux.Register(apis)
+	if !s.Exclusive && !s.registered {
+		apisMux.RegisterApis(s)
+		s.registered = true
+	}
 }
