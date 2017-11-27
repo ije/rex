@@ -1,6 +1,6 @@
 package acl
 
-// User implementes `Privileges() map[string]*Privilege`
+// User implementes Privileges method that returns a privilege id array
 type User interface {
-	Privileges() map[string]Privilege
+	Privileges() []string
 }
