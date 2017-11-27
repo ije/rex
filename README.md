@@ -17,13 +17,11 @@ import (
 func main() {
 	var apis = &web.APIService{}
 
-	apis.Get("/hello/:name", func(ctx *webx.Context, xs *webx.XService) {
+	apis.Get("/hello/:name", func(ctx *webx.Context) {
 		ctx.WriteJSON(200, map[string]string{
 			"message": "Hello, " + ctx.URL.Params.ByName("name"),
 		})
 	}, "privilegeId")
-
-	webx.Register(apis)
 
 	webx.Serve(&webx.ServerConfig{
 		AppRoot: "/var/www/spa-app",
