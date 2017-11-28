@@ -19,14 +19,6 @@ import (
 	"github.com/julienschmidt/httprouter"
 )
 
-var globalSessionManager session.Manager = session.NewMemorySessionManager(time.Hour / 2)
-
-func SetSessionManager(manager session.Manager) {
-	if manager != nil {
-		globalSessionManager = manager
-	}
-}
-
 type Context struct {
 	App            *App
 	User           acl.User
@@ -35,6 +27,7 @@ type Context struct {
 	URL            *URL
 	XServices      *XServices
 	session        session.Session
+	mux            *ApisMux
 }
 
 type XServices struct {
@@ -69,8 +62,8 @@ type initSessionError struct {
 
 func (ctx *Context) Session() (sess session.Session) {
 	sessionCookieName := "x-session"
-	if len(config.SessionCookieName) > 0 {
-		sessionCookieName = config.SessionCookieName
+	if len(ctx.mux.SessionCookieName) > 0 {
+		sessionCookieName = ctx.mux.SessionCookieName
 	}
 
 	var sid string
@@ -81,10 +74,15 @@ func (ctx *Context) Session() (sess session.Session) {
 
 	sess = ctx.session
 	if sess == nil {
-		sess, err = globalSessionManager.Get(sid)
+		if ctx.mux.SessionManager == nil {
+			panic(&initSessionError{"missing session manager"})
+		}
+
+		sess, err = ctx.mux.SessionManager.Get(sid)
 		if err != nil {
 			panic(&initSessionError{err.Error()})
 		}
+
 		if sess.SID() != sid {
 			ctx.SetCookie(&http.Cookie{
 				Name:     sessionCookieName,
@@ -224,7 +222,7 @@ func (ctx *Context) Write(p []byte) (n int, err error) {
 
 func (ctx *Context) WriteJSON(status int, data interface{}) (n int, err error) {
 	var jsonData []byte
-	if config.Debug {
+	if ctx.mux.Debug {
 		jsonData, err = json.MarshalIndent(data, "", "\t")
 	} else {
 		jsonData, err = json.Marshal(data)
@@ -264,7 +262,7 @@ func (ctx *Context) End(status int, a ...string) {
 }
 
 func (ctx *Context) Error(err error) {
-	if config.Debug {
+	if ctx.mux.Debug {
 		ctx.End(http.StatusInternalServerError, err.Error())
 	} else {
 		ctx.End(http.StatusInternalServerError)
