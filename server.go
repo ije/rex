@@ -4,15 +4,15 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"syscall"
 	"time"
 
-	logx "github.com/ije/gox/log"
+	"github.com/ije/gox/log"
 	"github.com/ije/gox/utils"
+	"github.com/ije/webx/session"
 )
 
-var config = &ServerConfig{}
-var log = &logx.Logger{}
 var apisMux = &ApisMux{}
 
 type ServerConfig struct {
@@ -24,47 +24,53 @@ type ServerConfig struct {
 	ReadTimeout       int               `json:"readTimeout"`
 	WriteTimeout      int               `json:"writeTimeout"`
 	MaxHeaderBytes    int               `json:"maxHeaderBytes"`
+	ErrorLog          string            `json:"errorLog"`
 	AccessLog         string            `json:"accessLog"`
+	AppBuildLog       string            `json:"appBuildLog"`
 	Debug             bool              `json:"debug"`
 }
 
-func SetLogger(logger *logx.Logger) {
-	if logger != nil {
-		log = logger
-	}
-}
-
-func Serve(serverConfig *ServerConfig) {
-	if serverConfig != nil {
-		config = serverConfig
+func Serve(config *ServerConfig) {
+	if config == nil {
+		config = &ServerConfig{}
 	}
 	if config.Port == 0 {
 		config.Port = 80
 	}
 
-	if log == nil {
-		log = &logx.Logger{}
+	var logger *log.Logger
+	if len(config.ErrorLog) > 0 {
+		logger, _ = log.New("file:" + strings.TrimPrefix(config.ErrorLog, "file:"))
+	}
+	if logger == nil {
+		logger = &log.Logger{}
 	}
 	if !config.Debug {
-		log.SetLevelByName("info")
-		log.SetQuite(true)
+		logger.SetLevelByName("info")
+		logger.SetQuite(true)
 	}
 
 	var app *App
 	if len(config.AppRoot) > 0 {
-		fi, err := os.Lstat(config.AppRoot)
-		if err == nil && !fi.IsDir() {
-			err = fmt.Errorf("invalid directory")
-		}
+		var err error
+		app, err = InitApp(config.AppRoot, config.AppBuildLog, config.Debug)
 		if err != nil {
-			log.Errorf("initialize app: incorrect root '%s': %v", config.AppRoot, err)
+			logger.Error("initialize app failed:", err)
 			return
 		}
+	}
 
-		app, err = initApp(config.AppRoot)
+	apisMux.CustomHTTPHeaders = config.CustomHTTPHeaders
+	apisMux.SessionCookieName = config.SessionCookieName
+	apisMux.HostRedirect = config.HostRedirect
+	apisMux.Debug = config.Debug
+	apisMux.SessionManager = session.NewMemorySessionManager(time.Hour / 2)
+	apisMux.Logger = logger
+	if len(config.AccessLog) > 0 {
+		var err error
+		apisMux.accessLogger, err = log.New("file:" + strings.TrimPrefix(config.ErrorLog, "file:"))
 		if err != nil {
-			log.Error("initialize app:", err)
-			return
+			logger.Error("initialize access logger:", err)
 		}
 	}
 	apisMux.InitRouter(app)
