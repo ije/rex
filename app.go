@@ -9,20 +9,30 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/ije/gox/crypto/rs"
 	"github.com/ije/gox/utils"
 )
 
 type App struct {
 	root         string
 	packMode     string
-	debuging     bool
 	debugPort    int
 	debugProcess *os.Process
 	building     bool
-	buildLog     []string
+	buildLog     []AppBuildLog
+	buildLogFile string
 }
 
-func initApp(root string) (app *App, err error) {
+type AppBuildLog struct {
+	ID        string
+	StartTime int64
+	EndTime   int64
+	PackMode  string
+	Error     string
+	Output    string
+}
+
+func InitApp(root string, buildLogFile string, debug bool) (app *App, err error) {
 	root, err = filepath.Abs(root)
 	if err != nil {
 		return
@@ -30,7 +40,7 @@ func initApp(root string) (app *App, err error) {
 
 	fi, err := os.Lstat(root)
 	if (err != nil && os.IsNotExist(err)) || (err == nil && !fi.IsDir()) {
-		err = fmt.Errorf("root(%s) is not a valid directory", root)
+		err = fmt.Errorf("app root(%s) is not a valid directory", root)
 		return
 	}
 
@@ -68,11 +78,11 @@ func initApp(root string) (app *App, err error) {
 			}
 			if ok {
 				cmd := exec.Command("npm", "install")
-				if !config.Debug {
+				if !debug {
 					cmd.Args = append(cmd.Args, "--production")
 				}
 				cmd.Dir = root
-				if config.Debug {
+				if debug {
 					cmd.Stderr = os.Stderr
 					cmd.Stdout = os.Stdout
 					fmt.Println("[npm] check/install dependencies...")
@@ -88,22 +98,20 @@ func initApp(root string) (app *App, err error) {
 	switch packMode {
 	case "webpack":
 		_, err = exec.LookPath("webpack")
-		if err == nil && config.Debug {
+		if err == nil && debug {
 			_, err = exec.LookPath("webpack-dev-server")
 		}
 		if err != nil {
-			cmd := exec.Command("npm", "install", "webpack")
-			if config.Debug {
-				cmd.Args = append(cmd.Args, "webpack-dev-server")
-				cmd.Stderr = os.Stderr
-				cmd.Stdout = os.Stdout
-			}
 			fmt.Println("[npm] install webpack/webpack-dev-server...")
+			cmd := exec.Command("npm", "install", "webpack", "webpack-dev-server")
+			cmd.Dir = root
+			cmd.Stderr = os.Stderr
+			cmd.Stdout = os.Stdout
 			cmd.Run()
 		}
 
 		_, err = exec.LookPath("webpack")
-		if err == nil && config.Debug {
+		if err == nil && debug {
 			_, err = exec.LookPath("webpack-dev-server")
 		}
 		if err != nil {
@@ -112,14 +120,19 @@ func initApp(root string) (app *App, err error) {
 	}
 
 	app = &App{
-		root:     root,
-		packMode: packMode,
+		root:         root,
+		packMode:     packMode,
+		buildLogFile: buildLogFile,
 	}
 
-	if config.Debug {
+	if len(buildLogFile) > 0 {
+		utils.ParseJSONFile(buildLogFile, &app.buildLog)
+	}
+
+	if debug {
 		go app.Debug()
 	} else {
-		go app.Build()
+		app.Build()
 	}
 	return
 }
@@ -128,20 +141,17 @@ func (app *App) Root() string {
 	return app.root
 }
 
-func (app *App) BuildLog() []string {
+func (app *App) BuildLog() []AppBuildLog {
 	return app.buildLog
 }
 
-func (app *App) Debug() (err error) {
-	if app.debuging {
-		err = fmt.Errorf("app is debuging")
+func (app *App) Debug() {
+	if app.debugProcess != nil {
 		return
 	}
 
-	app.debuging = true
 	defer func() {
 		app.debugProcess = nil
-		app.debuging = false
 	}()
 
 	debugPort := 9000
@@ -163,25 +173,28 @@ func (app *App) Debug() (err error) {
 		cmd.Stdout = os.Stdout
 
 		fmt.Println("[webpack] start dev-server...")
-		err = cmd.Start()
+		err := cmd.Start()
 		if err != nil {
-			return err
+			return
 		}
 
 		app.debugPort = debugPort
 		app.debugProcess = cmd.Process
-		err = cmd.Wait()
+		cmd.Wait()
 	}
 
 	return
 }
 
-func (app *App) Build() (err error) {
+func (app *App) Build() {
 	if app.building {
-		err = fmt.Errorf("app is building")
 		return
 	}
 
+	go app.build(rs.Hex.String(32))
+}
+
+func (app *App) build(id string) {
 	app.building = true
 	defer func() {
 		app.building = false
@@ -189,22 +202,24 @@ func (app *App) Build() (err error) {
 
 	switch app.packMode {
 	case "webpack":
+		start := time.Now()
 		cmd := exec.Command("webpack", "--hide-modules", "--color=false")
 		cmd.Env = append(os.Environ(), "NODE_ENV=production")
 		cmd.Dir = app.root
-		var output []byte
-		var level string
-		var msg string
-		output, err = cmd.CombinedOutput()
-		if err != nil {
-			level = "error"
-			msg = err.Error()
-		} else {
-			level = "info"
-			msg = string(output)
+		output, err := cmd.CombinedOutput()
+		log := AppBuildLog{
+			ID:        id,
+			StartTime: start.UnixNano() / (1000 * 1000),
+			EndTime:   time.Now().UnixNano() / (1000 * 1000),
+			PackMode:  app.packMode,
+			Output:    string(output),
 		}
-		app.buildLog = append(app.buildLog, fmt.Sprintf(`%s [%s] %s`, time.Now().Format("2006/01/02 15:04:05"), level, msg))
+		if err != nil {
+			log.Error = err.Error()
+		}
+		app.buildLog = append(app.buildLog, log)
+		if len(app.buildLogFile) > 0 {
+			utils.SaveJSONFile(app.buildLogFile, app.buildLog)
+		}
 	}
-
-	return
 }
