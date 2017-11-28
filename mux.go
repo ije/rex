@@ -12,14 +12,25 @@ import (
 	"path"
 	"runtime"
 	"strings"
+	"time"
 
+	"github.com/ije/gox/log"
 	"github.com/ije/gox/utils"
+	"github.com/ije/webx/session"
 	"github.com/julienschmidt/httprouter"
 )
 
 type ApisMux struct {
-	router *httprouter.Router
-	apiss  []*APIService
+	CustomHTTPHeaders map[string]string
+	SessionCookieName string
+	HostRedirect      string
+	Debug             bool
+	SessionManager    session.Manager
+	Logger            *log.Logger
+	app               *App
+	accessLogger      *log.Logger
+	router            *httprouter.Router
+	apiss             []*APIService
 }
 
 func (mux *ApisMux) RegisterApis(apis *APIService) {
@@ -31,6 +42,7 @@ func (mux *ApisMux) RegisterApis(apis *APIService) {
 }
 
 func (mux *ApisMux) InitRouter(app *App) {
+	mux.app = app
 	if mux.router != nil {
 		return
 	}
@@ -38,14 +50,16 @@ func (mux *ApisMux) InitRouter(app *App) {
 	router := httprouter.New()
 	mux.router = router
 	router.PanicHandler = func(w http.ResponseWriter, r *http.Request, v interface{}) {
-		if config.Debug {
+		if mux.Debug {
 			http.Error(w, fmt.Sprintf("%v", v), http.StatusInternalServerError)
 		} else {
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		}
 
 		if err, ok := v.(*initSessionError); ok {
-			log.Errorf("Init session: %s", err.msg)
+			if mux.Logger != nil {
+				mux.Logger.Errorf("Init session: %s", err.msg)
+			}
 			return
 		}
 
@@ -71,10 +85,12 @@ func (mux *ApisMux) InitRouter(app *App) {
 			}
 			i++
 		}
-		log.Error("[panic]", v, buf.String())
+		if mux.Logger != nil {
+			mux.Logger.Error("[panic]", v, buf.String())
+		}
 	}
-	if app != nil {
-		router.NotFound = &AppMux{app}
+	if mux.app != nil {
+		router.NotFound = &AppMux{mux.app}
 	}
 
 	for _, apis := range mux.apiss {
@@ -103,61 +119,85 @@ func (mux *ApisMux) InitRouter(app *App) {
 				if len(apis.Prefix) > 0 {
 					endpoint = path.Join("/"+strings.Trim(apis.Prefix, "/"), endpoint)
 				}
-				if app != nil {
+				if mux.app != nil {
 					endpoint = path.Join("/api", endpoint)
 				}
-				routerHandle(endpoint, func(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
-					ctx := &Context{
-						App:            app,
-						ResponseWriter: w,
-						Request:        r,
-						URL:            &URL{params, r.URL},
-					}
-
-					if len(apis.middlewares) > 0 {
-						for _, use := range apis.middlewares {
-							use(ctx)
+				func(mux *ApisMux, routerHandle func(string, httprouter.Handle), endpoint string, handler *apiHandler, apis *APIService) {
+					routerHandle(endpoint, func(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
+						url := &URL{params, r.URL}
+						xs := &XServices{
+							Log: mux.Logger,
 						}
-					}
+						ctx := &Context{
+							App:            mux.app,
+							ResponseWriter: w,
+							Request:        r,
+							URL:            url,
+							XServices:      xs,
+							mux:            mux,
+						}
 
-					ctx.App = app
-					ctx.ResponseWriter = w
-					ctx.Request = r
-					ctx.URL = &URL{params, r.URL}
-
-					if len(handler.privileges) > 0 {
-						var isGranted bool
-						if ctx.User != nil {
-							for _, pid := range ctx.User.Privileges() {
-								_, isGranted = handler.privileges[pid]
-								if isGranted {
-									break
-								}
+						if len(apis.middlewares) > 0 {
+							for _, use := range apis.middlewares {
+								use(ctx)
 							}
 						}
-						if !isGranted {
-							ctx.End(http.StatusUnauthorized)
-						}
-					}
 
-					handler.handle(ctx)
-				})
+						ctx.App = mux.app
+						ctx.ResponseWriter = w
+						ctx.Request = r
+						ctx.URL = url
+						ctx.XServices = xs
+
+						if len(handler.privileges) > 0 {
+							var isGranted bool
+							if ctx.User != nil {
+								for _, pid := range ctx.User.Privileges() {
+									_, isGranted = handler.privileges[pid]
+									if isGranted {
+										break
+									}
+								}
+							}
+							if !isGranted {
+								ctx.End(http.StatusUnauthorized)
+							}
+						}
+
+						handler.handle(ctx)
+					})
+				}(mux, routerHandle, endpoint, handler, apis)
 			}
 		}
 	}
 }
 
 func (mux *ApisMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	w = NewResponseWriter(w)
+
+	if mux.accessLogger != nil {
+		start := time.Now()
+		defer func() {
+			rw, ok := w.(*ResponseWriter)
+			if !ok {
+				return
+			}
+			status, writed := rw.WriteStatus()
+
+			mux.accessLogger.Printf(`%s %s %s %s %s %d "%s" "%s" %d %d %dms`, r.RemoteAddr, r.Host, r.Proto, r.Method, r.RequestURI, r.ContentLength, strings.Replace(r.Referer(), `"`, "'", -1), strings.Replace(r.UserAgent(), `"`, "'", -1), status, writed, time.Now().Sub(start).Nanoseconds()/(1000*1000))
+		}()
+	}
+
 	wh := w.Header()
-	if len(config.CustomHTTPHeaders) > 0 {
-		for key, val := range config.CustomHTTPHeaders {
+	if len(mux.CustomHTTPHeaders) > 0 {
+		for key, val := range mux.CustomHTTPHeaders {
 			wh.Set(key, val)
 		}
 	}
 	wh.Set("Connection", "keep-alive")
 	wh.Set("Server", "webx-server")
 
-	if len(config.HostRedirect) > 0 {
+	if len(mux.HostRedirect) > 0 {
 		code := 301 // Permanent redirect, request with GET method
 		if r.Method != "GET" {
 			// Temporary redirect, request with same method
@@ -165,12 +205,12 @@ func (mux *ApisMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			code = 307
 		}
 
-		if config.HostRedirect == "force-www" {
+		if mux.HostRedirect == "force-www" {
 			if !strings.HasPrefix(r.Host, "www.") {
 				http.Redirect(w, r, path.Join("www."+r.Host, r.URL.String()), code)
 				return
 			}
-		} else if config.HostRedirect == "non-www" {
+		} else if mux.HostRedirect == "non-www" {
 			if strings.HasPrefix(r.Host, "www.") {
 				http.Redirect(w, r, path.Join(strings.TrimPrefix(r.Host, "www."), r.URL.String()), code)
 				return
@@ -197,7 +237,7 @@ func (mux *AppMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// todo: app ssr
 
-	if mux.app.debuging {
+	if mux.app.debugProcess != nil {
 		remote, err := url.Parse(fmt.Sprintf("http://127.0.0.1:%d", mux.app.debugPort))
 		if err != nil {
 			http.Error(w, err.Error(), 500)
@@ -252,9 +292,38 @@ Stat:
 	http.ServeFile(w, r, filePath)
 }
 
+type ResponseWriter struct {
+	status             int
+	writed             int
+	httpResponseWriter http.ResponseWriter
+}
+
+func NewResponseWriter(w http.ResponseWriter) *ResponseWriter {
+	return &ResponseWriter{status: 200, httpResponseWriter: w}
+}
+
+func (w *ResponseWriter) Header() http.Header {
+	return w.httpResponseWriter.Header()
+}
+
+func (w *ResponseWriter) WriteHeader(status int) {
+	w.status = status
+	w.httpResponseWriter.WriteHeader(status)
+}
+
+func (w *ResponseWriter) Write(p []byte) (n int, err error) {
+	n, err = w.httpResponseWriter.Write(p)
+	w.writed += n
+	return
+}
+
+func (w *ResponseWriter) WriteStatus() (status int, writed int) {
+	return w.status, w.writed
+}
+
 type GzipResponseWriter struct {
-	rawResponseWriter http.ResponseWriter
-	gzWriter          io.WriteCloser
+	httpResponseWriter http.ResponseWriter
+	gzWriter           io.WriteCloser
 }
 
 func newGzipResponseWriter(w http.ResponseWriter, speed int) (grw *GzipResponseWriter, err error) {
@@ -268,11 +337,11 @@ func newGzipResponseWriter(w http.ResponseWriter, speed int) (grw *GzipResponseW
 }
 
 func (w *GzipResponseWriter) Header() http.Header {
-	return w.rawResponseWriter.Header()
+	return w.httpResponseWriter.Header()
 }
 
 func (w *GzipResponseWriter) WriteHeader(status int) {
-	w.rawResponseWriter.WriteHeader(status)
+	w.httpResponseWriter.WriteHeader(status)
 }
 
 func (w *GzipResponseWriter) Write(p []byte) (int, error) {

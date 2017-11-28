@@ -6,8 +6,8 @@ import (
 )
 
 type APIService struct {
-	Prefix      string
 	Exclusive   bool
+	Prefix      string
 	registered  bool
 	middlewares []APIHandle
 	route       map[string]map[string]*apiHandler
