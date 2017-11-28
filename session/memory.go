@@ -37,9 +37,18 @@ func (ms *MemorySession) Values(keys ...string) (values map[string]interface{}, 
 	return
 }
 
-func (ms *MemorySession) Get(key string) (value interface{}, ok bool, err error) {
+func (ms *MemorySession) Has(key string) (ok bool, err error) {
 	ms.storeLock.RLock()
-	value, ok = ms.store[key]
+	_, ok = ms.store[key]
+	ms.storeLock.RUnlock()
+
+	ms.activate()
+	return
+}
+
+func (ms *MemorySession) Get(key string) (value interface{}, err error) {
+	ms.storeLock.RLock()
+	value, _ = ms.store[key]
 	ms.storeLock.RUnlock()
 
 	ms.activate()
