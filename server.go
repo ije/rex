@@ -14,7 +14,6 @@ import (
 )
 
 var apiss []*APIService
-var apisMux = &ApisMux{}
 
 type ServerConfig struct {
 	AppRoot           string            `json:"appRoot"`
@@ -61,13 +60,15 @@ func Serve(config *ServerConfig) {
 		}
 	}
 
-	apisMux.App = app
-	apisMux.CustomHTTPHeaders = config.CustomHTTPHeaders
-	apisMux.SessionCookieName = config.SessionCookieName
-	apisMux.HostRedirect = config.HostRedirect
-	apisMux.Debug = config.Debug
-	apisMux.SessionManager = session.NewMemorySessionManager(time.Hour / 2)
-	apisMux.Logger = logger
+	apisMux := &ApisMux{
+		App:               app,
+		CustomHTTPHeaders: config.CustomHTTPHeaders,
+		SessionCookieName: config.SessionCookieName,
+		HostRedirect:      config.HostRedirect,
+		Debug:             config.Debug,
+		SessionManager:    session.NewMemorySessionManager(time.Hour / 2),
+		Logger:            logger,
+	}
 	if len(config.AccessLog) > 0 {
 		var err error
 		apisMux.AccessLogger, err = log.New("file:" + strings.TrimPrefix(config.ErrorLog, "file:"))
