@@ -209,7 +209,7 @@ func (mux *ApisMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if mux.router != nil {
 		mux.router.ServeHTTP(w, r)
 	} else {
-		http.Error(w, http.StatusText(404), 404)
+		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 	}
 }
 
@@ -219,14 +219,16 @@ type AppMux struct {
 
 func (mux *AppMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if mux.parent == nil || mux.parent.App == nil {
-		http.Error(w, http.StatusText(404), 404)
+		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 		return
 	}
 
+	app := mux.parent.App
+
 	// todo: app ssr
 
-	if mux.parent.App.debugProcess != nil {
-		remote, err := url.Parse(fmt.Sprintf("http://127.0.0.1:%d", mux.parent.App.debugPort))
+	if app.debugProcess != nil {
+		remote, err := url.Parse(fmt.Sprintf("http://127.0.0.1:%d", app.debugPort))
 		if err != nil {
 			http.Error(w, err.Error(), 500)
 			return
@@ -238,13 +240,13 @@ func (mux *AppMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Serve File
-	filePath := utils.CleanPath(path.Join(mux.parent.App.root, r.URL.Path))
+	filePath := utils.CleanPath(path.Join(app.root, r.URL.Path))
 Stat:
 	fi, err := os.Stat(filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// 404s will fallback to /index.html
-			if topIndexHTML := path.Join(mux.parent.App.root, "index.html"); filePath != topIndexHTML {
+			if topIndexHTML := path.Join(app.root, "index.html"); filePath != topIndexHTML {
 				filePath = topIndexHTML
 				goto Stat
 			}
@@ -267,12 +269,13 @@ Stat:
 			if fi.Size() > 1024 {
 				w.Header().Set("Content-Encoding", "gzip")
 				w.Header().Set("Vary", "Accept-Encoding")
-				w, err = newGzipResponseWriter(w, gzip.BestSpeed)
+				gzw, err := newGzipResponseWriter(w, gzip.BestSpeed)
 				if err != nil {
 					http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 					return
 				}
-				defer w.(*GzipResponseWriter).Close()
+				defer gzw.Close()
+				w = gzw
 			}
 		}
 	}
@@ -310,8 +313,8 @@ func (w *ResponseWriter) WriteStatus() (status int, writed int) {
 }
 
 type GzipResponseWriter struct {
-	responseWriter http.ResponseWriter
 	gzipWriter     io.WriteCloser
+	responseWriter http.ResponseWriter
 }
 
 func newGzipResponseWriter(w http.ResponseWriter, speed int) (grw *GzipResponseWriter, err error) {
@@ -320,7 +323,7 @@ func newGzipResponseWriter(w http.ResponseWriter, speed int) (grw *GzipResponseW
 		return
 	}
 
-	grw = &GzipResponseWriter{w, gzipWriter}
+	grw = &GzipResponseWriter{gzipWriter, w}
 	return
 }
 
