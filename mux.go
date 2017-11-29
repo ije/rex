@@ -218,8 +218,8 @@ type AppMux struct {
 }
 
 func (mux *AppMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if mux.parent.App == nil {
-		http.Error(w, "App Not Found", 404)
+	if mux.parent == nil || mux.parent.App == nil {
+		http.Error(w, http.StatusText(404), 404)
 		return
 	}
 
@@ -281,26 +281,26 @@ Stat:
 }
 
 type ResponseWriter struct {
-	status             int
-	writed             int
-	httpResponseWriter http.ResponseWriter
+	status         int
+	writed         int
+	responseWriter http.ResponseWriter
 }
 
 func NewResponseWriter(w http.ResponseWriter) *ResponseWriter {
-	return &ResponseWriter{status: 200, httpResponseWriter: w}
+	return &ResponseWriter{status: 200, responseWriter: w}
 }
 
 func (w *ResponseWriter) Header() http.Header {
-	return w.httpResponseWriter.Header()
+	return w.responseWriter.Header()
 }
 
 func (w *ResponseWriter) WriteHeader(status int) {
 	w.status = status
-	w.httpResponseWriter.WriteHeader(status)
+	w.responseWriter.WriteHeader(status)
 }
 
 func (w *ResponseWriter) Write(p []byte) (n int, err error) {
-	n, err = w.httpResponseWriter.Write(p)
+	n, err = w.responseWriter.Write(p)
 	w.writed += n
 	return
 }
@@ -310,8 +310,8 @@ func (w *ResponseWriter) WriteStatus() (status int, writed int) {
 }
 
 type GzipResponseWriter struct {
-	httpResponseWriter http.ResponseWriter
-	gzWriter           io.WriteCloser
+	responseWriter http.ResponseWriter
+	gzipWriter     io.WriteCloser
 }
 
 func newGzipResponseWriter(w http.ResponseWriter, speed int) (grw *GzipResponseWriter, err error) {
@@ -325,17 +325,17 @@ func newGzipResponseWriter(w http.ResponseWriter, speed int) (grw *GzipResponseW
 }
 
 func (w *GzipResponseWriter) Header() http.Header {
-	return w.httpResponseWriter.Header()
+	return w.responseWriter.Header()
 }
 
 func (w *GzipResponseWriter) WriteHeader(status int) {
-	w.httpResponseWriter.WriteHeader(status)
+	w.responseWriter.WriteHeader(status)
 }
 
 func (w *GzipResponseWriter) Write(p []byte) (int, error) {
-	return w.gzWriter.Write(p)
+	return w.gzipWriter.Write(p)
 }
 
 func (w *GzipResponseWriter) Close() error {
-	return w.gzWriter.Close()
+	return w.gzipWriter.Close()
 }
