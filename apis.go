@@ -103,7 +103,7 @@ func (s *APIService) register(method string, endpoint string, handle APIHandle, 
 	s.route[method][endpoint] = &apiHandler{privileges: privileges, handle: handle}
 
 	if !s.Exclusive && !s.registered {
-		apisMux.RegisterApis(s)
+		apiss = append(apiss, s)
 		s.registered = true
 	}
 }

@@ -21,16 +21,15 @@ import (
 )
 
 type ApisMux struct {
+	App               *App
 	CustomHTTPHeaders map[string]string
 	SessionCookieName string
 	HostRedirect      string
 	Debug             bool
 	SessionManager    session.Manager
+	AccessLogger      *log.Logger
 	Logger            *log.Logger
-	app               *App
-	accessLogger      *log.Logger
 	router            *httprouter.Router
-	apiss             []*APIService
 }
 
 func (mux *ApisMux) RegisterApis(apis *APIService) {
@@ -38,144 +37,133 @@ func (mux *ApisMux) RegisterApis(apis *APIService) {
 		return
 	}
 
-	mux.apiss = append(mux.apiss, apis)
-}
-
-func (mux *ApisMux) InitRouter(app *App) {
-	mux.app = app
-	if mux.router != nil {
-		return
-	}
-
-	router := httprouter.New()
-	mux.router = router
-	router.PanicHandler = func(w http.ResponseWriter, r *http.Request, v interface{}) {
-		if mux.Debug {
-			http.Error(w, fmt.Sprintf("%v", v), http.StatusInternalServerError)
-		} else {
-			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		}
-
-		if err, ok := v.(*initSessionError); ok {
-			if mux.Logger != nil {
-				mux.Logger.Errorf("Init session: %s", err.msg)
-			}
-			return
-		}
-
-		var (
-			i    = 2
-			j    int
-			pc   uintptr
-			file string
-			line int
-			ok   bool
-			buf  = bytes.NewBuffer(nil)
-		)
-		for {
-			pc, file, line, ok = runtime.Caller(i)
-			if ok {
-				buf.WriteByte('\n')
-				for j = 0; j < 34; j++ {
-					buf.WriteByte(' ')
-				}
-				fmt.Fprint(buf, "> ", runtime.FuncForPC(pc).Name(), " ", file, ":", line)
+	router := mux.router
+	if router == nil {
+		router = httprouter.New()
+		router.PanicHandler = func(w http.ResponseWriter, r *http.Request, v interface{}) {
+			if mux.Debug {
+				http.Error(w, fmt.Sprintf("%v", v), http.StatusInternalServerError)
 			} else {
-				break
+				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			}
-			i++
+
+			if err, ok := v.(*initSessionError); ok {
+				if mux.Logger != nil {
+					mux.Logger.Errorf("Init session: %s", err.msg)
+				}
+				return
+			}
+
+			var (
+				i    = 2
+				j    int
+				pc   uintptr
+				file string
+				line int
+				ok   bool
+				buf  = bytes.NewBuffer(nil)
+			)
+			for {
+				pc, file, line, ok = runtime.Caller(i)
+				if ok {
+					buf.WriteByte('\n')
+					for j = 0; j < 34; j++ {
+						buf.WriteByte(' ')
+					}
+					fmt.Fprint(buf, "> ", runtime.FuncForPC(pc).Name(), " ", file, ":", line)
+				} else {
+					break
+				}
+				i++
+			}
+			if mux.Logger != nil {
+				mux.Logger.Error("[panic]", v, buf.String())
+			}
 		}
-		if mux.Logger != nil {
-			mux.Logger.Error("[panic]", v, buf.String())
-		}
-	}
-	if mux.app != nil {
-		router.NotFound = &AppMux{mux.app}
+		router.NotFound = &AppMux{mux}
+		mux.router = router
 	}
 
-	for _, apis := range mux.apiss {
-		for method, route := range apis.route {
-			for endpoint, handler := range route {
-				var routerHandle func(string, httprouter.Handle)
-				switch method {
-				case "OPTIONS":
-					routerHandle = router.OPTIONS
-				case "HEAD":
-					routerHandle = router.HEAD
-				case "GET":
-					routerHandle = router.GET
-				case "POST":
-					routerHandle = router.POST
-				case "PUT":
-					routerHandle = router.PUT
-				case "PATCH":
-					routerHandle = router.PATCH
-				case "DELETE":
-					routerHandle = router.DELETE
-				}
-				if routerHandle == nil {
-					continue
-				}
-				if len(apis.Prefix) > 0 {
-					endpoint = path.Join("/"+strings.Trim(apis.Prefix, "/"), endpoint)
-				}
-				if mux.app != nil {
-					endpoint = path.Join("/api", endpoint)
-				}
-				func(mux *ApisMux, routerHandle func(string, httprouter.Handle), endpoint string, handler *apiHandler, apis *APIService) {
-					routerHandle(endpoint, func(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
-						url := &URL{params, r.URL}
-						xs := &XServices{
-							Log: mux.Logger,
-						}
-						ctx := &Context{
-							App:            mux.app,
-							ResponseWriter: w,
-							Request:        r,
-							URL:            url,
-							XServices:      xs,
-							mux:            mux,
-						}
+	for method, route := range apis.route {
+		for endpoint, handler := range route {
+			var routerHandle func(string, httprouter.Handle)
+			switch method {
+			case "OPTIONS":
+				routerHandle = router.OPTIONS
+			case "HEAD":
+				routerHandle = router.HEAD
+			case "GET":
+				routerHandle = router.GET
+			case "POST":
+				routerHandle = router.POST
+			case "PUT":
+				routerHandle = router.PUT
+			case "PATCH":
+				routerHandle = router.PATCH
+			case "DELETE":
+				routerHandle = router.DELETE
+			}
+			if routerHandle == nil {
+				continue
+			}
+			if len(apis.Prefix) > 0 {
+				endpoint = path.Join("/"+strings.Trim(apis.Prefix, "/"), endpoint)
+			}
+			if mux.App != nil {
+				endpoint = path.Join("/api", endpoint)
+			}
+			func(mux *ApisMux, routerHandle func(string, httprouter.Handle), endpoint string, handler *apiHandler, apis *APIService) {
+				routerHandle(endpoint, func(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
+					url := &URL{params, r.URL}
+					xs := &XServices{
+						Log: mux.Logger,
+					}
+					ctx := &Context{
+						App:            mux.App,
+						ResponseWriter: w,
+						Request:        r,
+						URL:            url,
+						XServices:      xs,
+						mux:            mux,
+					}
 
-						if len(apis.middlewares) > 0 {
-							for _, use := range apis.middlewares {
-								use(ctx)
-							}
+					if len(apis.middlewares) > 0 {
+						for _, use := range apis.middlewares {
+							use(ctx)
 						}
+					}
 
-						ctx.App = mux.app
-						ctx.ResponseWriter = w
-						ctx.Request = r
-						ctx.URL = url
-						ctx.XServices = xs
+					ctx.App = mux.App
+					ctx.ResponseWriter = w
+					ctx.Request = r
+					ctx.URL = url
+					ctx.XServices = xs
 
-						if len(handler.privileges) > 0 {
-							var isGranted bool
-							if ctx.User != nil {
-								for _, pid := range ctx.User.Privileges() {
-									_, isGranted = handler.privileges[pid]
-									if isGranted {
-										break
-									}
+					if len(handler.privileges) > 0 {
+						var isGranted bool
+						if ctx.User != nil {
+							for _, pid := range ctx.User.Privileges() {
+								_, isGranted = handler.privileges[pid]
+								if isGranted {
+									break
 								}
 							}
-							if !isGranted {
-								ctx.End(http.StatusUnauthorized)
-							}
 						}
+						if !isGranted {
+							ctx.End(http.StatusUnauthorized)
+						}
+					}
 
-						handler.handle(ctx)
-					})
-				}(mux, routerHandle, endpoint, handler, apis)
-			}
+					handler.handle(ctx)
+				})
+			}(mux, routerHandle, endpoint, handler, apis)
 		}
 	}
 }
 
 func (mux *ApisMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w = NewResponseWriter(w)
-
-	if mux.accessLogger != nil {
+	if mux.AccessLogger != nil {
 		start := time.Now()
 		defer func() {
 			rw, ok := w.(*ResponseWriter)
@@ -184,7 +172,7 @@ func (mux *ApisMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 			status, writed := rw.WriteStatus()
 
-			mux.accessLogger.Printf(`%s %s %s %s %s %d "%s" "%s" %d %d %dms`, r.RemoteAddr, r.Host, r.Proto, r.Method, r.RequestURI, r.ContentLength, strings.Replace(r.Referer(), `"`, "'", -1), strings.Replace(r.UserAgent(), `"`, "'", -1), status, writed, time.Now().Sub(start).Nanoseconds()/(1000*1000))
+			mux.AccessLogger.Printf(`%s %s %s %s %s %d "%s" "%s" %d %d %dms`, r.RemoteAddr, r.Host, r.Proto, r.Method, r.RequestURI, r.ContentLength, strings.Replace(r.Referer(), `"`, "'", -1), strings.Replace(r.UserAgent(), `"`, "'", -1), status, writed, time.Now().Sub(start).Nanoseconds()/(1000*1000))
 		}()
 	}
 
@@ -226,19 +214,19 @@ func (mux *ApisMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 type AppMux struct {
-	app *App
+	parent *ApisMux
 }
 
 func (mux *AppMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if mux.app == nil {
+	if mux.parent.App == nil {
 		http.Error(w, "App Not Found", 404)
 		return
 	}
 
 	// todo: app ssr
 
-	if mux.app.debugProcess != nil {
-		remote, err := url.Parse(fmt.Sprintf("http://127.0.0.1:%d", mux.app.debugPort))
+	if mux.parent.App.debugProcess != nil {
+		remote, err := url.Parse(fmt.Sprintf("http://127.0.0.1:%d", mux.parent.App.debugPort))
 		if err != nil {
 			http.Error(w, err.Error(), 500)
 			return
@@ -250,13 +238,13 @@ func (mux *AppMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Serve File
-	filePath := utils.CleanPath(path.Join(mux.app.root, r.URL.Path))
+	filePath := utils.CleanPath(path.Join(mux.parent.App.root, r.URL.Path))
 Stat:
 	fi, err := os.Stat(filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// 404s will fallback to /index.html
-			if topIndexHTML := path.Join(mux.app.root, "index.html"); filePath != topIndexHTML {
+			if topIndexHTML := path.Join(mux.parent.App.root, "index.html"); filePath != topIndexHTML {
 				filePath = topIndexHTML
 				goto Stat
 			}

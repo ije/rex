@@ -13,6 +13,7 @@ import (
 	"github.com/ije/webx/session"
 )
 
+var apiss []*APIService
 var apisMux = &ApisMux{}
 
 type ServerConfig struct {
@@ -60,6 +61,7 @@ func Serve(config *ServerConfig) {
 		}
 	}
 
+	apisMux.App = app
 	apisMux.CustomHTTPHeaders = config.CustomHTTPHeaders
 	apisMux.SessionCookieName = config.SessionCookieName
 	apisMux.HostRedirect = config.HostRedirect
@@ -68,12 +70,17 @@ func Serve(config *ServerConfig) {
 	apisMux.Logger = logger
 	if len(config.AccessLog) > 0 {
 		var err error
-		apisMux.accessLogger, err = log.New("file:" + strings.TrimPrefix(config.ErrorLog, "file:"))
+		apisMux.AccessLogger, err = log.New("file:" + strings.TrimPrefix(config.ErrorLog, "file:"))
 		if err != nil {
 			logger.Error("initialize access logger:", err)
+		} else {
+			apisMux.AccessLogger.SetQuite(true)
 		}
 	}
-	apisMux.InitRouter(app)
+
+	for _, apis := range apiss {
+		apisMux.RegisterApis(apis)
+	}
 
 	serv := &http.Server{
 		Addr:           fmt.Sprintf((":%d"), config.Port),
