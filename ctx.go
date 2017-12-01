@@ -216,6 +216,10 @@ func (ctx *Context) Authenticate(realm string, authHandle func(user string, pass
 	return
 }
 
+func (ctx *Context) Redirect(url string, code int) {
+	http.Redirect(ctx.ResponseWriter, ctx.Request, url, code)
+}
+
 func (ctx *Context) Write(p []byte) (n int, err error) {
 	return ctx.ResponseWriter.Write(p)
 }
