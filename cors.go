@@ -11,7 +11,7 @@ type CORS struct {
 func PublicCORS() *CORS {
 	return &CORS{
 		Origin:      "*",
-		Methods:     []string{"HEAD", "GET", "POST", "PUT", "PATCH", "DELETE"},
+		Methods:     []string{"OPTIONS", "HEAD", "GET", "POST", "PUT", "PATCH", "DELETE"},
 		Headers:     []string{"Accept", "Accept-Encoding", "Accept-Lang", "Content-Type", "Authorization", "X-Requested-With"},
 		Credentials: true,
 		MaxAge:      60,

@@ -6,11 +6,19 @@ import (
 )
 
 type APIService struct {
-	Exclusive   bool
 	Prefix      string
-	registered  bool
 	middlewares []APIHandle
 	route       map[string]map[string]*apiHandler
+}
+
+func NewAPIService() *APIService {
+	apis := &APIService{}
+	return apis
+}
+
+func NewAPIServiceWithPrefix(prefix string) *APIService {
+	apis := &APIService{Prefix: prefix}
+	return apis
 }
 
 type apiHandler struct {
@@ -101,9 +109,4 @@ func (s *APIService) register(method string, endpoint string, handle APIHandle, 
 		s.route[method] = map[string]*apiHandler{}
 	}
 	s.route[method][endpoint] = &apiHandler{privileges: privileges, handle: handle}
-
-	if !s.Exclusive && !s.registered {
-		apiss = append(apiss, s)
-		s.registered = true
-	}
 }

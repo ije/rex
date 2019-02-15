@@ -14,8 +14,8 @@ import (
 
 	logx "github.com/ije/gox/log"
 	"github.com/ije/gox/utils"
-	"github.com/ije/webx/acl"
-	"github.com/ije/webx/session"
+	"github.com/ije/wsx/acl"
+	"github.com/ije/wsx/session"
 	"github.com/julienschmidt/httprouter"
 )
 
@@ -27,7 +27,7 @@ type Context struct {
 	URL            *URL
 	XServices      *XServices
 	session        session.Session
-	mux            *ApisMux
+	mux            *Mux
 }
 
 type XServices struct {
@@ -54,10 +54,6 @@ func (ctx *Context) RemoveCookie(cookie *http.Cookie) {
 		cookie.Expires = time.Now().Add(-time.Second)
 		ctx.ResponseWriter.Header().Add("Set-Cookie", cookie.String())
 	}
-}
-
-type initSessionError struct {
-	msg string
 }
 
 func (ctx *Context) Session() (sess session.Session) {
@@ -269,6 +265,9 @@ func (ctx *Context) Error(err error) {
 	if ctx.mux.Debug {
 		ctx.End(http.StatusInternalServerError, err.Error())
 	} else {
+		if ctx.mux.Logger != nil {
+			ctx.mux.Logger.Error(err)
+		}
 		ctx.End(http.StatusInternalServerError)
 	}
 }

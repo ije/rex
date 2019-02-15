@@ -1,8 +1,8 @@
-WEBX
+WSX
 ====
-webx provides a restful API server by [golang](https://golang.org/) that can debug, build and host a SPA(single page appliaction).
+**WSX** provides a restful API server by [golang](https://golang.org/) that can debug, build, and host a SPA(single page appliaction).
 
-[![GoDoc](https://godoc.org/github.com/ije/webx?status.svg)](https://godoc.org/github.com/ije/webx)
+[![GoDoc](https://godoc.org/github.com/ije/wsx?status.svg)](https://godoc.org/github.com/ije/wsx)
 
 
 Example
@@ -11,32 +11,21 @@ Example
 package main
 
 import (
-	"github.com/ije/webx"
+	"github.com/ije/wsx"
 )
 
 func main() {
-	var apis = &web.APIService{}
+	var apis = wsx.NewAPIService()
 
-	apis.Get("/hello/:name", func(ctx *webx.Context) {
+	apis.Get("/hello/:name", func(ctx *wsx.Context) {
 		ctx.WriteJSON(200, map[string]string{
 			"message": "Hello, " + ctx.URL.Params.ByName("name"),
 		})
-	}, "privilegeId")
-
-	webx.Serve(&webx.ServerConfig{
-		AppRoot: "/var/www/spa-app",
-		Port: 8080,
 	})
+
+	wsx.Serve(&wsx.ServerConfig{
+		AppRoot: "/var/www/app",
+		Port: 8080,
+	}, apis)
 }
 ```
-
-
-Features
---------
-* Restful API Server
-* Debug and Build SPA
-
-
-Node.js
--------
-If you run the webx with a SPA, you need install the [nodejs](https://nodejs.org/) to debug and build the App.

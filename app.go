@@ -28,8 +28,8 @@ type AppBuildLog struct {
 	StartTime int64
 	EndTime   int64
 	PackMode  string
-	Error     string
 	Output    string
+	Error     string
 }
 
 func InitApp(root string, buildLogFile string, debug bool) (app *App, err error) {
@@ -141,7 +141,7 @@ func (app *App) Root() string {
 	return app.root
 }
 
-func (app *App) BuildLog() []AppBuildLog {
+func (app *App) BuildLogs() []AppBuildLog {
 	return app.buildLog
 }
 

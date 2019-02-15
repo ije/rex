@@ -10,10 +10,8 @@ import (
 
 	"github.com/ije/gox/log"
 	"github.com/ije/gox/utils"
-	"github.com/ije/webx/session"
+	"github.com/ije/wsx/session"
 )
-
-var apiss []*APIService
 
 type ServerConfig struct {
 	AppRoot           string            `json:"appRoot"`
@@ -30,7 +28,7 @@ type ServerConfig struct {
 	Debug             bool              `json:"debug"`
 }
 
-func Serve(config *ServerConfig) {
+func Serve(config *ServerConfig, apiss ...*APIService) {
 	if config == nil {
 		config = &ServerConfig{}
 	}
@@ -60,7 +58,7 @@ func Serve(config *ServerConfig) {
 		}
 	}
 
-	apisMux := &ApisMux{
+	mux := &Mux{
 		App:               app,
 		CustomHTTPHeaders: config.CustomHTTPHeaders,
 		SessionCookieName: config.SessionCookieName,
@@ -71,21 +69,21 @@ func Serve(config *ServerConfig) {
 	}
 	if len(config.AccessLog) > 0 {
 		var err error
-		apisMux.AccessLogger, err = log.New("file:" + strings.TrimPrefix(config.ErrorLog, "file:"))
+		mux.AccessLogger, err = log.New("file:" + strings.TrimPrefix(config.ErrorLog, "file:"))
 		if err != nil {
 			logger.Error("initialize access logger:", err)
 		} else {
-			apisMux.AccessLogger.SetQuite(true)
+			mux.AccessLogger.SetQuite(true)
 		}
 	}
 
 	for _, apis := range apiss {
-		apisMux.RegisterApis(apis)
+		mux.RegisterAPIService(apis)
 	}
 
 	serv := &http.Server{
 		Addr:           fmt.Sprintf((":%d"), config.Port),
-		Handler:        apisMux,
+		Handler:        mux,
 		ReadTimeout:    time.Duration(config.ReadTimeout) * time.Second,
 		WriteTimeout:   time.Duration(config.WriteTimeout) * time.Second,
 		MaxHeaderBytes: config.MaxHeaderBytes,

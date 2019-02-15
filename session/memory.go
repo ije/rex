@@ -4,8 +4,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ije/gox/utils"
-
 	"github.com/ije/gox/crypto/rs"
 )
 
@@ -25,9 +23,15 @@ func (ms *MemorySession) Values(keys ...string) (values map[string]interface{}, 
 	ms.storeLock.RLock()
 	if len(ms.store) > 0 {
 		values = map[string]interface{}{}
-		for key, value := range ms.store {
-			if len(keys) == 0 || utils.ContainsString(keys, key) {
+		if len(keys) == 0 {
+			for key, value := range ms.store {
 				values[key] = value
+			}
+		} else {
+			for _, key := range keys {
+				if value, ok := ms.store[key]; ok {
+					values[key] = value
+				}
 			}
 		}
 	}
@@ -97,7 +101,7 @@ func NewMemorySessionManager(gcLifetime time.Duration) *MemorySessionManager {
 	manager := &MemorySessionManager{
 		sessions: map[string]*MemorySession{},
 	}
-	manager.SetGCLifetime(gcLifetime)
+	manager.SetGCInterval(gcLifetime)
 
 	return manager
 }
@@ -157,7 +161,7 @@ func (manager *MemorySessionManager) Destroy(sid string) error {
 	return nil
 }
 
-func (manager *MemorySessionManager) SetGCLifetime(lifetime time.Duration) error {
+func (manager *MemorySessionManager) SetGCInterval(lifetime time.Duration) error {
 	if lifetime < time.Second {
 		return nil
 	}

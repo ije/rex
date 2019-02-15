@@ -16,11 +16,11 @@ import (
 
 	"github.com/ije/gox/log"
 	"github.com/ije/gox/utils"
-	"github.com/ije/webx/session"
+	"github.com/ije/wsx/session"
 	"github.com/julienschmidt/httprouter"
 )
 
-type ApisMux struct {
+type Mux struct {
 	App               *App
 	CustomHTTPHeaders map[string]string
 	SessionCookieName string
@@ -32,7 +32,7 @@ type ApisMux struct {
 	router            *httprouter.Router
 }
 
-func (mux *ApisMux) RegisterApis(apis *APIService) {
+func (mux *Mux) RegisterAPIService(apis *APIService) {
 	if apis == nil {
 		return
 	}
@@ -112,7 +112,7 @@ func (mux *ApisMux) RegisterApis(apis *APIService) {
 			if mux.App != nil {
 				endpoint = path.Join("/api", endpoint)
 			}
-			func(mux *ApisMux, routerHandle func(string, httprouter.Handle), endpoint string, handler *apiHandler, apis *APIService) {
+			func(mux *Mux, routerHandle func(string, httprouter.Handle), endpoint string, handler *apiHandler, apis *APIService) {
 				routerHandle(endpoint, func(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
 					url := &URL{params, r.URL}
 					xs := &XServices{
@@ -161,7 +161,7 @@ func (mux *ApisMux) RegisterApis(apis *APIService) {
 	}
 }
 
-func (mux *ApisMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (mux *Mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w = NewResponseWriter(w)
 	if mux.AccessLogger != nil {
 		start := time.Now()
@@ -182,8 +182,9 @@ func (mux *ApisMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			wh.Set(key, val)
 		}
 	}
+
 	wh.Set("Connection", "keep-alive")
-	wh.Set("Server", "webx-server")
+	wh.Set("Server", "wsx")
 
 	if len(mux.HostRedirect) > 0 {
 		code := 301 // Permanent redirect, request with GET method
@@ -214,7 +215,7 @@ func (mux *ApisMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 type AppMux struct {
-	parent *ApisMux
+	parent *Mux
 }
 
 func (mux *AppMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -269,7 +270,7 @@ Stat:
 			if fi.Size() > 1024 {
 				w.Header().Set("Content-Encoding", "gzip")
 				w.Header().Set("Vary", "Accept-Encoding")
-				gzw, err := newGzipResponseWriter(w, gzip.BestSpeed)
+				gzw, err := newGzResponseWriter(w, gzip.BestSpeed)
 				if err != nil {
 					http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 					return
@@ -312,33 +313,33 @@ func (w *ResponseWriter) WriteStatus() (status int, writed int) {
 	return w.status, w.writed
 }
 
-type GzipResponseWriter struct {
+type gzResponseWriter struct {
 	gzipWriter     io.WriteCloser
 	responseWriter http.ResponseWriter
 }
 
-func newGzipResponseWriter(w http.ResponseWriter, speed int) (grw *GzipResponseWriter, err error) {
+func newGzResponseWriter(w http.ResponseWriter, speed int) (grw *gzResponseWriter, err error) {
 	gzipWriter, err := gzip.NewWriterLevel(w, speed)
 	if err != nil {
 		return
 	}
 
-	grw = &GzipResponseWriter{gzipWriter, w}
+	grw = &gzResponseWriter{gzipWriter, w}
 	return
 }
 
-func (w *GzipResponseWriter) Header() http.Header {
+func (w *gzResponseWriter) Header() http.Header {
 	return w.responseWriter.Header()
 }
 
-func (w *GzipResponseWriter) WriteHeader(status int) {
+func (w *gzResponseWriter) WriteHeader(status int) {
 	w.responseWriter.WriteHeader(status)
 }
 
-func (w *GzipResponseWriter) Write(p []byte) (int, error) {
+func (w *gzResponseWriter) Write(p []byte) (int, error) {
 	return w.gzipWriter.Write(p)
 }
 
-func (w *GzipResponseWriter) Close() error {
+func (w *gzResponseWriter) Close() error {
 	return w.gzipWriter.Close()
 }
