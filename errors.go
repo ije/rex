@@ -1,4 +1,4 @@
-package webx
+package wsx
 
 type initSessionError struct {
 	msg string

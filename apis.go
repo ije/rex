@@ -1,4 +1,4 @@
-package webx
+package wsx
 
 import (
 	"strconv"
@@ -109,38 +109,4 @@ func (s *APIService) register(method string, endpoint string, handle APIHandle, 
 		s.route[method] = map[string]*apiHandler{}
 	}
 	s.route[method][endpoint] = &apiHandler{privileges: privileges, handle: handle}
-}
-
-var gapis = &APIService{}
-
-func Use(middleware APIHandle) {
-	gapis.Use(middleware)
-}
-
-func Options(endpoint string, cors *CORS) {
-	gapis.Options(endpoint, cors)
-}
-
-func Head(endpoint string, handle APIHandle, privilegeIds ...string) {
-	gapis.Head(endpoint, handle, privilegeIds...)
-}
-
-func Get(endpoint string, handle APIHandle, privilegeIds ...string) {
-	gapis.Get(endpoint, handle, privilegeIds...)
-}
-
-func Post(endpoint string, handle APIHandle, privilegeIds ...string) {
-	gapis.Post(endpoint, handle, privilegeIds...)
-}
-
-func Put(endpoint string, handle APIHandle, privilegeIds ...string) {
-	gapis.Put(endpoint, handle, privilegeIds...)
-}
-
-func Patch(endpoint string, handle APIHandle, privilegeIds ...string) {
-	gapis.Patch(endpoint, handle, privilegeIds...)
-}
-
-func Delete(endpoint string, handle APIHandle, privilegeIds ...string) {
-	gapis.Delete(endpoint, handle, privilegeIds...)
 }

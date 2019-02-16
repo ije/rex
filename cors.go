@@ -1,4 +1,4 @@
-package webx
+package wsx
 
 type CORS struct {
 	Origin      string

@@ -1,4 +1,4 @@
-package webx
+package wsx
 
 import (
 	"compress/gzip"

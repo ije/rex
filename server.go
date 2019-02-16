@@ -1,4 +1,4 @@
-package webx
+package wsx
 
 import (
 	"fmt"
@@ -64,9 +64,10 @@ func Serve(config *ServerConfig, apiss ...*APIService) {
 		Logger:            logger,
 	}
 
-	mux.RegisterAPIService(gapis)
-	for _, apis := range apiss {
-		mux.RegisterAPIService(apis)
+	if len(apiss) > 0 {
+		for _, apis := range apiss {
+			mux.RegisterAPIService(apis)
+		}
 	}
 
 	if config.AccessLogger != nil {

@@ -15,13 +15,14 @@ import (
 )
 
 func main() {
-    wsx.Get("/hello/:name", func(ctx *wsx.Context) {
+    apis := &wsx.APIService{}
+    apis.Get("/hello/:name", func(ctx *wsx.Context) {
         ctx.WriteText("Hello, " + ctx.URL.Params.ByName("name"))
     })
 
     wsx.Serve(&wsx.ServerConfig{
         AppRoot: "/var/www/app",
         Port: 8080,
-    })
+    }, apis)
 }
 ```
