@@ -17,6 +17,6 @@ type Session interface {
 type Manager interface {
 	Get(sid string) (Session, error)
 	Destroy(sid string) error
-	SetGCInterval(lifetime time.Duration) error
 	GC() error
+	SetGCInterval(d time.Duration) error
 }

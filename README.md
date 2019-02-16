@@ -15,9 +15,7 @@ import (
 )
 
 func main() {
-    var apis = wsx.NewAPIService()
-
-    apis.Get("/hello/:name", func(ctx *wsx.Context) {
+    wsx.Get("/hello/:name", func(ctx *wsx.Context) {
         ctx.WriteJSON(200, map[string]string{
             "message": "Hello, " + ctx.URL.Params.ByName("name"),
         })
@@ -26,6 +24,6 @@ func main() {
     wsx.Serve(&wsx.ServerConfig{
         AppRoot: "/var/www/app",
         Port: 8080,
-    }, apis)
+    })
 }
 ```

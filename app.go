@@ -25,10 +25,9 @@ type App struct {
 
 type AppBuildLog struct {
 	ID        string
-	StartTime int64
-	EndTime   int64
 	PackMode  string
 	Output    string
+	BuildTime int64
 	Error     string
 }
 
@@ -102,15 +101,15 @@ func InitApp(root string, buildLogFile string, debug bool) (app *App, err error)
 			_, err = exec.LookPath("webpack-dev-server")
 		}
 		if err != nil {
-			fmt.Println("[npm] install webpack/webpack-dev-server...")
-			cmd := exec.Command("npm", "install", "webpack", "webpack-dev-server")
+			fmt.Println("[npm] install webpack/webpack-cli/webpack-dev-server...")
+			cmd := exec.Command("npm", "install", "webpack", "webpack-cli", "webpack-dev-server")
 			cmd.Dir = root
 			cmd.Stderr = os.Stderr
 			cmd.Stdout = os.Stdout
 			cmd.Run()
 		}
 
-		_, err = exec.LookPath("webpack")
+		_, err = exec.LookPath("webpack-cli")
 		if err == nil && debug {
 			_, err = exec.LookPath("webpack-dev-server")
 		}
@@ -202,17 +201,16 @@ func (app *App) build(id string) {
 
 	switch app.packMode {
 	case "webpack":
-		start := time.Now()
-		cmd := exec.Command("webpack", "--hide-modules", "--color=false")
+		since := time.Since(time.Now())
+		cmd := exec.Command("webpack-cli", "--hide-modules", "--color=false")
 		cmd.Env = append(os.Environ(), "NODE_ENV=production")
 		cmd.Dir = app.root
 		output, err := cmd.CombinedOutput()
 		log := AppBuildLog{
 			ID:        id,
-			StartTime: start.UnixNano() / (1000 * 1000),
-			EndTime:   time.Now().UnixNano() / (1000 * 1000),
 			PackMode:  app.packMode,
 			Output:    string(output),
+			BuildTime: int64(since / time.Millisecond),
 		}
 		if err != nil {
 			log.Error = err.Error()

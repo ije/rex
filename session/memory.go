@@ -87,21 +87,21 @@ func (ms *MemorySession) Flush() error {
 }
 
 func (ms *MemorySession) activate() {
-	ms.expires = time.Now().Add(ms.manager.gcLifetime)
+	ms.expires = time.Now().Add(ms.manager.gcInterval)
 }
 
 type MemorySessionManager struct {
 	lock       sync.RWMutex
 	sessions   map[string]*MemorySession
-	gcLifetime time.Duration
+	gcInterval time.Duration
 	gcTimer    *time.Timer
 }
 
-func NewMemorySessionManager(gcLifetime time.Duration) *MemorySessionManager {
+func NewMemorySessionManager(gcInterval time.Duration) *MemorySessionManager {
 	manager := &MemorySessionManager{
 		sessions: map[string]*MemorySession{},
 	}
-	manager.SetGCInterval(gcLifetime)
+	manager.SetGCInterval(gcInterval)
 
 	return manager
 }
@@ -146,7 +146,7 @@ func (manager *MemorySessionManager) Get(sid string) (session Session, err error
 	}
 
 	manager.lock.Lock()
-	ms.expires = now.Add(manager.gcLifetime)
+	ms.expires = now.Add(manager.gcInterval)
 	manager.lock.Unlock()
 
 	session = ms
@@ -166,7 +166,7 @@ func (manager *MemorySessionManager) SetGCInterval(lifetime time.Duration) error
 		return nil
 	}
 
-	manager.gcLifetime = lifetime
+	manager.gcInterval = lifetime
 	manager.gcTime()
 
 	return nil
@@ -177,7 +177,7 @@ func (manager *MemorySessionManager) gcTime() {
 		manager.gcTimer.Stop()
 	}
 
-	manager.gcTimer = time.AfterFunc(manager.gcLifetime, func() {
+	manager.gcTimer = time.AfterFunc(manager.gcInterval, func() {
 		manager.GC()
 		manager.gcTime()
 	})

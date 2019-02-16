@@ -23,7 +23,7 @@ func NewAPIServiceWithPrefix(prefix string) *APIService {
 
 type apiHandler struct {
 	handle     APIHandle
-	privileges map[string]struct{}
+	privileges map[string]struct{} // set
 }
 
 type APIHandle func(*Context)
@@ -32,7 +32,7 @@ func (s *APIService) Use(middleware APIHandle) {
 	s.middlewares = append(s.middlewares, middleware)
 }
 
-func (s *APIService) OPTIONS(endpoint string, cors *CORS) {
+func (s *APIService) Options(endpoint string, cors *CORS) {
 	if cors == nil {
 		return
 	}
@@ -63,27 +63,27 @@ func (s *APIService) OPTIONS(endpoint string, cors *CORS) {
 	}, nil)
 }
 
-func (s *APIService) HEAD(endpoint string, handle APIHandle, privilegeIds ...string) {
+func (s *APIService) Head(endpoint string, handle APIHandle, privilegeIds ...string) {
 	s.register("HEAD", endpoint, handle, privilegeIds)
 }
 
-func (s *APIService) GET(endpoint string, handle APIHandle, privilegeIds ...string) {
+func (s *APIService) Get(endpoint string, handle APIHandle, privilegeIds ...string) {
 	s.register("GET", endpoint, handle, privilegeIds)
 }
 
-func (s *APIService) POST(endpoint string, handle APIHandle, privilegeIds ...string) {
+func (s *APIService) Post(endpoint string, handle APIHandle, privilegeIds ...string) {
 	s.register("POST", endpoint, handle, privilegeIds)
 }
 
-func (s *APIService) PUT(endpoint string, handle APIHandle, privilegeIds ...string) {
+func (s *APIService) Put(endpoint string, handle APIHandle, privilegeIds ...string) {
 	s.register("PUT", endpoint, handle, privilegeIds)
 }
 
-func (s *APIService) PATCH(endpoint string, handle APIHandle, privilegeIds ...string) {
+func (s *APIService) Patch(endpoint string, handle APIHandle, privilegeIds ...string) {
 	s.register("PATCH", endpoint, handle, privilegeIds)
 }
 
-func (s *APIService) DELETE(endpoint string, handle APIHandle, privilegeIds ...string) {
+func (s *APIService) Delete(endpoint string, handle APIHandle, privilegeIds ...string) {
 	s.register("DELETE", endpoint, handle, privilegeIds)
 }
 
@@ -109,4 +109,38 @@ func (s *APIService) register(method string, endpoint string, handle APIHandle, 
 		s.route[method] = map[string]*apiHandler{}
 	}
 	s.route[method][endpoint] = &apiHandler{privileges: privileges, handle: handle}
+}
+
+var gapis = &APIService{}
+
+func Use(middleware APIHandle) {
+	gapis.Use(middleware)
+}
+
+func Options(endpoint string, cors *CORS) {
+	gapis.Options(endpoint, cors)
+}
+
+func Head(endpoint string, handle APIHandle, privilegeIds ...string) {
+	gapis.Head(endpoint, handle, privilegeIds...)
+}
+
+func Get(endpoint string, handle APIHandle, privilegeIds ...string) {
+	gapis.Get(endpoint, handle, privilegeIds...)
+}
+
+func Post(endpoint string, handle APIHandle, privilegeIds ...string) {
+	gapis.Post(endpoint, handle, privilegeIds...)
+}
+
+func Put(endpoint string, handle APIHandle, privilegeIds ...string) {
+	gapis.Put(endpoint, handle, privilegeIds...)
+}
+
+func Patch(endpoint string, handle APIHandle, privilegeIds ...string) {
+	gapis.Patch(endpoint, handle, privilegeIds...)
+}
+
+func Delete(endpoint string, handle APIHandle, privilegeIds ...string) {
+	gapis.Delete(endpoint, handle, privilegeIds...)
 }

@@ -53,7 +53,7 @@ func Serve(config *ServerConfig, apiss ...*APIService) {
 		var err error
 		app, err = InitApp(config.AppRoot, config.AppBuildLog, config.Debug)
 		if err != nil {
-			logger.Error("initialize app failed:", err)
+			logger.Error("initialize app:", err)
 			return
 		}
 	}
@@ -67,6 +67,7 @@ func Serve(config *ServerConfig, apiss ...*APIService) {
 		SessionManager:    session.NewMemorySessionManager(time.Hour / 2),
 		Logger:            logger,
 	}
+
 	if len(config.AccessLog) > 0 {
 		var err error
 		mux.AccessLogger, err = log.New("file:" + strings.TrimPrefix(config.ErrorLog, "file:"))
@@ -77,6 +78,7 @@ func Serve(config *ServerConfig, apiss ...*APIService) {
 		}
 	}
 
+	mux.RegisterAPIService(gapis)
 	for _, apis := range apiss {
 		mux.RegisterAPIService(apis)
 	}
