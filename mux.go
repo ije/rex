@@ -115,15 +115,11 @@ func (mux *Mux) RegisterAPIService(apis *APIService) {
 			func(mux *Mux, routerHandle func(string, httprouter.Handle), endpoint string, handler *apiHandler, apis *APIService) {
 				routerHandle(endpoint, func(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
 					url := &URL{params, r.URL}
-					xs := &XServices{
-						Log: mux.Logger,
-					}
 					ctx := &Context{
 						App:            mux.App,
 						ResponseWriter: w,
 						Request:        r,
 						URL:            url,
-						XServices:      xs,
 						mux:            mux,
 					}
 
@@ -137,7 +133,6 @@ func (mux *Mux) RegisterAPIService(apis *APIService) {
 					ctx.ResponseWriter = w
 					ctx.Request = r
 					ctx.URL = url
-					ctx.XServices = xs
 
 					if len(handler.privileges) > 0 {
 						var isGranted bool

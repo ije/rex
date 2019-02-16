@@ -12,12 +12,16 @@ import (
 	"strings"
 	"time"
 
-	logx "github.com/ije/gox/log"
 	"github.com/ije/gox/utils"
 	"github.com/ije/wsx/acl"
 	"github.com/ije/wsx/session"
 	"github.com/julienschmidt/httprouter"
 )
+
+type URL struct {
+	Params httprouter.Params
+	*url.URL
+}
 
 type Context struct {
 	App            *App
@@ -25,18 +29,8 @@ type Context struct {
 	ResponseWriter http.ResponseWriter
 	Request        *http.Request
 	URL            *URL
-	XServices      *XServices
 	session        session.Session
 	mux            *Mux
-}
-
-type XServices struct {
-	Log *logx.Logger
-}
-
-type URL struct {
-	Params httprouter.Params
-	*url.URL
 }
 
 func (ctx *Context) Cookie(name string) (cookie *http.Cookie, err error) {
@@ -51,7 +45,7 @@ func (ctx *Context) SetCookie(cookie *http.Cookie) {
 
 func (ctx *Context) RemoveCookie(cookie *http.Cookie) {
 	if cookie != nil {
-		cookie.Expires = time.Now().Add(-time.Second)
+		cookie.Expires = time.Now().Add(-time.Hour)
 		ctx.ResponseWriter.Header().Add("Set-Cookie", cookie.String())
 	}
 }
@@ -220,7 +214,19 @@ func (ctx *Context) Write(p []byte) (n int, err error) {
 	return ctx.ResponseWriter.Write(p)
 }
 
-func (ctx *Context) WriteJSON(status int, data interface{}) (n int, err error) {
+func (ctx *Context) WriteText(s string) (n int, err error) {
+	return ctx.ResponseWriter.Write([]byte(s))
+}
+
+func (ctx *Context) WriteJSON(data interface{}) (n int, err error) {
+	return ctx.writeJSON(200, data)
+}
+
+func (ctx *Context) WriteStatusJSON(status int, data interface{}) (n int, err error) {
+	return ctx.writeJSON(status, data)
+}
+
+func (ctx *Context) writeJSON(status int, data interface{}) (n int, err error) {
 	var jsonData []byte
 	if ctx.mux.Debug {
 		jsonData, err = json.MarshalIndent(data, "", "\t")
@@ -258,7 +264,7 @@ func (ctx *Context) End(status int, a ...string) {
 	} else {
 		text = http.StatusText(status)
 	}
-	ctx.ResponseWriter.Write([]byte(text))
+	ctx.Write([]byte(text))
 }
 
 func (ctx *Context) Error(err error) {

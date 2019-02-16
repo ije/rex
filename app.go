@@ -19,7 +19,7 @@ type App struct {
 	debugPort    int
 	debugProcess *os.Process
 	building     bool
-	buildLog     []AppBuildRecord
+	buildLog     []*AppBuildRecord
 	buildLogFile string
 }
 
@@ -27,7 +27,8 @@ type AppBuildRecord struct {
 	ID        string
 	PackMode  string
 	Output    string
-	BuildTime int64
+	StartTime int64
+	EndTime   int64
 	Error     string
 }
 
@@ -140,7 +141,7 @@ func (app *App) Root() string {
 	return app.root
 }
 
-func (app *App) BuildLog() []AppBuildRecord {
+func (app *App) BuildLog() []*AppBuildRecord {
 	return app.buildLog
 }
 
@@ -151,6 +152,7 @@ func (app *App) Debug() {
 
 	defer func() {
 		app.debugProcess = nil
+		app.debugPort = 0
 	}()
 
 	debugPort := 9000
@@ -185,15 +187,30 @@ func (app *App) Debug() {
 	return
 }
 
-func (app *App) Build() {
+func (app *App) Build() *AppBuildRecord {
+	record := &AppBuildRecord{
+		ID:        rs.Hex.String(32),
+		PackMode:  app.packMode,
+		StartTime: time.Now().UnixNano(),
+	}
+	if app.building {
+		record.EndTime = record.StartTime
+		record.Error = "other build process is running"
+	} else {
+		app.buildLog = append(app.buildLog, record)
+		if len(app.buildLogFile) > 0 {
+			utils.SaveJSONFile(app.buildLogFile, app.buildLog)
+		}
+		go app.build(record)
+	}
+	return record
+}
+
+func (app *App) build(record *AppBuildRecord) {
 	if app.building {
 		return
 	}
 
-	go app.build(rs.Hex.String(32))
-}
-
-func (app *App) build(id string) {
 	app.building = true
 	defer func() {
 		app.building = false
@@ -201,21 +218,15 @@ func (app *App) build(id string) {
 
 	switch app.packMode {
 	case "webpack":
-		since := time.Since(time.Now())
 		cmd := exec.Command("webpack-cli", "--hide-modules", "--color=false")
 		cmd.Env = append(os.Environ(), "NODE_ENV=production")
 		cmd.Dir = app.root
 		output, err := cmd.CombinedOutput()
-		record := AppBuildRecord{
-			ID:        id,
-			PackMode:  app.packMode,
-			Output:    string(output),
-			BuildTime: int64(since / time.Millisecond),
-		}
+		record.Output = string(output)
+		record.EndTime = time.Now().UnixNano()
 		if err != nil {
 			record.Error = err.Error()
 		}
-		app.buildLog = append(app.buildLog, record)
 		if len(app.buildLogFile) > 0 {
 			utils.SaveJSONFile(app.buildLogFile, app.buildLog)
 		}

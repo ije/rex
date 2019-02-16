@@ -16,9 +16,7 @@ import (
 
 func main() {
     wsx.Get("/hello/:name", func(ctx *wsx.Context) {
-        ctx.WriteJSON(200, map[string]string{
-            "message": "Hello, " + ctx.URL.Params.ByName("name"),
-        })
+        ctx.WriteText("Hello, " + ctx.URL.Params.ByName("name"))
     })
 
     wsx.Serve(&wsx.ServerConfig{
