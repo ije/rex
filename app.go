@@ -20,8 +20,8 @@ type App struct {
 	debugPort    int
 	debugProcess *os.Process
 	building     bool
-	buildLog     []*AppBuildRecord
 	buildLogFile string
+	buildRecords []*AppBuildRecord
 }
 
 type AppBuildRecord struct {
@@ -127,7 +127,7 @@ func InitApp(root string, buildLogFile string, debug bool) (app *App, err error)
 	}
 
 	if len(app.buildLogFile) > 0 {
-		utils.ParseJSONFile(app.buildLogFile, &app.buildLog)
+		utils.ParseJSONFile(app.buildLogFile, &app.buildRecords)
 	}
 
 	if debug {
@@ -144,7 +144,7 @@ func (app *App) Root() string {
 }
 
 func (app *App) BuildRecords() []*AppBuildRecord {
-	return app.buildLog
+	return app.buildRecords
 }
 
 func (app *App) startDebug() {
@@ -199,9 +199,9 @@ func (app *App) Build() *AppBuildRecord {
 		record.EndTime = record.StartTime
 		record.Error = "other build process is running"
 	} else {
-		app.buildLog = append(app.buildLog, record)
+		app.buildRecords = append(app.buildRecords, record)
 		if len(app.buildLogFile) > 0 {
-			utils.SaveJSONFile(app.buildLogFile, app.buildLog)
+			utils.SaveJSONFile(app.buildLogFile, app.buildRecords)
 		}
 		go app.build(record)
 	}
@@ -230,7 +230,7 @@ func (app *App) build(record *AppBuildRecord) {
 			record.Error = err.Error()
 		}
 		if len(app.buildLogFile) > 0 {
-			utils.SaveJSONFile(app.buildLogFile, app.buildLog)
+			utils.SaveJSONFile(app.buildLogFile, app.buildRecords)
 		}
 	}
 }

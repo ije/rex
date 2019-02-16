@@ -1,7 +1,7 @@
-// package wsx provides provides a REST server that can debug, build, and host a SPA(single page appliaction).
+// Package wsx provides provides a REST server that can debug, build, and host a SPA(single page appliaction).
 
 /*
-WSX provides provides a REST server that can debug, build, and host a SPA(single page appliaction).
+Package wsx provides provides a REST server that can debug, build, and host a SPA(single page appliaction).
 
 
 APIService
