@@ -22,14 +22,60 @@ import (
 
 type Mux struct {
 	App               *App
+	Debug             bool
 	CustomHTTPHeaders map[string]string
 	SessionCookieName string
 	HostRedirectRule  string
-	Debug             bool
 	SessionManager    session.Manager
 	AccessLogger      *log.Logger
 	Logger            *log.Logger
 	router            *httprouter.Router
+}
+
+func (mux *Mux) initRouter() *httprouter.Router {
+	router := httprouter.New()
+	router.PanicHandler = func(w http.ResponseWriter, r *http.Request, v interface{}) {
+		if mux.Debug {
+			http.Error(w, fmt.Sprintf("%v", v), http.StatusInternalServerError)
+		} else {
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		}
+
+		if err, ok := v.(*initSessionError); ok {
+			if mux.Logger != nil {
+				mux.Logger.Errorf("Init session: %s", err.msg)
+			}
+			return
+		}
+
+		var (
+			i    = 2
+			j    int
+			pc   uintptr
+			file string
+			line int
+			ok   bool
+			buf  = bytes.NewBuffer(nil)
+		)
+		for {
+			pc, file, line, ok = runtime.Caller(i)
+			if ok {
+				buf.WriteByte('\n')
+				for j = 0; j < 34; j++ {
+					buf.WriteByte(' ')
+				}
+				fmt.Fprint(buf, "> ", runtime.FuncForPC(pc).Name(), " ", file, ":", line)
+			} else {
+				break
+			}
+			i++
+		}
+		if mux.Logger != nil {
+			mux.Logger.Error("[panic]", v, buf.String())
+		}
+	}
+	router.NotFound = &AppMux{mux.App}
+	return router
 }
 
 func (mux *Mux) RegisterAPIService(apis *APIService) {
@@ -37,51 +83,8 @@ func (mux *Mux) RegisterAPIService(apis *APIService) {
 		return
 	}
 
-	router := mux.router
-	if router == nil {
-		router = httprouter.New()
-		router.PanicHandler = func(w http.ResponseWriter, r *http.Request, v interface{}) {
-			if mux.Debug {
-				http.Error(w, fmt.Sprintf("%v", v), http.StatusInternalServerError)
-			} else {
-				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-			}
-
-			if err, ok := v.(*initSessionError); ok {
-				if mux.Logger != nil {
-					mux.Logger.Errorf("Init session: %s", err.msg)
-				}
-				return
-			}
-
-			var (
-				i    = 2
-				j    int
-				pc   uintptr
-				file string
-				line int
-				ok   bool
-				buf  = bytes.NewBuffer(nil)
-			)
-			for {
-				pc, file, line, ok = runtime.Caller(i)
-				if ok {
-					buf.WriteByte('\n')
-					for j = 0; j < 34; j++ {
-						buf.WriteByte(' ')
-					}
-					fmt.Fprint(buf, "> ", runtime.FuncForPC(pc).Name(), " ", file, ":", line)
-				} else {
-					break
-				}
-				i++
-			}
-			if mux.Logger != nil {
-				mux.Logger.Error("[panic]", v, buf.String())
-			}
-		}
-		router.NotFound = &AppMux{mux}
-		mux.router = router
+	if mux.router == nil {
+		mux.router = mux.initRouter()
 	}
 
 	for method, route := range apis.route {
@@ -89,19 +92,19 @@ func (mux *Mux) RegisterAPIService(apis *APIService) {
 			var routerHandle func(string, httprouter.Handle)
 			switch method {
 			case "OPTIONS":
-				routerHandle = router.OPTIONS
+				routerHandle = mux.router.OPTIONS
 			case "HEAD":
-				routerHandle = router.HEAD
+				routerHandle = mux.router.HEAD
 			case "GET":
-				routerHandle = router.GET
+				routerHandle = mux.router.GET
 			case "POST":
-				routerHandle = router.POST
+				routerHandle = mux.router.POST
 			case "PUT":
-				routerHandle = router.PUT
+				routerHandle = mux.router.PUT
 			case "PATCH":
-				routerHandle = router.PATCH
+				routerHandle = mux.router.PATCH
 			case "DELETE":
-				routerHandle = router.DELETE
+				routerHandle = mux.router.DELETE
 			}
 			if routerHandle == nil {
 				continue
@@ -157,19 +160,19 @@ func (mux *Mux) RegisterAPIService(apis *APIService) {
 }
 
 func (mux *Mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	w = NewResponseWriter(w)
 	if mux.AccessLogger != nil {
-		start := time.Now()
+		d := time.Since(time.Now())
 		defer func() {
 			rw, ok := w.(*ResponseWriter)
-			if !ok {
-				return
+			if ok {
+				status, writedBytes := rw.Status()
+				mux.AccessLogger.Printf(`%s %s %s %s %s %d "%s" "%s" %d %d %dms`, r.RemoteAddr, r.Host, r.Proto, r.Method, r.RequestURI, r.ContentLength, strings.Replace(r.Referer(), `"`, "'", -1), strings.Replace(r.UserAgent(), `"`, "'", -1), status, writedBytes, d/time.Millisecond)
 			}
-			status, writed := rw.WriteStatus()
-
-			mux.AccessLogger.Printf(`%s %s %s %s %s %d "%s" "%s" %d %d %dms`, r.RemoteAddr, r.Host, r.Proto, r.Method, r.RequestURI, r.ContentLength, strings.Replace(r.Referer(), `"`, "'", -1), strings.Replace(r.UserAgent(), `"`, "'", -1), status, writed, time.Now().Sub(start).Nanoseconds()/(1000*1000))
 		}()
 	}
+
+	// wrap http ResponseWriter
+	w = &ResponseWriter{status: 200, rawWriter: w}
 
 	wh := w.Header()
 	if len(mux.CustomHTTPHeaders) > 0 {
@@ -177,9 +180,8 @@ func (mux *Mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			wh.Set(key, val)
 		}
 	}
-
 	wh.Set("Connection", "keep-alive")
-	wh.Set("Server", "wsx")
+	wh.Set("Server", "wsx-server")
 
 	if len(mux.HostRedirectRule) > 0 {
 		code := 301 // Permanent redirect, request with GET method
@@ -201,29 +203,26 @@ func (mux *Mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if mux.router != nil {
-		mux.router.ServeHTTP(w, r)
-	} else {
-		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+	if mux.router == nil {
+		mux.router = mux.initRouter()
 	}
+	mux.router.ServeHTTP(w, r)
 }
 
 type AppMux struct {
-	parent *Mux
+	*App
 }
 
 func (mux *AppMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if mux.parent == nil || mux.parent.App == nil {
-		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+	if mux.App == nil {
+		http.Error(w, http.StatusText(404), 404)
 		return
 	}
 
-	app := mux.parent.App
-
 	// todo: app ssr
 
-	if app.debugProcess != nil {
-		remote, err := url.Parse(fmt.Sprintf("http://127.0.0.1:%d", app.debugPort))
+	if mux.debugProcess != nil {
+		remote, err := url.Parse(fmt.Sprintf("http://127.0.0.1:%d", mux.debugPort))
 		if err != nil {
 			http.Error(w, err.Error(), 500)
 			return
@@ -235,15 +234,15 @@ func (mux *AppMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Serve File
-	filePath := utils.CleanPath(path.Join(app.root, r.URL.Path))
-Stat:
+	filePath := utils.CleanPath(path.Join(mux.root, r.URL.Path))
+Lookup:
 	fi, err := os.Stat(filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// 404s will fallback to /index.html
-			if topIndexHTML := path.Join(app.root, "index.html"); filePath != topIndexHTML {
+			if topIndexHTML := path.Join(mux.root, "index.html"); filePath != topIndexHTML {
 				filePath = topIndexHTML
-				goto Stat
+				goto Lookup
 			}
 			http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 		} else {
@@ -254,7 +253,7 @@ Stat:
 
 	if fi.IsDir() {
 		filePath = path.Join(filePath, "index.html")
-		goto Stat
+		goto Lookup
 	}
 
 	// compress text file when the size is greater than 1024 bytes
@@ -270,7 +269,7 @@ Stat:
 					return
 				}
 				defer gzw.Close()
-				w = gzw
+				w = &ResponseWriter{status: 200, rawWriter: gzw}
 			}
 		}
 	}
@@ -279,55 +278,51 @@ Stat:
 }
 
 type ResponseWriter struct {
-	status         int
-	writed         int
-	responseWriter http.ResponseWriter
-}
-
-func NewResponseWriter(w http.ResponseWriter) *ResponseWriter {
-	return &ResponseWriter{status: 200, responseWriter: w}
+	status      int
+	writedBytes int
+	rawWriter   http.ResponseWriter
 }
 
 func (w *ResponseWriter) Header() http.Header {
-	return w.responseWriter.Header()
+	return w.rawWriter.Header()
 }
 
 func (w *ResponseWriter) WriteHeader(status int) {
 	w.status = status
-	w.responseWriter.WriteHeader(status)
+	w.rawWriter.WriteHeader(status)
 }
 
 func (w *ResponseWriter) Write(p []byte) (n int, err error) {
-	n, err = w.responseWriter.Write(p)
-	w.writed += n
+	n, err = w.rawWriter.Write(p)
+	w.writedBytes += n
 	return
 }
 
-func (w *ResponseWriter) WriteStatus() (status int, writed int) {
-	return w.status, w.writed
+func (w *ResponseWriter) Status() (status int, writedBytes int) {
+	return w.status, w.writedBytes
 }
 
 type gzResponseWriter struct {
-	gzipWriter     io.WriteCloser
-	responseWriter http.ResponseWriter
+	gzipWriter io.WriteCloser
+	rawWriter  http.ResponseWriter
 }
 
-func newGzResponseWriter(w http.ResponseWriter, speed int) (grw *gzResponseWriter, err error) {
+func newGzResponseWriter(w http.ResponseWriter, speed int) (gzw *gzResponseWriter, err error) {
 	gzipWriter, err := gzip.NewWriterLevel(w, speed)
 	if err != nil {
 		return
 	}
 
-	grw = &gzResponseWriter{gzipWriter, w}
+	gzw = &gzResponseWriter{gzipWriter, w}
 	return
 }
 
 func (w *gzResponseWriter) Header() http.Header {
-	return w.responseWriter.Header()
+	return w.rawWriter.Header()
 }
 
 func (w *gzResponseWriter) WriteHeader(status int) {
-	w.responseWriter.WriteHeader(status)
+	w.rawWriter.WriteHeader(status)
 }
 
 func (w *gzResponseWriter) Write(p []byte) (int, error) {

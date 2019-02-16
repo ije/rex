@@ -56,10 +56,10 @@ func Serve(config *ServerConfig, apiss ...*APIService) {
 
 	mux := &Mux{
 		App:               app,
+		Debug:             config.Debug,
 		CustomHTTPHeaders: config.CustomHTTPHeaders,
 		SessionCookieName: config.SessionCookieName,
 		HostRedirectRule:  config.HostRedirectRule,
-		Debug:             config.Debug,
 		SessionManager:    session.NewMemorySessionManager(time.Hour / 2),
 		Logger:            logger,
 	}
