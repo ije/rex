@@ -24,6 +24,6 @@ func main() {
     wsx.Serve(&wsx.ServerConfig{
         AppRoot: "/var/www/app",
         Port: 8080,
-    }, apis)
+    })
 }
 ```

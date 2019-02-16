@@ -5,10 +5,13 @@ import (
 	"strings"
 )
 
+var apiss = []*APIService{}
+
 type APIService struct {
 	Prefix      string
 	middlewares []APIHandle
 	route       map[string]map[string]*apiHandler
+	registered  bool
 }
 
 func NewAPIService() *APIService {
@@ -109,4 +112,9 @@ func (s *APIService) register(method string, endpoint string, handle APIHandle, 
 		s.route[method] = map[string]*apiHandler{}
 	}
 	s.route[method][endpoint] = &apiHandler{privileges: privileges, handle: handle}
+
+	if !s.registered {
+		s.registered = true
+		apiss = append(apiss, s)
+	}
 }

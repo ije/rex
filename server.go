@@ -27,7 +27,7 @@ type ServerConfig struct {
 	AccessLogger      *log.Logger       `json:"-"`
 }
 
-func Serve(config *ServerConfig, apiss ...*APIService) {
+func Serve(config *ServerConfig) {
 	if config == nil {
 		config = &ServerConfig{}
 	}
@@ -64,10 +64,8 @@ func Serve(config *ServerConfig, apiss ...*APIService) {
 		Logger:            logger,
 	}
 
-	if len(apiss) > 0 {
-		for _, apis := range apiss {
-			mux.RegisterAPIService(apis)
-		}
+	for _, apis := range apiss {
+		mux.RegisterAPIService(apis)
 	}
 
 	if config.AccessLogger != nil {
