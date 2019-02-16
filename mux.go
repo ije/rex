@@ -24,7 +24,7 @@ type Mux struct {
 	App               *App
 	CustomHTTPHeaders map[string]string
 	SessionCookieName string
-	HostRedirect      string
+	HostRedirectRule  string
 	Debug             bool
 	SessionManager    session.Manager
 	AccessLogger      *log.Logger
@@ -186,20 +186,19 @@ func (mux *Mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	wh.Set("Connection", "keep-alive")
 	wh.Set("Server", "wsx")
 
-	if len(mux.HostRedirect) > 0 {
+	if len(mux.HostRedirectRule) > 0 {
 		code := 301 // Permanent redirect, request with GET method
 		if r.Method != "GET" {
 			// Temporary redirect, request with same method
 			// As of Go 1.3, Go does not support status code 308.
 			code = 307
 		}
-
-		if mux.HostRedirect == "force-www" {
+		if mux.HostRedirectRule == "force-www" {
 			if !strings.HasPrefix(r.Host, "www.") {
 				http.Redirect(w, r, path.Join("www."+r.Host, r.URL.String()), code)
 				return
 			}
-		} else if mux.HostRedirect == "non-www" {
+		} else if mux.HostRedirectRule == "remove-www" {
 			if strings.HasPrefix(r.Host, "www.") {
 				http.Redirect(w, r, path.Join(strings.TrimPrefix(r.Host, "www."), r.URL.String()), code)
 				return

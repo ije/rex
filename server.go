@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"strings"
 	"syscall"
 	"time"
 
@@ -17,15 +16,15 @@ type ServerConfig struct {
 	AppRoot           string            `json:"appRoot"`
 	Port              uint16            `json:"port"`
 	CustomHTTPHeaders map[string]string `json:"customHTTPHeaders"`
-	HostRedirect      string            `json:"hostRedirect"`
 	SessionCookieName string            `json:"sessionCookieName"`
+	HostRedirectRule  string            `json:"hostRedirectRule"`
 	ReadTimeout       int               `json:"readTimeout"`
 	WriteTimeout      int               `json:"writeTimeout"`
 	MaxHeaderBytes    int               `json:"maxHeaderBytes"`
-	ErrorLog          string            `json:"errorLog"`
-	AccessLog         string            `json:"accessLog"`
-	AppBuildLog       string            `json:"appBuildLog"`
 	Debug             bool              `json:"debug"`
+	AppBuildLogFile   string            `json:"appBuildLogFile"`
+	ErrorLogger       *log.Logger       `json:"-"`
+	AccessLogger      *log.Logger       `json:"-"`
 }
 
 func Serve(config *ServerConfig, apiss ...*APIService) {
@@ -36,12 +35,9 @@ func Serve(config *ServerConfig, apiss ...*APIService) {
 		config.Port = 80
 	}
 
-	var logger *log.Logger
-	if len(config.ErrorLog) > 0 {
-		logger, _ = log.New("file:" + strings.TrimPrefix(config.ErrorLog, "file:"))
-	}
-	if logger == nil {
-		logger = &log.Logger{}
+	logger := &log.Logger{}
+	if config.ErrorLogger != nil {
+		logger = config.ErrorLogger
 	}
 	if !config.Debug {
 		logger.SetLevelByName("info")
@@ -51,7 +47,7 @@ func Serve(config *ServerConfig, apiss ...*APIService) {
 	var app *App
 	if len(config.AppRoot) > 0 {
 		var err error
-		app, err = InitApp(config.AppRoot, config.AppBuildLog, config.Debug)
+		app, err = InitApp(config.AppRoot, config.AppBuildLogFile, config.Debug)
 		if err != nil {
 			logger.Error("initialize app:", err)
 			return
@@ -62,25 +58,20 @@ func Serve(config *ServerConfig, apiss ...*APIService) {
 		App:               app,
 		CustomHTTPHeaders: config.CustomHTTPHeaders,
 		SessionCookieName: config.SessionCookieName,
-		HostRedirect:      config.HostRedirect,
+		HostRedirectRule:  config.HostRedirectRule,
 		Debug:             config.Debug,
 		SessionManager:    session.NewMemorySessionManager(time.Hour / 2),
 		Logger:            logger,
 	}
 
-	if len(config.AccessLog) > 0 {
-		var err error
-		mux.AccessLogger, err = log.New("file:" + strings.TrimPrefix(config.ErrorLog, "file:"))
-		if err != nil {
-			logger.Error("initialize access logger:", err)
-		} else {
-			mux.AccessLogger.SetQuite(true)
-		}
-	}
-
 	mux.RegisterAPIService(gapis)
 	for _, apis := range apiss {
 		mux.RegisterAPIService(apis)
+	}
+
+	if config.AccessLogger != nil {
+		mux.AccessLogger = config.AccessLogger
+		mux.AccessLogger.SetQuite(true)
 	}
 
 	serv := &http.Server{

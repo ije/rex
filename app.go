@@ -19,11 +19,11 @@ type App struct {
 	debugPort    int
 	debugProcess *os.Process
 	building     bool
-	buildLog     []AppBuildLog
+	buildLog     []AppBuildRecord
 	buildLogFile string
 }
 
-type AppBuildLog struct {
+type AppBuildRecord struct {
 	ID        string
 	PackMode  string
 	Output    string
@@ -124,8 +124,8 @@ func InitApp(root string, buildLogFile string, debug bool) (app *App, err error)
 		buildLogFile: buildLogFile,
 	}
 
-	if len(buildLogFile) > 0 {
-		utils.ParseJSONFile(buildLogFile, &app.buildLog)
+	if len(app.buildLogFile) > 0 {
+		utils.ParseJSONFile(app.buildLogFile, &app.buildLog)
 	}
 
 	if debug {
@@ -140,7 +140,7 @@ func (app *App) Root() string {
 	return app.root
 }
 
-func (app *App) BuildLogs() []AppBuildLog {
+func (app *App) BuildLog() []AppBuildRecord {
 	return app.buildLog
 }
 
@@ -206,16 +206,16 @@ func (app *App) build(id string) {
 		cmd.Env = append(os.Environ(), "NODE_ENV=production")
 		cmd.Dir = app.root
 		output, err := cmd.CombinedOutput()
-		log := AppBuildLog{
+		record := AppBuildRecord{
 			ID:        id,
 			PackMode:  app.packMode,
 			Output:    string(output),
 			BuildTime: int64(since / time.Millisecond),
 		}
 		if err != nil {
-			log.Error = err.Error()
+			record.Error = err.Error()
 		}
-		app.buildLog = append(app.buildLog, log)
+		app.buildLog = append(app.buildLog, record)
 		if len(app.buildLogFile) > 0 {
 			utils.SaveJSONFile(app.buildLogFile, app.buildLog)
 		}
