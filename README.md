@@ -1,6 +1,6 @@
 WSX
 ====
-**WSX** provides a simple & lightweight REST server by [golang](https://golang.org/) that can debug, build, and host a SPA(single page appliaction).
+**WSX** provides a simple & lightweight REST server in [Golang](https://golang.org/) that can debug, build, and host a SPA(single page appliaction).
 
 [![GoDoc](https://godoc.org/github.com/ije/wsx?status.svg)](https://godoc.org/github.com/ije/wsx)
 
@@ -16,6 +16,7 @@ import (
 
 func main() {
     apis := &wsx.APIService{}
+
     apis.Get("/hello/:name", func(ctx *wsx.Context) {
         ctx.WriteText("Hello, " + ctx.URL.Params.ByName("name"))
     })
