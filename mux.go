@@ -74,7 +74,9 @@ func (mux *Mux) initRouter() *httprouter.Router {
 			mux.Logger.Error("[panic]", v, buf.String())
 		}
 	}
-	router.NotFound = &AppMux{mux.App}
+	if mux.App != nil {
+		router.NotFound = &AppMux{mux.App}
+	}
 	return router
 }
 
@@ -215,25 +217,29 @@ type AppMux struct {
 
 func (mux *AppMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if mux.App == nil {
-		http.Error(w, http.StatusText(404), 404)
+		http.Error(w, http.StatusText(500), 500)
+		return
+	}
+
+	if mux.debug {
+		if mux.debugProcess != nil {
+			remote, err := url.Parse(fmt.Sprintf("http://127.0.0.1:%d", mux.debugPort))
+			if err != nil {
+				http.Error(w, err.Error(), 500)
+				return
+			}
+
+			proxy := httputil.NewSingleHostReverseProxy(remote)
+			proxy.ServeHTTP(w, r)
+		} else {
+			http.Error(w, http.StatusText(500), 500)
+		}
 		return
 	}
 
 	// todo: app ssr
 
-	if mux.debugProcess != nil {
-		remote, err := url.Parse(fmt.Sprintf("http://127.0.0.1:%d", mux.debugPort))
-		if err != nil {
-			http.Error(w, err.Error(), 500)
-			return
-		}
-
-		proxy := httputil.NewSingleHostReverseProxy(remote)
-		proxy.ServeHTTP(w, r)
-		return
-	}
-
-	// Serve File
+	// Serve app dist files
 	filePath := utils.CleanPath(path.Join(mux.root, r.URL.Path))
 Lookup:
 	fi, err := os.Stat(filePath)
@@ -256,7 +262,7 @@ Lookup:
 		goto Lookup
 	}
 
-	// compress text file when the size is greater than 1024 bytes
+	// compress text files when the size is greater than 1024 bytes
 	if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
 		switch strings.ToLower(utils.FileExt(filePath)) {
 		case "js", "css", "html", "htm", "xml", "svg", "json", "txt":

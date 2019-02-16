@@ -16,6 +16,7 @@ import (
 type App struct {
 	root         string
 	packMode     string
+	debug        bool
 	debugPort    int
 	debugProcess *os.Process
 	building     bool
@@ -130,7 +131,8 @@ func InitApp(root string, buildLogFile string, debug bool) (app *App, err error)
 	}
 
 	if debug {
-		go app.Debug()
+		app.debug = true
+		go app.startDebug()
 	} else {
 		app.Build()
 	}
@@ -141,11 +143,11 @@ func (app *App) Root() string {
 	return app.root
 }
 
-func (app *App) BuildLog() []*AppBuildRecord {
+func (app *App) BuildRecords() []*AppBuildRecord {
 	return app.buildLog
 }
 
-func (app *App) Debug() {
+func (app *App) startDebug() {
 	if app.debugProcess != nil {
 		return
 	}
