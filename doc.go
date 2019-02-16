@@ -1,12 +1,12 @@
-// package wsx provides a restful API server that can debug, build, and host a SPA(single page appliaction).
+// package wsx provides provides a REST server that can debug, build, and host a SPA(single page appliaction).
 
 /*
-WSX provides a restful API server that can debug, build, and host a SPA(single page appliaction).
+WSX provides provides a REST server that can debug, build, and host a SPA(single page appliaction).
 
 
 APIService
 
-APIService provides a restful API service with user privileges.
+APIService provides a REST API service with user privileges.
 
 	var apis = &wsx.APIService {
 		Prefix: 'v2',
@@ -19,11 +19,6 @@ APIService provides a restful API service with user privileges.
 	apis.Put('endpoint', func(ctx *wsx.Context) {}, 'privilegeId')
 	apis.Patch('endpoint', func(ctx *wsx.Context) {}, 'privilegeId')
 	apis.Delete('endpoint', func(ctx *wsx.Context) {}, 'privilegeId')
-
-Context
-
-Context...
-
 
 */
 package wsx

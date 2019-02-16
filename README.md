@@ -1,6 +1,6 @@
 WSX
 ====
-**WSX** provides a restful API server by [golang](https://golang.org/) that can debug, build, and host a SPA(single page appliaction).
+**WSX** provides a simple & lightweight REST server by [golang](https://golang.org/) that can debug, build, and host a SPA(single page appliaction).
 
 [![GoDoc](https://godoc.org/github.com/ije/wsx?status.svg)](https://godoc.org/github.com/ije/wsx)
 
