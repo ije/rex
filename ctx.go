@@ -168,7 +168,7 @@ func (ctx *Context) FormJSON(key string) (value map[string]interface{}, err erro
 	return
 }
 
-func (ctx *Context) RemoteIp() (ip string) {
+func (ctx *Context) RemoteIP() (ip string) {
 	ip = ctx.Request.Header.Get("X-Real-IP")
 	if len(ip) == 0 {
 		ip = ctx.Request.Header.Get("X-Forwarded-For")
@@ -214,7 +214,7 @@ func (ctx *Context) Write(p []byte) (n int, err error) {
 	return ctx.ResponseWriter.Write(p)
 }
 
-func (ctx *Context) WriteText(s string) (n int, err error) {
+func (ctx *Context) WriteString(s string) (n int, err error) {
 	return ctx.ResponseWriter.Write([]byte(s))
 }
 

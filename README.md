@@ -18,7 +18,7 @@ func main() {
     apis := &wsx.APIService{}
 
     apis.Get("/hello/:name", func(ctx *wsx.Context) {
-        ctx.WriteText("Hello, " + ctx.URL.Params.ByName("name"))
+        ctx.WriteString("Hello, " + ctx.URL.Params.ByName("name"))
     })
 
     wsx.Serve(&wsx.ServerConfig{
