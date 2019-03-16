@@ -1,6 +1,6 @@
 package acl
 
-// User implementes Privileges method that returns a privilege id array
+// User implementes Privileges method that returns a privilege(id) list
 type User interface {
 	Privileges() []string
 }

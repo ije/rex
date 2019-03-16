@@ -14,7 +14,7 @@ import (
 )
 
 type App struct {
-	root         string
+	dir          string
 	packMode     string
 	debug        bool
 	debugPort    int
@@ -33,21 +33,21 @@ type AppBuildRecord struct {
 	Error     string
 }
 
-func InitApp(root string, buildLogFile string, debug bool) (app *App, err error) {
-	root, err = filepath.Abs(root)
+func InitApp(dir string, buildLogFile string, debug bool) (app *App, err error) {
+	dir, err = filepath.Abs(dir)
 	if err != nil {
 		return
 	}
 
-	fi, err := os.Lstat(root)
+	fi, err := os.Lstat(dir)
 	if (err != nil && os.IsNotExist(err)) || (err == nil && !fi.IsDir()) {
-		err = fmt.Errorf("app root(%s) is not a valid directory", root)
+		err = fmt.Errorf("app dir(%s) is not a valid directory", dir)
 		return
 	}
 
 	var requireNode bool
 	var packMode string
-	if fi, err := os.Lstat(path.Join(root, "webpack.config.js")); err == nil && !fi.IsDir() {
+	if fi, err := os.Lstat(path.Join(dir, "webpack.config.js")); err == nil && !fi.IsDir() {
 		requireNode = true
 		packMode = "webpack"
 	}
@@ -57,7 +57,7 @@ func InitApp(root string, buildLogFile string, debug bool) (app *App, err error)
 		if binDir := os.Getenv("NODEBINDIR"); len(binDir) > 0 {
 			os.Setenv("PATH", fmt.Sprintf("%s:%s", binDir, os.Getenv("PATH")))
 		}
-		os.Setenv("PATH", fmt.Sprintf("%s:%s", path.Join(root, "node_modules/.bin"), os.Getenv("PATH")))
+		os.Setenv("PATH", fmt.Sprintf("%s:%s", path.Join(dir, "node_modules/.bin"), os.Getenv("PATH")))
 
 		_, err = exec.LookPath("npm")
 		if err != nil {
@@ -65,9 +65,9 @@ func InitApp(root string, buildLogFile string, debug bool) (app *App, err error)
 			return
 		}
 
-		if fi, e := os.Lstat(path.Join(root, "package.json")); e == nil && !fi.IsDir() {
+		if fi, e := os.Lstat(path.Join(dir, "package.json")); e == nil && !fi.IsDir() {
 			var m map[string]interface{}
-			err = utils.ParseJSONFile(path.Join(root, "package.json"), &m)
+			err = utils.ParseJSONFile(path.Join(dir, "package.json"), &m)
 			if err != nil {
 				err = fmt.Errorf("parse package.json: %v", err)
 				return
@@ -82,7 +82,7 @@ func InitApp(root string, buildLogFile string, debug bool) (app *App, err error)
 				if !debug {
 					cmd.Args = append(cmd.Args, "--production")
 				}
-				cmd.Dir = root
+				cmd.Dir = dir
 				if debug {
 					cmd.Stderr = os.Stderr
 					cmd.Stdout = os.Stdout
@@ -105,7 +105,7 @@ func InitApp(root string, buildLogFile string, debug bool) (app *App, err error)
 		if err != nil {
 			fmt.Println("[npm] install webpack/webpack-cli/webpack-dev-server...")
 			cmd := exec.Command("npm", "install", "webpack", "webpack-cli", "webpack-dev-server")
-			cmd.Dir = root
+			cmd.Dir = dir
 			cmd.Stderr = os.Stderr
 			cmd.Stdout = os.Stdout
 			cmd.Run()
@@ -121,7 +121,7 @@ func InitApp(root string, buildLogFile string, debug bool) (app *App, err error)
 	}
 
 	app = &App{
-		root:         root,
+		dir:          dir,
 		packMode:     packMode,
 		buildLogFile: buildLogFile,
 	}
@@ -139,8 +139,8 @@ func InitApp(root string, buildLogFile string, debug bool) (app *App, err error)
 	return
 }
 
-func (app *App) Root() string {
-	return app.root
+func (app *App) Dir() string {
+	return app.dir
 }
 
 func (app *App) BuildRecords() []*AppBuildRecord {
@@ -171,7 +171,7 @@ func (app *App) startDebug() {
 	case "webpack":
 		cmd := exec.Command("webpack-dev-server", "--hot", "--host=127.0.0.1", fmt.Sprintf("--port=%d", debugPort))
 		cmd.Env = append(os.Environ(), "NODE_ENV=development")
-		cmd.Dir = app.root
+		cmd.Dir = app.dir
 		cmd.Stderr = os.Stderr
 		cmd.Stdout = os.Stdout
 
@@ -222,7 +222,7 @@ func (app *App) build(record *AppBuildRecord) {
 	case "webpack":
 		cmd := exec.Command("webpack-cli", "--hide-modules", "--color=false")
 		cmd.Env = append(os.Environ(), "NODE_ENV=production")
-		cmd.Dir = app.root
+		cmd.Dir = app.dir
 		output, err := cmd.CombinedOutput()
 		record.Output = string(output)
 		record.EndTime = time.Now().UnixNano()

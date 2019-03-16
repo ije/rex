@@ -5,11 +5,11 @@ import (
 	"strings"
 )
 
-var apiss = []*APIService{}
+var globalAPIServices = []*APIService{}
 
 type APIService struct {
 	Prefix      string
-	middlewares []APIHandle
+	middlewares []MiddlewareHandle
 	route       map[string]map[string]*apiHandler
 	registered  bool
 }
@@ -30,8 +30,9 @@ type apiHandler struct {
 }
 
 type APIHandle func(*Context)
+type MiddlewareHandle func(*Context, func())
 
-func (s *APIService) Use(middleware APIHandle) {
+func (s *APIService) Use(middleware MiddlewareHandle) {
 	s.middlewares = append(s.middlewares, middleware)
 }
 
@@ -115,6 +116,6 @@ func (s *APIService) register(method string, endpoint string, handle APIHandle, 
 
 	if !s.registered {
 		s.registered = true
-		apiss = append(apiss, s)
+		globalAPIServices = append(globalAPIServices, s)
 	}
 }

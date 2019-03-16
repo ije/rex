@@ -25,10 +25,10 @@ type URL struct {
 
 type Context struct {
 	App            *App
-	User           acl.User
 	ResponseWriter http.ResponseWriter
 	Request        *http.Request
 	URL            *URL
+	user           acl.User
 	session        session.Session
 	mux            *Mux
 }
@@ -276,4 +276,12 @@ func (ctx *Context) Error(err error) {
 		}
 		ctx.End(http.StatusInternalServerError)
 	}
+}
+
+func (ctx *Context) User() acl.User {
+	return ctx.user
+}
+
+func (ctx *Context) SetUser(user acl.User) {
+	ctx.user = user
 }
