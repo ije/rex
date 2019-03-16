@@ -127,15 +127,16 @@ func (mux *Mux) RegisterAPIService(apis *APIService) {
 						Request:        r,
 						URL:            url,
 						mux:            mux,
+						state:          map[string]interface{}{},
 					}
 
 					if len(apis.middlewares) > 0 {
 						for _, use := range apis.middlewares {
-							shouldEnd := false
+							shouldContinue := false
 							use(ctx, func() {
-								shouldEnd = true
+								shouldContinue = true
 							})
-							if shouldEnd {
+							if !shouldContinue {
 								return
 							}
 
