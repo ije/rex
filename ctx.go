@@ -1,4 +1,4 @@
-package wsx
+package rex
 
 import (
 	"compress/gzip"
@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"github.com/ije/gox/utils"
-	"github.com/ije/wsx/acl"
-	"github.com/ije/wsx/session"
+	"github.com/ije/rex/acl"
+	"github.com/ije/rex/session"
 	"github.com/julienschmidt/httprouter"
 )
 

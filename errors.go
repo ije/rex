@@ -1,4 +1,4 @@
-package wsx
+package rex
 
 type initSessionError struct {
 	msg string

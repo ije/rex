@@ -1,4 +1,4 @@
-package wsx
+package rex
 
 import (
 	"strconv"

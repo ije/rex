@@ -1,4 +1,4 @@
-package wsx
+package rex
 
 import (
 	"fmt"
@@ -9,7 +9,7 @@ import (
 
 	"github.com/ije/gox/log"
 	"github.com/ije/gox/utils"
-	"github.com/ije/wsx/session"
+	"github.com/ije/rex/session"
 )
 
 type ServerConfig struct {
@@ -36,7 +36,7 @@ func Serve(config *ServerConfig) {
 		config.Port = 80
 	}
 	if config.ServerName == "" {
-		config.ServerName = "WSX"
+		config.ServerName = "rex-serv"
 	}
 
 	logger := &log.Logger{}
