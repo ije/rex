@@ -31,6 +31,7 @@ type Context struct {
 	user           acl.User
 	session        session.Session
 	mux            *Mux
+	state          map[string]interface{}
 }
 
 func (ctx *Context) Cookie(name string) (cookie *http.Cookie, err error) {
@@ -284,4 +285,13 @@ func (ctx *Context) User() acl.User {
 
 func (ctx *Context) SetUser(user acl.User) {
 	ctx.user = user
+}
+
+func (ctx *Context) Get(key string) (v interface{}, ok bool) {
+	v, ok = ctx.state[key]
+	return
+}
+
+func (ctx *Context) Set(key string, v interface{}) {
+	ctx.state[key] = v
 }
