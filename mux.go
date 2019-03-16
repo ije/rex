@@ -23,6 +23,7 @@ import (
 type Mux struct {
 	App               *App
 	Debug             bool
+	ServerName        string
 	CustomHTTPHeaders map[string]string
 	SessionCookieName string
 	HostRedirectRule  string
@@ -130,19 +131,26 @@ func (mux *Mux) RegisterAPIService(apis *APIService) {
 
 					if len(apis.middlewares) > 0 {
 						for _, use := range apis.middlewares {
-							use(ctx)
+							shouldEnd := false
+							use(ctx, func() {
+								shouldEnd = true
+							})
+							if shouldEnd {
+								return
+							}
+
+							// prevent user chanage the 'read-only' fields in context
+							ctx.App = mux.App
+							ctx.ResponseWriter = w
+							ctx.Request = r
+							ctx.URL = url
 						}
 					}
 
-					ctx.App = mux.App
-					ctx.ResponseWriter = w
-					ctx.Request = r
-					ctx.URL = url
-
 					if len(handler.privileges) > 0 {
 						var isGranted bool
-						if ctx.User != nil {
-							for _, pid := range ctx.User.Privileges() {
+						if ctx.user != nil {
+							for _, pid := range ctx.user.Privileges() {
 								_, isGranted = handler.privileges[pid]
 								if isGranted {
 									break
@@ -183,7 +191,7 @@ func (mux *Mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	wh.Set("Connection", "keep-alive")
-	wh.Set("Server", "wsx-server")
+	wh.Set("Server", mux.ServerName)
 
 	if len(mux.HostRedirectRule) > 0 {
 		code := 301 // Permanent redirect, request with GET method
@@ -240,13 +248,13 @@ func (mux *AppMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// todo: app ssr
 
 	// Serve app dist files
-	filePath := utils.CleanPath(path.Join(mux.root, r.URL.Path))
+	filePath := utils.CleanPath(path.Join(mux.Dir(), r.URL.Path))
 Lookup:
 	fi, err := os.Stat(filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// 404s will fallback to /index.html
-			if topIndexHTML := path.Join(mux.root, "index.html"); filePath != topIndexHTML {
+			if topIndexHTML := path.Join(mux.Dir(), "index.html"); filePath != topIndexHTML {
 				filePath = topIndexHTML
 				goto Lookup
 			}

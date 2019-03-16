@@ -15,6 +15,7 @@ import (
 type ServerConfig struct {
 	AppRoot           string            `json:"appRoot"`
 	Port              uint16            `json:"port"`
+	ServerName        string            `json:"serverName"`
 	CustomHTTPHeaders map[string]string `json:"customHTTPHeaders"`
 	SessionCookieName string            `json:"sessionCookieName"`
 	HostRedirectRule  string            `json:"hostRedirectRule"`
@@ -33,6 +34,9 @@ func Serve(config *ServerConfig) {
 	}
 	if config.Port == 0 {
 		config.Port = 80
+	}
+	if config.ServerName == "" {
+		config.ServerName = "WSX"
 	}
 
 	logger := &log.Logger{}
@@ -57,6 +61,7 @@ func Serve(config *ServerConfig) {
 	mux := &Mux{
 		App:               app,
 		Debug:             config.Debug,
+		ServerName:        config.ServerName,
 		CustomHTTPHeaders: config.CustomHTTPHeaders,
 		SessionCookieName: config.SessionCookieName,
 		HostRedirectRule:  config.HostRedirectRule,
@@ -64,7 +69,7 @@ func Serve(config *ServerConfig) {
 		Logger:            logger,
 	}
 
-	for _, apis := range apiss {
+	for _, apis := range globalAPIServices {
 		mux.RegisterAPIService(apis)
 	}
 
