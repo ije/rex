@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -296,6 +297,23 @@ func (ctx *Context) Error(err error) {
 }
 
 func (ctx *Context) ServeFile(name string) {
+	if strings.Contains(ctx.Request.Header.Get("Accept-Encoding"), "gzip") {
+		switch strings.ToLower(utils.FileExt(name)) {
+		case "js", "css", "html", "htm", "xml", "svg", "json", "txt":
+			fi, err := os.Stat(name)
+			if err != nil {
+				ctx.End(500)
+				return
+			}
+			if fi.Size() > 1024 {
+				if w, ok := ctx.ResponseWriter.(*ResponseWriter); ok {
+					gzw := newGzResponseWriter(w.rawWriter)
+					defer gzw.Close()
+					w.rawWriter = gzw
+				}
+			}
+		}
+	}
 	http.ServeFile(ctx.ResponseWriter, ctx.Request, name)
 }
 

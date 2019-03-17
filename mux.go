@@ -285,13 +285,9 @@ Lookup:
 			if fi.Size() > 1024 {
 				w.Header().Set("Content-Encoding", "gzip")
 				w.Header().Set("Vary", "Accept-Encoding")
-				gzw, err := newGzResponseWriter(w, gzip.BestSpeed)
-				if err != nil {
-					http.Error(w, http.StatusText(500), 500)
-					return
-				}
+				gzw := newGzResponseWriter(w)
 				defer gzw.Close()
-				w = &ResponseWriter{status: 200, rawWriter: gzw}
+				w = gzw
 			}
 		}
 	}
@@ -329,8 +325,8 @@ type gzResponseWriter struct {
 	rawWriter  http.ResponseWriter
 }
 
-func newGzResponseWriter(w http.ResponseWriter, speed int) (gzw *gzResponseWriter, err error) {
-	gzipWriter, err := gzip.NewWriterLevel(w, speed)
+func newGzResponseWriter(w http.ResponseWriter) (gzw *gzResponseWriter) {
+	gzipWriter, err := gzip.NewWriterLevel(w, gzip.BestSpeed)
 	if err != nil {
 		return
 	}
