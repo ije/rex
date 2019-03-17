@@ -28,9 +28,9 @@ type Context struct {
 	ResponseWriter http.ResponseWriter
 	Request        *http.Request
 	URL            *URL
+	State          *State
 	session        session.Session
 	user           acl.User
-	state          map[string]interface{}
 	mux            *Mux
 }
 
@@ -285,13 +285,4 @@ func (ctx *Context) User() acl.User {
 
 func (ctx *Context) SetUser(user acl.User) {
 	ctx.user = user
-}
-
-func (ctx *Context) Get(key string) (v interface{}, ok bool) {
-	v, ok = ctx.state[key]
-	return
-}
-
-func (ctx *Context) Set(key string, v interface{}) {
-	ctx.state[key] = v
 }

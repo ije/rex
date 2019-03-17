@@ -121,12 +121,13 @@ func (mux *Mux) RegisterAPIService(apis *APIService) {
 			func(mux *Mux, routerHandle func(string, httprouter.Handle), endpoint string, handler *apiHandler, apis *APIService) {
 				routerHandle(endpoint, func(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
 					url := &URL{params, r.URL}
+					state := NewState()
 					ctx := &Context{
 						App:            mux.App,
 						ResponseWriter: w,
 						Request:        r,
 						URL:            url,
-						state:          map[string]interface{}{},
+						State:          state,
 						mux:            mux,
 					}
 
@@ -145,6 +146,7 @@ func (mux *Mux) RegisterAPIService(apis *APIService) {
 							ctx.ResponseWriter = w
 							ctx.Request = r
 							ctx.URL = url
+							ctx.State = state
 						}
 					}
 
