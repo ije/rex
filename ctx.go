@@ -28,10 +28,10 @@ type Context struct {
 	ResponseWriter http.ResponseWriter
 	Request        *http.Request
 	URL            *URL
-	user           acl.User
 	session        session.Session
-	mux            *Mux
+	user           acl.User
 	state          map[string]interface{}
+	mux            *Mux
 }
 
 func (ctx *Context) Cookie(name string) (cookie *http.Cookie, err error) {
@@ -46,19 +46,19 @@ func (ctx *Context) SetCookie(cookie *http.Cookie) {
 
 func (ctx *Context) RemoveCookie(cookie *http.Cookie) {
 	if cookie != nil {
-		cookie.Expires = time.Now().Add(-time.Hour)
+		cookie.Expires = time.Now().Add(-(365 * 24 * time.Hour))
 		ctx.ResponseWriter.Header().Add("Set-Cookie", cookie.String())
 	}
 }
 
 func (ctx *Context) Session() (sess session.Session) {
-	sessionCookieName := "x-session"
+	cookieName := "x-session"
 	if len(ctx.mux.SessionCookieName) > 0 {
-		sessionCookieName = ctx.mux.SessionCookieName
+		cookieName = ctx.mux.SessionCookieName
 	}
 
 	var sid string
-	cookie, err := ctx.Cookie(sessionCookieName)
+	cookie, err := ctx.Cookie(cookieName)
 	if err == nil {
 		sid = cookie.Value
 	}
@@ -76,7 +76,7 @@ func (ctx *Context) Session() (sess session.Session) {
 
 		if sess.SID() != sid {
 			ctx.SetCookie(&http.Cookie{
-				Name:     sessionCookieName,
+				Name:     cookieName,
 				Value:    sess.SID(),
 				HttpOnly: true,
 			})

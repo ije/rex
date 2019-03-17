@@ -126,8 +126,8 @@ func (mux *Mux) RegisterAPIService(apis *APIService) {
 						ResponseWriter: w,
 						Request:        r,
 						URL:            url,
-						mux:            mux,
 						state:          map[string]interface{}{},
+						mux:            mux,
 					}
 
 					if len(apis.middlewares) > 0 {
