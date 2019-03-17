@@ -171,6 +171,9 @@ func (mux *Mux) RegisterAPIService(apis *APIService) {
 }
 
 func (mux *Mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// rewrap the http ResponseWriter
+	w = &ResponseWriter{status: 200, rawWriter: w}
+
 	if mux.AccessLogger != nil {
 		d := time.Since(time.Now())
 		defer func() {
@@ -182,17 +185,19 @@ func (mux *Mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}()
 	}
 
-	// wrap http ResponseWriter
-	w = &ResponseWriter{status: 200, rawWriter: w}
-
 	wh := w.Header()
 	if len(mux.CustomHTTPHeaders) > 0 {
 		for key, val := range mux.CustomHTTPHeaders {
 			wh.Set(key, val)
 		}
 	}
+
 	wh.Set("Connection", "keep-alive")
-	wh.Set("Server", mux.ServerName)
+	if len(mux.ServerName) > 0 {
+		wh.Set("Server", mux.ServerName)
+	} else {
+		wh.Set("Server", "rex-serv")
+	}
 
 	if len(mux.HostRedirectRule) > 0 {
 		code := 301 // Permanent redirect, request with GET method

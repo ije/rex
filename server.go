@@ -28,15 +28,9 @@ type Config struct {
 	AccessLogger      *log.Logger       `json:"-"`
 }
 
-func Serve(config *Config) {
-	if config == nil {
-		config = &Config{}
-	}
+func Serve(config Config) {
 	if config.Port == 0 {
 		config.Port = 80
-	}
-	if config.ServerName == "" {
-		config.ServerName = "rex-serv"
 	}
 
 	logger := &log.Logger{}
