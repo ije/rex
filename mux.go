@@ -27,6 +27,7 @@ type Mux struct {
 	CustomHTTPHeaders map[string]string
 	SessionCookieName string
 	HostRedirectRule  string
+	NotFoundHandler   http.Handler
 	SessionManager    session.Manager
 	AccessLogger      *log.Logger
 	Logger            *log.Logger
@@ -77,6 +78,8 @@ func (mux *Mux) initRouter() *httprouter.Router {
 	}
 	if mux.App != nil {
 		router.NotFound = &AppMux{mux.App}
+	} else if mux.NotFoundHandler != nil {
+		router.NotFound = mux.NotFoundHandler
 	}
 	return router
 }
@@ -114,9 +117,6 @@ func (mux *Mux) RegisterAPIService(apis *APIService) {
 			}
 			if len(apis.Prefix) > 0 {
 				endpoint = path.Join("/"+strings.Trim(apis.Prefix, "/"), endpoint)
-			}
-			if mux.App != nil {
-				endpoint = path.Join("/api", endpoint)
 			}
 			func(mux *Mux, routerHandle func(string, httprouter.Handle), endpoint string, handler *apiHandler, apis *APIService) {
 				routerHandle(endpoint, func(w http.ResponseWriter, r *http.Request, params httprouter.Params) {

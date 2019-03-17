@@ -23,6 +23,7 @@ type Config struct {
 	WriteTimeout      uint32            `json:"writeTimeout"`
 	MaxHeaderBytes    uint32            `json:"maxHeaderBytes"`
 	Debug             bool              `json:"debug"`
+	NotFoundHandler   http.Handler      `json:"-"`
 	ErrorLogger       *log.Logger       `json:"-"`
 	AccessLogger      *log.Logger       `json:"-"`
 }
@@ -59,6 +60,7 @@ func Serve(config Config) {
 		SessionCookieName: config.SessionCookieName,
 		HostRedirectRule:  config.HostRedirectRule,
 		SessionManager:    session.NewMemorySessionManager(time.Hour / 2),
+		NotFoundHandler:          config.NotFoundHandler,
 		Logger:            logger,
 	}
 
