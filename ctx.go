@@ -34,20 +34,36 @@ type Context struct {
 	mux            *Mux
 }
 
+func (ctx *Context) AddHeader(key string, value string) {
+	ctx.ResponseWriter.Header().Add(key, value)
+}
+
+func (ctx *Context) SetHeader(key string, value string) {
+	ctx.ResponseWriter.Header().Set(key, value)
+}
+
+func (ctx *Context) DelHeader(key string) {
+	ctx.ResponseWriter.Header().Del(key)
+}
+
+func (ctx *Context) WriteHeader(status int) {
+	ctx.ResponseWriter.WriteHeader(status)
+}
+
 func (ctx *Context) Cookie(name string) (cookie *http.Cookie, err error) {
 	return ctx.Request.Cookie(name)
 }
 
 func (ctx *Context) SetCookie(cookie *http.Cookie) {
 	if cookie != nil {
-		ctx.ResponseWriter.Header().Add("Set-Cookie", cookie.String())
+		ctx.AddHeader("Set-Cookie", cookie.String())
 	}
 }
 
 func (ctx *Context) RemoveCookie(cookie *http.Cookie) {
 	if cookie != nil {
 		cookie.Expires = time.Now().Add(-(365 * 24 * time.Hour))
-		ctx.ResponseWriter.Header().Add("Set-Cookie", cookie.String())
+		ctx.AddHeader("Set-Cookie", cookie.String())
 	}
 }
 
@@ -202,8 +218,8 @@ func (ctx *Context) Authenticate(realm string, authHandle func(user string, pass
 		}
 	}
 
-	ctx.ResponseWriter.Header().Set("WWW-Authenticate", fmt.Sprintf("Basic realm=\"%s\"", realm))
-	ctx.ResponseWriter.WriteHeader(401)
+	ctx.SetHeader("WWW-Authenticate", fmt.Sprintf("Basic realm=\"%s\"", realm))
+	ctx.WriteHeader(401)
 	return
 }
 
