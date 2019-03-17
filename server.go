@@ -12,25 +12,25 @@ import (
 	"github.com/ije/rex/session"
 )
 
-type ServerConfig struct {
-	AppRoot           string            `json:"appRoot"`
+type Config struct {
 	Port              uint16            `json:"port"`
+	AppDir            string            `json:"appDir"`
 	ServerName        string            `json:"serverName"`
 	CustomHTTPHeaders map[string]string `json:"customHTTPHeaders"`
 	SessionCookieName string            `json:"sessionCookieName"`
 	HostRedirectRule  string            `json:"hostRedirectRule"`
-	ReadTimeout       int               `json:"readTimeout"`
-	WriteTimeout      int               `json:"writeTimeout"`
-	MaxHeaderBytes    int               `json:"maxHeaderBytes"`
+	ReadTimeout       uint32            `json:"readTimeout"`
+	WriteTimeout      uint32            `json:"writeTimeout"`
+	MaxHeaderBytes    uint32            `json:"maxHeaderBytes"`
 	Debug             bool              `json:"debug"`
 	AppBuildLogFile   string            `json:"appBuildLogFile"`
 	ErrorLogger       *log.Logger       `json:"-"`
 	AccessLogger      *log.Logger       `json:"-"`
 }
 
-func Serve(config *ServerConfig) {
+func Serve(config *Config) {
 	if config == nil {
-		config = &ServerConfig{}
+		config = &Config{}
 	}
 	if config.Port == 0 {
 		config.Port = 80
@@ -49,9 +49,9 @@ func Serve(config *ServerConfig) {
 	}
 
 	var app *App
-	if len(config.AppRoot) > 0 {
+	if len(config.AppDir) > 0 {
 		var err error
-		app, err = InitApp(config.AppRoot, config.AppBuildLogFile, config.Debug)
+		app, err = InitApp(config.AppDir, config.AppBuildLogFile, config.Debug)
 		if err != nil {
 			logger.Error("initialize app:", err)
 			return
@@ -83,7 +83,7 @@ func Serve(config *ServerConfig) {
 		Handler:        mux,
 		ReadTimeout:    time.Duration(config.ReadTimeout) * time.Second,
 		WriteTimeout:   time.Duration(config.WriteTimeout) * time.Second,
-		MaxHeaderBytes: config.MaxHeaderBytes,
+		MaxHeaderBytes: int(config.MaxHeaderBytes),
 	}
 
 	go func() {
