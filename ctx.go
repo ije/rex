@@ -295,6 +295,10 @@ func (ctx *Context) Error(err error) {
 	}
 }
 
+func (ctx *Context) ServeFile(name string) {
+	http.ServeFile(ctx.ResponseWriter, ctx.Request, name)
+}
+
 func (ctx *Context) User() acl.User {
 	return ctx.user
 }
