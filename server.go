@@ -3,12 +3,10 @@ package rex
 import (
 	"fmt"
 	"net/http"
-	"os"
 	"syscall"
 	"time"
 
 	"github.com/ije/gox/log"
-	"github.com/ije/gox/utils"
 	"github.com/ije/rex/session"
 )
 
@@ -60,7 +58,7 @@ func Serve(config Config) {
 		SessionCookieName: config.SessionCookieName,
 		HostRedirectRule:  config.HostRedirectRule,
 		SessionManager:    session.NewMemorySessionManager(time.Hour / 2),
-		NotFoundHandler:          config.NotFoundHandler,
+		NotFoundHandler:   config.NotFoundHandler,
 		Logger:            logger,
 	}
 
@@ -81,19 +79,12 @@ func Serve(config Config) {
 		MaxHeaderBytes: int(config.MaxHeaderBytes),
 	}
 
-	go func() {
-		err := serv.ListenAndServe()
-		if err != nil {
-			fmt.Println("server shutdown:", err)
-		}
-		os.Exit(1)
-	}()
+	err := serv.ListenAndServe()
+	if err != nil {
+		fmt.Println("rex server shutdown:", err)
+	}
 
-	utils.WaitExit(func(signal os.Signal) bool {
-		if app.debugProcess != nil {
-			app.debugProcess.Signal(syscall.SIGTERM)
-		}
-		serv.Shutdown(nil)
-		return false // exit main process by shutdown the http server
-	})
+	if app != nil && app.debugProcess != nil {
+		app.debugProcess.Signal(syscall.SIGTERM)
+	}
 }
