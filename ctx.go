@@ -307,6 +307,8 @@ func (ctx *Context) ServeFile(name string) {
 			}
 			if fi.Size() > 1024 {
 				if w, ok := ctx.ResponseWriter.(*ResponseWriter); ok {
+					w.Header().Set("Content-Encoding", "gzip")
+					w.Header().Set("Vary", "Accept-Encoding")
 					gzw := newGzResponseWriter(w.rawWriter)
 					defer gzw.Close()
 					w.rawWriter = gzw

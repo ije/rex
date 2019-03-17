@@ -283,11 +283,13 @@ Lookup:
 		switch strings.ToLower(utils.FileExt(filePath)) {
 		case "js", "css", "html", "htm", "xml", "svg", "json", "txt":
 			if fi.Size() > 1024 {
-				w.Header().Set("Content-Encoding", "gzip")
-				w.Header().Set("Vary", "Accept-Encoding")
-				gzw := newGzResponseWriter(w)
-				defer gzw.Close()
-				w = gzw
+				if w, ok := w.(*ResponseWriter); ok {
+					w.Header().Set("Content-Encoding", "gzip")
+					w.Header().Set("Vary", "Accept-Encoding")
+					gzw := newGzResponseWriter(w.rawWriter)
+					defer gzw.Close()
+					w.rawWriter = gzw
+				}
 			}
 		}
 	}
