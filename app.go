@@ -16,11 +16,10 @@ import (
 type App struct {
 	dir          string
 	packMode     string
-	debug        bool
+	isBuilding   bool
+	isDebug      bool
 	debugPort    int
 	debugProcess *os.Process
-	building     bool
-	buildLogFile string
 	buildRecords []*AppBuildRecord
 }
 
@@ -33,7 +32,7 @@ type AppBuildRecord struct {
 	Error     string
 }
 
-func InitApp(dir string, buildLogFile string, debug bool) (app *App, err error) {
+func InitApp(dir string, isDebug bool) (app *App, err error) {
 	dir, err = filepath.Abs(dir)
 	if err != nil {
 		return
@@ -79,11 +78,11 @@ func InitApp(dir string, buildLogFile string, debug bool) (app *App, err error) 
 			}
 			if ok {
 				cmd := exec.Command("npm", "install")
-				if !debug {
+				if !isDebug {
 					cmd.Args = append(cmd.Args, "--production")
 				}
 				cmd.Dir = dir
-				if debug {
+				if isDebug {
 					cmd.Stderr = os.Stderr
 					cmd.Stdout = os.Stdout
 					fmt.Println("[npm] check/install dependencies...")
@@ -99,7 +98,7 @@ func InitApp(dir string, buildLogFile string, debug bool) (app *App, err error) 
 	switch packMode {
 	case "webpack":
 		_, err = exec.LookPath("webpack")
-		if err == nil && debug {
+		if err == nil && isDebug {
 			_, err = exec.LookPath("webpack-dev-server")
 		}
 		if err != nil {
@@ -112,7 +111,7 @@ func InitApp(dir string, buildLogFile string, debug bool) (app *App, err error) 
 		}
 
 		_, err = exec.LookPath("webpack-cli")
-		if err == nil && debug {
+		if err == nil && isDebug {
 			_, err = exec.LookPath("webpack-dev-server")
 		}
 		if err != nil {
@@ -121,17 +120,14 @@ func InitApp(dir string, buildLogFile string, debug bool) (app *App, err error) 
 	}
 
 	app = &App{
-		dir:          dir,
-		packMode:     packMode,
-		buildLogFile: buildLogFile,
+		dir:      dir,
+		packMode: packMode,
 	}
 
-	if len(app.buildLogFile) > 0 {
-		utils.ParseJSONFile(app.buildLogFile, &app.buildRecords)
-	}
+	go utils.ParseJSONFile(path.Join(app.dir, "build.log"), &app.buildRecords)
 
-	if debug {
-		app.debug = true
+	if isDebug {
+		app.isDebug = true
 		go app.startDebug()
 	} else {
 		app.Build()
@@ -148,7 +144,7 @@ func (app *App) BuildRecords() []*AppBuildRecord {
 }
 
 func (app *App) startDebug() {
-	if app.debugProcess != nil {
+	if app.packMode == "" || app.debugProcess != nil {
 		return
 	}
 
@@ -195,27 +191,30 @@ func (app *App) Build() *AppBuildRecord {
 		PackMode:  app.packMode,
 		StartTime: time.Now().UnixNano(),
 	}
-	if app.building {
+	if app.packMode == "" {
 		record.EndTime = record.StartTime
-		record.Error = "other build process is running"
+		record.Error = "unknown packMode"
+	} else if app.isBuilding {
+		record.EndTime = record.StartTime
+		record.Error = "another build process is running"
 	} else {
 		app.buildRecords = append(app.buildRecords, record)
-		if len(app.buildLogFile) > 0 {
-			utils.SaveJSONFile(app.buildLogFile, app.buildRecords)
-		}
 		go app.build(record)
 	}
 	return record
 }
 
 func (app *App) build(record *AppBuildRecord) {
-	if app.building {
+	if app.isBuilding {
 		return
 	}
 
-	app.building = true
+	app.isBuilding = true
 	defer func() {
-		app.building = false
+		app.isBuilding = false
+		record.EndTime = time.Now().UnixNano()
+		app.buildRecords = append(app.buildRecords, record)
+		utils.SaveJSONFile(path.Join(app.dir, "build.log"), app.buildRecords)
 	}()
 
 	switch app.packMode {
@@ -225,12 +224,8 @@ func (app *App) build(record *AppBuildRecord) {
 		cmd.Dir = app.dir
 		output, err := cmd.CombinedOutput()
 		record.Output = string(output)
-		record.EndTime = time.Now().UnixNano()
 		if err != nil {
 			record.Error = err.Error()
-		}
-		if len(app.buildLogFile) > 0 {
-			utils.SaveJSONFile(app.buildLogFile, app.buildRecords)
 		}
 	}
 }

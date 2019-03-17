@@ -37,9 +37,9 @@ func (mux *Mux) initRouter() *httprouter.Router {
 	router := httprouter.New()
 	router.PanicHandler = func(w http.ResponseWriter, r *http.Request, v interface{}) {
 		if mux.Debug {
-			http.Error(w, fmt.Sprintf("%v", v), http.StatusInternalServerError)
+			http.Error(w, fmt.Sprintf("%v", v), 500)
 		} else {
-			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			http.Error(w, http.StatusText(500), 500)
 		}
 
 		if err, ok := v.(*initSessionError); ok {
@@ -226,18 +226,18 @@ func (mux *Mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 type AppMux struct {
-	*App
+	app *App
 }
 
 func (mux *AppMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if mux.App == nil {
+	if mux.app == nil {
 		http.Error(w, http.StatusText(500), 500)
 		return
 	}
 
-	if mux.debug {
-		if mux.debugProcess != nil {
-			remote, err := url.Parse(fmt.Sprintf("http://127.0.0.1:%d", mux.debugPort))
+	if mux.app.isDebug {
+		if mux.app.debugProcess != nil {
+			remote, err := url.Parse(fmt.Sprintf("http://127.0.0.1:%d", mux.app.debugPort))
 			if err != nil {
 				http.Error(w, err.Error(), 500)
 				return
@@ -254,19 +254,19 @@ func (mux *AppMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// todo: app ssr
 
 	// Serve app dist files
-	filePath := utils.CleanPath(path.Join(mux.Dir(), r.URL.Path))
+	filePath := utils.CleanPath(path.Join(mux.app.Dir(), r.URL.Path))
 Lookup:
 	fi, err := os.Stat(filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// 404s will fallback to /index.html
-			if topIndexHTML := path.Join(mux.Dir(), "index.html"); filePath != topIndexHTML {
-				filePath = topIndexHTML
+			if rootIndexHTML := path.Join(mux.app.Dir(), "index.html"); filePath != rootIndexHTML {
+				filePath = rootIndexHTML
 				goto Lookup
 			}
-			http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+			http.Error(w, http.StatusText(400), 400)
 		} else {
-			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			http.Error(w, http.StatusText(500), 500)
 		}
 		return
 	}
@@ -285,7 +285,7 @@ Lookup:
 				w.Header().Set("Vary", "Accept-Encoding")
 				gzw, err := newGzResponseWriter(w, gzip.BestSpeed)
 				if err != nil {
-					http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+					http.Error(w, http.StatusText(500), 500)
 					return
 				}
 				defer gzw.Close()

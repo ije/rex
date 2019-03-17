@@ -23,7 +23,6 @@ type Config struct {
 	WriteTimeout      uint32            `json:"writeTimeout"`
 	MaxHeaderBytes    uint32            `json:"maxHeaderBytes"`
 	Debug             bool              `json:"debug"`
-	AppBuildLogFile   string            `json:"appBuildLogFile"`
 	ErrorLogger       *log.Logger       `json:"-"`
 	AccessLogger      *log.Logger       `json:"-"`
 }
@@ -45,7 +44,7 @@ func Serve(config Config) {
 	var app *App
 	if len(config.AppDir) > 0 {
 		var err error
-		app, err = InitApp(config.AppDir, config.AppBuildLogFile, config.Debug)
+		app, err = InitApp(config.AppDir, config.Debug)
 		if err != nil {
 			logger.Error("initialize app:", err)
 			return
