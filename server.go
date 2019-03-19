@@ -3,7 +3,6 @@ package rex
 import (
 	"fmt"
 	"net/http"
-	"syscall"
 	"time"
 
 	"github.com/ije/gox/log"
@@ -12,7 +11,7 @@ import (
 
 type Config struct {
 	Port              uint16            `json:"port"`
-	AppDir            string            `json:"appDir"`
+	Root              string            `json:"root"`
 	ServerName        string            `json:"serverName"`
 	CustomHTTPHeaders map[string]string `json:"customHTTPHeaders"`
 	SessionCookieName string            `json:"sessionCookieName"`
@@ -30,6 +29,9 @@ func Serve(config Config) {
 	if config.Port == 0 {
 		config.Port = 80
 	}
+	if config.AccessLogger != nil {
+		config.AccessLogger.SetQuite(true)
+	}
 
 	logger := &log.Logger{}
 	if config.ErrorLogger != nil {
@@ -40,18 +42,8 @@ func Serve(config Config) {
 		logger.SetQuite(true)
 	}
 
-	var app *App
-	if len(config.AppDir) > 0 {
-		var err error
-		app, err = InitApp(config.AppDir, config.Debug)
-		if err != nil {
-			logger.Error("initialize app:", err)
-			return
-		}
-	}
-
 	mux := &Mux{
-		App:               app,
+		Root:              config.Root,
 		Debug:             config.Debug,
 		ServerName:        config.ServerName,
 		CustomHTTPHeaders: config.CustomHTTPHeaders,
@@ -60,15 +52,11 @@ func Serve(config Config) {
 		SessionManager:    session.NewMemorySessionManager(time.Hour / 2),
 		NotFoundHandler:   config.NotFoundHandler,
 		Logger:            logger,
+		AccessLogger:      config.AccessLogger,
 	}
 
 	for _, apis := range globalAPIServices {
 		mux.RegisterAPIService(apis)
-	}
-
-	if config.AccessLogger != nil {
-		mux.AccessLogger = config.AccessLogger
-		mux.AccessLogger.SetQuite(true)
 	}
 
 	serv := &http.Server{
@@ -78,13 +66,8 @@ func Serve(config Config) {
 		WriteTimeout:   time.Duration(config.WriteTimeout) * time.Second,
 		MaxHeaderBytes: int(config.MaxHeaderBytes),
 	}
-
 	err := serv.ListenAndServe()
 	if err != nil {
 		fmt.Println("rex server shutdown:", err)
-	}
-
-	if app != nil && app.debugProcess != nil {
-		app.debugProcess.Signal(syscall.SIGTERM)
 	}
 }

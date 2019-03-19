@@ -1,11 +1,9 @@
 package rex
 
 import (
-	"compress/gzip"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -15,8 +13,8 @@ import (
 
 	"github.com/ije/gox/utils"
 	"github.com/ije/rex/acl"
+	"github.com/ije/rex/httprouter"
 	"github.com/ije/rex/session"
-	"github.com/julienschmidt/httprouter"
 )
 
 type URL struct {
@@ -25,46 +23,29 @@ type URL struct {
 }
 
 type Context struct {
-	App            *App
-	ResponseWriter http.ResponseWriter
-	Request        *http.Request
-	URL            *URL
-	State          *State
-	session        session.Session
-	user           acl.User
-	mux            *Mux
+	W       http.ResponseWriter
+	R       *http.Request
+	URL     *URL
+	State   *State
+	session session.Session
+	user    acl.User
+	mux     *Mux
 }
 
-func (ctx *Context) AddHeader(key string, value string) {
-	ctx.ResponseWriter.Header().Add(key, value)
-}
-
-func (ctx *Context) SetHeader(key string, value string) {
-	ctx.ResponseWriter.Header().Set(key, value)
-}
-
-func (ctx *Context) DelHeader(key string) {
-	ctx.ResponseWriter.Header().Del(key)
-}
-
-func (ctx *Context) WriteHeader(status int) {
-	ctx.ResponseWriter.WriteHeader(status)
-}
-
-func (ctx *Context) Cookie(name string) (cookie *http.Cookie, err error) {
-	return ctx.Request.Cookie(name)
+func (ctx *Context) GetCookie(name string) (cookie *http.Cookie, err error) {
+	return ctx.R.Cookie(name)
 }
 
 func (ctx *Context) SetCookie(cookie *http.Cookie) {
 	if cookie != nil {
-		ctx.AddHeader("Set-Cookie", cookie.String())
+		ctx.W.Header().Add("Set-Cookie", cookie.String())
 	}
 }
 
 func (ctx *Context) RemoveCookie(cookie *http.Cookie) {
 	if cookie != nil {
-		cookie.Expires = time.Now().Add(-(365 * 24 * time.Hour))
-		ctx.AddHeader("Set-Cookie", cookie.String())
+		cookie.Expires = time.Now().Add(-(1000 * time.Hour))
+		ctx.W.Header().Add("Set-Cookie", cookie.String())
 	}
 }
 
@@ -75,7 +56,7 @@ func (ctx *Context) Session() (sess session.Session) {
 	}
 
 	var sid string
-	cookie, err := ctx.Cookie(cookieName)
+	cookie, err := ctx.GetCookie(cookieName)
 	if err == nil {
 		sid = cookie.Value
 	}
@@ -105,9 +86,9 @@ func (ctx *Context) Session() (sess session.Session) {
 }
 
 func (ctx *Context) ParseMultipartForm(maxMemoryBytes int64) {
-	if strings.Contains(ctx.Request.Header.Get("Content-Type"), "json") {
+	if strings.Contains(ctx.R.Header.Get("Content-Type"), "json") {
 		var values map[string]interface{}
-		if json.NewDecoder(ctx.Request.Body).Decode(&values) == nil {
+		if json.NewDecoder(ctx.R.Body).Decode(&values) == nil {
 			form := url.Values{}
 			for key, value := range values {
 				switch v := value.(type) {
@@ -122,21 +103,21 @@ func (ctx *Context) ParseMultipartForm(maxMemoryBytes int64) {
 					form.Set(key, fmt.Sprintf("%v", value))
 				}
 			}
-			ctx.Request.Form = form
+			ctx.R.Form = form
 			return
 		}
 	} else {
-		ctx.Request.ParseMultipartForm(maxMemoryBytes)
+		ctx.R.ParseMultipartForm(maxMemoryBytes)
 	}
 }
 
 func (ctx *Context) FormValues(key string) (values []string) {
-	if ctx.Request.Form == nil {
+	if ctx.R.Form == nil {
 		ctx.ParseMultipartForm(32 << 20) // 32m in memory
 	}
-	values, ok := ctx.Request.Form[key]
+	values, ok := ctx.R.Form[key]
 	if !ok {
-		values, _ = ctx.Request.Form[key+"[]"]
+		values, _ = ctx.R.Form[key+"[]"]
 	}
 	return
 }
@@ -153,7 +134,7 @@ func (ctx *Context) FormBool(key string) (b bool) {
 	s := strings.TrimSpace(ctx.FormString(key))
 	if len(s) > 0 {
 		s = strings.ToLower(s)
-		b = s != "false" && s != "0" && s != "no" && s != "disable"
+		b = s != "false" && s != "0"
 	}
 	return
 }
@@ -179,22 +160,15 @@ func (ctx *Context) FormInt(key string) (i int, err error) {
 	return
 }
 
-func (ctx *Context) FormJSON(key string) (value map[string]interface{}, err error) {
-	if s := strings.TrimSpace(ctx.FormString(key)); len(s) > 0 {
-		err = json.Unmarshal([]byte(s), &value)
-	}
-	return
-}
-
 func (ctx *Context) RemoteIP() (ip string) {
-	ip = ctx.Request.Header.Get("X-Real-IP")
+	ip = ctx.R.Header.Get("X-Real-IP")
 	if len(ip) == 0 {
-		ip = ctx.Request.Header.Get("X-Forwarded-For")
+		ip = ctx.R.Header.Get("X-Forwarded-For")
 		if len(ip) > 0 {
 			ip, _ = utils.SplitByFirstByte(ip, ',')
 			ip = strings.TrimSpace(ip)
 		} else {
-			ip = ctx.Request.RemoteAddr
+			ip = ctx.R.RemoteAddr
 		}
 	}
 
@@ -203,7 +177,7 @@ func (ctx *Context) RemoteIP() (ip string) {
 }
 
 func (ctx *Context) Authenticate(realm string, authHandle func(user string, password string) (ok bool, err error)) (ok bool, err error) {
-	if authField := ctx.Request.Header.Get("Authorization"); len(authField) > 0 {
+	if authField := ctx.R.Header.Get("Authorization"); len(authField) > 0 {
 		if authType, combination := utils.SplitByFirstByte(authField, ' '); len(combination) > 0 {
 			switch authType {
 			case "Basic":
@@ -219,21 +193,21 @@ func (ctx *Context) Authenticate(realm string, authHandle func(user string, pass
 		}
 	}
 
-	ctx.SetHeader("WWW-Authenticate", fmt.Sprintf("Basic realm=\"%s\"", realm))
-	ctx.WriteHeader(401)
+	ctx.W.Header().Set("WWW-Authenticate", fmt.Sprintf("Basic realm=\"%s\"", realm))
+	ctx.W.WriteHeader(401)
 	return
 }
 
 func (ctx *Context) Redirect(url string, code int) {
-	http.Redirect(ctx.ResponseWriter, ctx.Request, url, code)
+	http.Redirect(ctx.W, ctx.R, url, code)
 }
 
 func (ctx *Context) Write(p []byte) (n int, err error) {
-	return ctx.ResponseWriter.Write(p)
+	return ctx.W.Write(p)
 }
 
 func (ctx *Context) WriteString(s string) (n int, err error) {
-	return ctx.ResponseWriter.Write([]byte(s))
+	return ctx.W.Write([]byte(s))
 }
 
 func (ctx *Context) WriteJSON(data interface{}) (n int, err error) {
@@ -256,59 +230,34 @@ func (ctx *Context) writeJSON(status int, data interface{}) (n int, err error) {
 		return
 	}
 
-	var wr io.Writer = ctx.ResponseWriter
-	wh := ctx.ResponseWriter.Header()
-	if len(jsonData) > 1024 && strings.Index(ctx.Request.Header.Get("Accept-Encoding"), "gzip") > -1 {
-		wh.Set("Content-Encoding", "gzip")
-		wh.Set("Vary", "Accept-Encoding")
-		gz, _ := gzip.NewWriterLevel(ctx.ResponseWriter, gzip.BestSpeed)
-		defer gz.Close()
-		wr = gz
-	}
-	wh.Set("Content-Type", "application/json; charset=utf-8")
-	ctx.ResponseWriter.WriteHeader(status)
-	return wr.Write(jsonData)
-}
-
-func (ctx *Context) End(status int, a ...string) {
-	wh := ctx.ResponseWriter.Header()
-	if _, ok := wh["Content-Type"]; !ok {
-		wh.Set("Content-Type", "text/plain; charset=utf-8")
-	}
-	ctx.ResponseWriter.WriteHeader(status)
-	var text string
-	if len(a) > 0 {
-		text = strings.Join(a, " ")
-	} else {
-		text = http.StatusText(status)
-	}
-	ctx.Write([]byte(text))
-}
-
-func (ctx *Context) Error(err error) {
-	if ctx.mux.Debug {
-		ctx.End(http.StatusInternalServerError, err.Error())
-	} else {
-		if ctx.mux.Logger != nil {
-			ctx.mux.Logger.Error(err)
+	if len(jsonData) > 1024 && strings.Index(ctx.R.Header.Get("Accept-Encoding"), "gzip") > -1 {
+		if w, ok := ctx.W.(*ResponseWriter); ok {
+			gzw := newGzResponseWriter(w.rawWriter)
+			defer gzw.Close()
+			w.rawWriter = gzw
 		}
-		ctx.End(http.StatusInternalServerError)
 	}
+
+	ctx.W.Header().Set("Content-Type", "application/json; charset=utf-8")
+	ctx.W.WriteHeader(status)
+	return ctx.Write(jsonData)
 }
 
 func (ctx *Context) ServeFile(name string) {
-	if strings.Contains(ctx.Request.Header.Get("Accept-Encoding"), "gzip") {
+	if strings.Contains(ctx.R.Header.Get("Accept-Encoding"), "gzip") {
 		switch strings.ToLower(utils.FileExt(name)) {
 		case "js", "css", "html", "htm", "xml", "svg", "json", "txt":
 			fi, err := os.Stat(name)
 			if err != nil {
-				ctx.End(500)
+				if os.IsNotExist(err) {
+					ctx.End(404)
+				} else {
+					ctx.End(500)
+				}
 				return
 			}
 			if fi.Size() > 1024 {
-				if w, ok := ctx.ResponseWriter.(*ResponseWriter); ok {
-					w.Header().Set("Content-Encoding", "gzip")
-					w.Header().Set("Vary", "Accept-Encoding")
+				if w, ok := ctx.W.(*ResponseWriter); ok {
 					gzw := newGzResponseWriter(w.rawWriter)
 					defer gzw.Close()
 					w.rawWriter = gzw
@@ -316,7 +265,31 @@ func (ctx *Context) ServeFile(name string) {
 			}
 		}
 	}
-	http.ServeFile(ctx.ResponseWriter, ctx.Request, name)
+	http.ServeFile(ctx.W, ctx.R, name)
+}
+
+func (ctx *Context) End(status int, a ...interface{}) {
+	wh := ctx.W.Header()
+	if _, ok := wh["Content-Type"]; !ok {
+		wh.Set("Content-Type", "text/plain; charset=utf-8")
+	}
+	ctx.W.WriteHeader(status)
+	if len(a) > 0 {
+		ctx.WriteString(fmt.Sprint(a...))
+	} else {
+		ctx.WriteString(http.StatusText(status))
+	}
+}
+
+func (ctx *Context) Error(err error) {
+	if ctx.mux.Debug {
+		ctx.End(500, err.Error())
+	} else {
+		if ctx.mux.Logger != nil {
+			ctx.mux.Logger.Error(err)
+		}
+		ctx.End(500)
+	}
 }
 
 func (ctx *Context) User() acl.User {

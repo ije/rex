@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/http/httputil"
-	"net/url"
 	"os"
 	"path"
 	"runtime"
@@ -16,12 +14,12 @@ import (
 
 	"github.com/ije/gox/log"
 	"github.com/ije/gox/utils"
+	"github.com/ije/rex/httprouter"
 	"github.com/ije/rex/session"
-	"github.com/julienschmidt/httprouter"
 )
 
 type Mux struct {
-	App               *App
+	Root              string
 	Debug             bool
 	ServerName        string
 	CustomHTTPHeaders map[string]string
@@ -76,10 +74,12 @@ func (mux *Mux) initRouter() *httprouter.Router {
 			mux.Logger.Error("[panic]", v, buf.String())
 		}
 	}
-	if mux.App != nil {
-		router.NotFound = &AppMux{mux.App}
-	} else if mux.NotFoundHandler != nil {
+	if mux.NotFoundHandler != nil {
 		router.NotFound = mux.NotFoundHandler
+	} else if mux.Root != "" {
+		if _, err := os.Stat(mux.Root); err == nil || os.IsExist(err) {
+			router.NotFound = &staticMux{mux.Root}
+		}
 	}
 	return router
 }
@@ -123,12 +123,11 @@ func (mux *Mux) RegisterAPIService(apis *APIService) {
 					url := &URL{params, r.URL}
 					state := NewState()
 					ctx := &Context{
-						App:            mux.App,
-						ResponseWriter: w,
-						Request:        r,
-						URL:            url,
-						State:          state,
-						mux:            mux,
+						W:     w,
+						R:     r,
+						URL:   url,
+						State: state,
+						mux:   mux,
 					}
 
 					if len(apis.middlewares) > 0 {
@@ -142,9 +141,8 @@ func (mux *Mux) RegisterAPIService(apis *APIService) {
 							}
 
 							// prevent user chanage the 'read-only' fields in context
-							ctx.App = mux.App
-							ctx.ResponseWriter = w
-							ctx.Request = r
+							ctx.W = w
+							ctx.R = r
 							ctx.URL = url
 							ctx.State = state
 						}
@@ -173,7 +171,7 @@ func (mux *Mux) RegisterAPIService(apis *APIService) {
 }
 
 func (mux *Mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// rewrap the http ResponseWriter
+	// wrap the ResponseWriter
 	w = &ResponseWriter{status: 200, rawWriter: w}
 
 	if mux.AccessLogger != nil {
@@ -181,8 +179,20 @@ func (mux *Mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			rw, ok := w.(*ResponseWriter)
 			if ok {
-				status, writedBytes := rw.Status()
-				mux.AccessLogger.Printf(`%s %s %s %s %s %d "%s" "%s" %d %d %dms`, r.RemoteAddr, r.Host, r.Proto, r.Method, r.RequestURI, r.ContentLength, strings.Replace(r.Referer(), `"`, "'", -1), strings.Replace(r.UserAgent(), `"`, "'", -1), status, writedBytes, d/time.Millisecond)
+				mux.AccessLogger.Printf(
+					`%s %s %s %s %s %d "%s" "%s" %d %d %dms`,
+					r.RemoteAddr,
+					r.Host,
+					r.Proto,
+					r.Method,
+					r.RequestURI,
+					r.ContentLength,
+					strings.ReplaceAll(r.Referer(), `"`, "'"),
+					strings.ReplaceAll(r.UserAgent(), `"`, "'"),
+					rw.status,
+					rw.writedBytes,
+					d/time.Millisecond,
+				)
 			}
 		}()
 	}
@@ -227,65 +237,35 @@ func (mux *Mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	mux.router.ServeHTTP(w, r)
 }
 
-type AppMux struct {
-	app *App
+type staticMux struct {
+	root string
 }
 
-func (mux *AppMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if mux.app == nil {
-		http.Error(w, http.StatusText(500), 500)
-		return
-	}
-
-	if mux.app.isDebug {
-		if mux.app.debugProcess != nil {
-			remote, err := url.Parse(fmt.Sprintf("http://127.0.0.1:%d", mux.app.debugPort))
-			if err != nil {
-				http.Error(w, err.Error(), 500)
-				return
-			}
-
-			proxy := httputil.NewSingleHostReverseProxy(remote)
-			proxy.ServeHTTP(w, r)
-		} else {
-			http.Error(w, http.StatusText(500), 500)
+func (mux *staticMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	rootIndexHTML := path.Join(mux.root, "index.html")
+	file := utils.CleanPath(path.Join(mux.root, r.URL.Path))
+Re:
+	fi, err := os.Stat(file)
+	if err != nil && os.IsNotExist(err) {
+		// 404s will fallback to /index.html
+		if file != rootIndexHTML {
+			file = rootIndexHTML
+			goto Re
 		}
-		return
-	}
-
-	// todo: app ssr
-
-	// Serve app dist files
-	filePath := utils.CleanPath(path.Join(mux.app.Dir(), r.URL.Path))
-Lookup:
-	fi, err := os.Stat(filePath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			// 404s will fallback to /index.html
-			if rootIndexHTML := path.Join(mux.app.Dir(), "index.html"); filePath != rootIndexHTML {
-				filePath = rootIndexHTML
-				goto Lookup
-			}
-			http.Error(w, http.StatusText(400), 400)
-		} else {
-			http.Error(w, http.StatusText(500), 500)
-		}
-		return
+		http.Error(w, http.StatusText(404), 404)
 	}
 
 	if fi.IsDir() {
-		filePath = path.Join(filePath, "index.html")
-		goto Lookup
+		file = path.Join(file, "index.html")
+		goto Re
 	}
 
 	// compress text files when the size is greater than 1024 bytes
 	if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
-		switch strings.ToLower(utils.FileExt(filePath)) {
+		switch strings.ToLower(utils.FileExt(file)) {
 		case "js", "css", "html", "htm", "xml", "svg", "json", "txt":
 			if fi.Size() > 1024 {
 				if w, ok := w.(*ResponseWriter); ok {
-					w.Header().Set("Content-Encoding", "gzip")
-					w.Header().Set("Vary", "Accept-Encoding")
 					gzw := newGzResponseWriter(w.rawWriter)
 					defer gzw.Close()
 					w.rawWriter = gzw
@@ -294,7 +274,7 @@ Lookup:
 		}
 	}
 
-	http.ServeFile(w, r, filePath)
+	http.ServeFile(w, r, file)
 }
 
 type ResponseWriter struct {
@@ -318,21 +298,15 @@ func (w *ResponseWriter) Write(p []byte) (n int, err error) {
 	return
 }
 
-func (w *ResponseWriter) Status() (status int, writedBytes int) {
-	return w.status, w.writedBytes
-}
-
 type gzResponseWriter struct {
 	gzipWriter io.WriteCloser
 	rawWriter  http.ResponseWriter
 }
 
 func newGzResponseWriter(w http.ResponseWriter) (gzw *gzResponseWriter) {
-	gzipWriter, err := gzip.NewWriterLevel(w, gzip.BestSpeed)
-	if err != nil {
-		return
-	}
-
+	w.Header().Set("Content-Encoding", "gzip")
+	w.Header().Set("Vary", "Accept-Encoding")
+	gzipWriter, _ := gzip.NewWriterLevel(w, gzip.BestSpeed)
 	gzw = &gzResponseWriter{gzipWriter, w}
 	return
 }

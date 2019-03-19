@@ -5,7 +5,13 @@ import (
 	"strings"
 )
 
-var globalAPIServices = []*APIService{}
+type APIHandle func(ctx *Context)
+type MiddlewareHandle func(ctx *Context, next func())
+
+type apiHandler struct {
+	handle     APIHandle
+	privileges map[string]struct{}
+}
 
 type APIService struct {
 	Prefix      string
@@ -24,14 +30,6 @@ func NewAPIServiceWithPrefix(prefix string) *APIService {
 	return apis
 }
 
-type apiHandler struct {
-	handle     APIHandle
-	privileges map[string]struct{} // set
-}
-
-type APIHandle func(*Context)
-type MiddlewareHandle func(*Context, func())
-
 func (s *APIService) Use(middleware MiddlewareHandle) {
 	s.middlewares = append(s.middlewares, middleware)
 }
@@ -42,10 +40,8 @@ func (s *APIService) Options(endpoint string, cors *CORS) {
 	}
 
 	s.register("OPTIONS", endpoint, func(ctx *Context) {
-		w := ctx.ResponseWriter
-		wh := w.Header()
-
 		if len(cors.Origin) > 0 {
+			wh := ctx.W.Header()
 			wh.Set("Access-Control-Allow-Origin", cors.Origin)
 			wh.Set("Vary", "Origin")
 
@@ -63,7 +59,7 @@ func (s *APIService) Options(endpoint string, cors *CORS) {
 			}
 		}
 
-		w.WriteHeader(204)
+		ctx.W.WriteHeader(204)
 	}, nil)
 }
 
@@ -90,6 +86,8 @@ func (s *APIService) Patch(endpoint string, handle APIHandle, privilegeIds ...st
 func (s *APIService) Delete(endpoint string, handle APIHandle, privilegeIds ...string) {
 	s.register("DELETE", endpoint, handle, privilegeIds)
 }
+
+var globalAPIServices = []*APIService{}
 
 func (s *APIService) register(method string, endpoint string, handle APIHandle, privilegeIds []string) {
 	if len(endpoint) == 0 || handle == nil {

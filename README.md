@@ -1,6 +1,6 @@
 REX
 ====
-**REX** provides a simple & light-weight REST server in [Golang](https://golang.org/) that can debug, build, and host a SPA(single page appliaction).
+**REX** provides a simple & light-weight REST server in [Golang](https://golang.org/).
 
 [![GoDoc](https://godoc.org/github.com/ije/rex?status.svg)](https://godoc.org/github.com/ije/rex)
 
@@ -22,7 +22,7 @@ func main() {
     })
 
     rex.Serve(&rex.ServerConfig{
-        AppRoot: "/var/www/app",
+        Root: "/var/www/app",
         Port: 8080,
     })
 }
