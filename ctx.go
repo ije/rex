@@ -238,6 +238,16 @@ func (ctx *Context) writeJSON(status int, data interface{}) (n int, err error) {
 	return ctx.Write(jsonData)
 }
 
+func (ctx *Context) IfModified(modtime time.Time, then func()) {
+	if t, err := time.Parse(http.TimeFormat, ctx.R.Header.Get("If-Modified-Since")); err == nil && modtime.Before(t.Add(1*time.Second)) {
+		ctx.End(http.StatusNotModified)
+		return
+	}
+
+	ctx.W.Header().Set("Last-Modified", modtime.Format(http.TimeFormat))
+	then()
+}
+
 func (ctx *Context) ServeFile(name string) {
 	if strings.Contains(ctx.R.Header.Get("Accept-Encoding"), "gzip") {
 		switch strings.ToLower(utils.FileExt(name)) {
