@@ -86,34 +86,53 @@ func (ctx *Context) Session() (sess session.Session) {
 }
 
 func (ctx *Context) ParseMultipartForm(maxMemoryBytes int64) {
-	if strings.Contains(ctx.R.Header.Get("Content-Type"), "json") {
-		var values map[string]interface{}
-		if json.NewDecoder(ctx.R.Body).Decode(&values) == nil {
-			form := url.Values{}
-			for key, value := range values {
+	if strings.Contains(ctx.R.Header.Get("Content-Type"), "/json") {
+		form := url.Values{}
+		var obj map[string]interface{}
+		if json.NewDecoder(ctx.R.Body).Decode(&obj) == nil {
+			for key, value := range obj {
 				switch v := value.(type) {
-				case map[string]interface{}, []interface{}:
-					b, err := json.Marshal(v)
-					if err == nil {
-						form.Set(key, string(b))
+				case []interface{}:
+					for _, val := range v {
+						form.Add(key, formatValue(val))
 					}
-				case string:
-					form.Set(key, v)
 				default:
-					form.Set(key, fmt.Sprintf("%v", value))
+					form.Set(key, formatValue(v))
 				}
 			}
-			ctx.R.Form = form
-			return
 		}
+		ctx.R.Form = form
 	} else {
 		ctx.R.ParseMultipartForm(maxMemoryBytes)
 	}
 }
 
+func formatValue(value interface{}) (str string) {
+	switch v := value.(type) {
+	case nil:
+		str = "null"
+	case bool:
+		if v {
+			str = "true"
+		} else {
+			str = "false"
+		}
+	case float64:
+		str = fmt.Sprintf("%f", v)
+	case string:
+		str = v
+	case map[string]interface{}:
+		p, err := json.Marshal(v)
+		if err == nil {
+			str = string(p)
+		}
+	}
+	return
+}
+
 func (ctx *Context) FormValues(key string) (values []string) {
 	if ctx.R.Form == nil {
-		ctx.ParseMultipartForm(32 << 20) // 32m in memory
+		ctx.R.ParseMultipartForm(32 << 20) // 32m in memory
 	}
 	values, ok := ctx.R.Form[key]
 	if !ok {
@@ -134,7 +153,7 @@ func (ctx *Context) FormBool(key string) (b bool) {
 	s := strings.TrimSpace(ctx.FormString(key))
 	if len(s) > 0 {
 		s = strings.ToLower(s)
-		b = s != "false" && s != "0"
+		b = s == "true" || s == "1"
 	}
 	return
 }
