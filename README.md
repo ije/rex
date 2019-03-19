@@ -1,12 +1,11 @@
-REX
-====
+# REX
+
 **REX** provides a simple & light-weight REST server in [Golang](https://golang.org/).
 
 [![GoDoc](https://godoc.org/github.com/ije/rex?status.svg)](https://godoc.org/github.com/ije/rex)
 
 
-Example
--------
+### Example
 ```go
 package main
 
@@ -21,9 +20,6 @@ func main() {
         ctx.WriteString("Hello, " + ctx.URL.Params.ByName("name"))
     })
 
-    rex.Serve(&rex.ServerConfig{
-        Root: "/var/www/app",
-        Port: 8080,
-    })
+    rex.Serve()
 }
 ```

@@ -166,35 +166,11 @@ func (ctx *Context) RemoteIP() (ip string) {
 		ip = ctx.R.Header.Get("X-Forwarded-For")
 		if len(ip) > 0 {
 			ip, _ = utils.SplitByFirstByte(ip, ',')
-			ip = strings.TrimSpace(ip)
 		} else {
 			ip = ctx.R.RemoteAddr
 		}
 	}
-
-	ip, _ = utils.SplitByLastByte(ip, ':')
-	return
-}
-
-func (ctx *Context) Authenticate(realm string, authHandle func(user string, password string) (ok bool, err error)) (ok bool, err error) {
-	if authField := ctx.R.Header.Get("Authorization"); len(authField) > 0 {
-		if authType, combination := utils.SplitByFirstByte(authField, ' '); len(combination) > 0 {
-			switch authType {
-			case "Basic":
-				authInfo, e := base64.StdEncoding.DecodeString(combination)
-				if e != nil {
-					return
-				}
-
-				user, password := utils.SplitByFirstByte(string(authInfo), ':')
-				ok, err = authHandle(user, password)
-				return
-			}
-		}
-	}
-
-	ctx.W.Header().Set("WWW-Authenticate", fmt.Sprintf("Basic realm=\"%s\"", realm))
-	ctx.W.WriteHeader(401)
+	ip, _ = utils.SplitByLastByte(strings.TrimSpace(ip), ':')
 	return
 }
 
@@ -290,6 +266,28 @@ func (ctx *Context) Error(err error) {
 		}
 		ctx.End(500)
 	}
+}
+
+func (ctx *Context) Authenticate(realm string, handle func(user string, password string) (ok bool, err error)) (ok bool, err error) {
+	if auth := ctx.R.Header.Get("Authorization"); len(auth) > 0 {
+		if authType, combination := utils.SplitByFirstByte(auth, ' '); len(combination) > 0 {
+			switch authType {
+			case "Basic":
+				authInfo, e := base64.StdEncoding.DecodeString(combination)
+				if e != nil {
+					return
+				}
+
+				user, password := utils.SplitByFirstByte(string(authInfo), ':')
+				ok, err = handle(user, password)
+				return
+			}
+		}
+	}
+
+	ctx.W.Header().Set("WWW-Authenticate", fmt.Sprintf("Basic realm=\"%s\"", realm))
+	ctx.W.WriteHeader(401)
+	return
 }
 
 func (ctx *Context) User() acl.User {
