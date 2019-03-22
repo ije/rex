@@ -1,10 +1,12 @@
 package rex
 
 import (
+	"bufio"
 	"bytes"
 	"compress/gzip"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"path"
@@ -298,6 +300,15 @@ func (w *ResponseWriter) Write(p []byte) (n int, err error) {
 	n, err = w.rawWriter.Write(p)
 	w.writedBytes += n
 	return
+}
+
+func (w *ResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	h, ok := w.rawWriter.(http.Hijacker)
+	if ok {
+		return h.Hijack()
+	}
+
+	return nil, nil, fmt.Errorf("Response does not implement the http.Hijacker")
 }
 
 type gzResponseWriter struct {
