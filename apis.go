@@ -94,6 +94,10 @@ func (s *APIService) register(method string, endpoint string, handle APIHandle, 
 		return
 	}
 
+	if endpoint == "*" {
+		endpoint = "*path"
+	}
+
 	var privileges map[string]struct{}
 	if len(privilegeIds) > 0 {
 		privileges = map[string]struct{}{}
