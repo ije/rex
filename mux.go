@@ -289,7 +289,9 @@ func (w *ResponseWriter) Header() http.Header {
 
 func (w *ResponseWriter) WriteHeader(status int) {
 	w.status = status
-	w.rawWriter.WriteHeader(status)
+	if w.writedBytes == 0 {
+		w.rawWriter.WriteHeader(status)
+	}
 }
 
 func (w *ResponseWriter) Write(p []byte) (n int, err error) {
