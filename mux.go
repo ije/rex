@@ -14,8 +14,8 @@ import (
 
 	"github.com/ije/gox/log"
 	"github.com/ije/gox/utils"
-	"github.com/ije/rex/httprouter"
 	"github.com/ije/rex/session"
+	"github.com/julienschmidt/httprouter"
 )
 
 type Mux struct {

@@ -1,0 +1,4 @@
+github.com/ije/gox v0.1.0 h1:NuVeNGR3G2zlSYXPehnPkdnweQwv09vCXBHOFD0DGmw=
+github.com/ije/gox v0.1.0/go.mod h1:wyaSgtoq4KzO3wIJbU7IH5TmaPMabLaHk3jlJ3i7eXg=
+github.com/julienschmidt/httprouter v1.2.0 h1:TDTW5Yz1mjftljbcKqRcrYhd4XeOoI98t+9HbQbYf7g=
+github.com/julienschmidt/httprouter v1.2.0/go.mod h1:SYymIcj16QtmaHHD7aYtjjsJG7VTCxuUUipMqKk8s4w=

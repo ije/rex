@@ -13,8 +13,8 @@ import (
 
 	"github.com/ije/gox/utils"
 	"github.com/ije/rex/acl"
-	"github.com/ije/rex/httprouter"
 	"github.com/ije/rex/session"
+	"github.com/julienschmidt/httprouter"
 )
 
 type URL struct {
