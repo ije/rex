@@ -21,7 +21,7 @@ import (
 )
 
 type Mux struct {
-	*Config
+	Config
 	Logger         *log.Logger
 	SessionManager session.Manager
 	router         *httprouter.Router

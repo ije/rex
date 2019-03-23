@@ -13,9 +13,6 @@ func Serve(config Config) {
 	if config.Port == 0 {
 		config.Port = 80
 	}
-	if config.AccessLogger != nil {
-		config.AccessLogger.SetQuite(true)
-	}
 
 	logger := &log.Logger{}
 	if config.ErrorLogger != nil {
@@ -24,10 +21,13 @@ func Serve(config Config) {
 	if !config.Debug {
 		logger.SetLevelByName("info")
 		logger.SetQuite(true)
+		if config.AccessLogger != nil {
+			config.AccessLogger.SetQuite(true)
+		}
 	}
 
 	mux := &Mux{
-		Config:         &config,
+		Config:         config,
 		Logger:         logger,
 		SessionManager: session.NewMemorySessionManager(time.Hour / 2),
 	}
