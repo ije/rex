@@ -70,7 +70,7 @@ func (mux *Mux) initRouter() *httprouter.Router {
 		}
 	}
 	if mux.Root != "" {
-		router.NotFound = &staticMux{mux.Root, mux.NotFoundHandler}
+		router.NotFound = &staticMux{utils.CleanPath(mux.Root), mux.NotFoundHandler}
 	} else if mux.NotFoundHandler != nil {
 		router.NotFound = mux.NotFoundHandler
 	}
@@ -236,8 +236,8 @@ type staticMux struct {
 }
 
 func (mux *staticMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	rootIndexHTML := utils.CleanPath(path.Join(mux.root, "index.html"))
-	file := utils.CleanPath(path.Join(mux.root, r.URL.Path))
+	rootIndexHTML := path.Join(mux.root, "index.html")
+	file := path.Join(mux.root, utils.CleanPath(r.URL.Path))
 Re:
 	fi, err := os.Stat(file)
 	if err != nil {
@@ -266,7 +266,7 @@ Re:
 
 	// compress text files when the size is greater than 1024 bytes
 	if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
-		switch strings.ToLower(utils.FileExt(file)) {
+		switch strings.ToLower(strings.TrimPrefix(path.Ext(file), ".")) {
 		case "js", "css", "html", "htm", "xml", "svg", "json", "txt":
 			if fi.Size() > 1024 {
 				if w, ok := w.(*ResponseWriter); ok {
@@ -310,7 +310,7 @@ func (w *ResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 		return h.Hijack()
 	}
 
-	return nil, nil, fmt.Errorf("Response does not implement the http.Hijacker")
+	return nil, nil, fmt.Errorf("The raw response writer does not implement the http.Hijacker")
 }
 
 type gzResponseWriter struct {

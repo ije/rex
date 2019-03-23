@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -250,7 +251,7 @@ func (ctx *Context) IfModified(modtime time.Time, then func()) {
 
 func (ctx *Context) ServeFile(name string) {
 	if strings.Contains(ctx.R.Header.Get("Accept-Encoding"), "gzip") {
-		switch strings.ToLower(utils.FileExt(name)) {
+		switch strings.ToLower(strings.TrimPrefix(path.Ext(name), ".")) {
 		case "js", "css", "html", "htm", "xml", "svg", "json", "txt":
 			fi, err := os.Stat(name)
 			if err != nil {
