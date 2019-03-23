@@ -21,17 +21,10 @@ import (
 )
 
 type Mux struct {
-	Root              string
-	Debug             bool
-	ServerName        string
-	CustomHTTPHeaders map[string]string
-	SessionCookieName string
-	HostRedirectRule  string
-	NotFoundHandler   http.Handler
-	SessionManager    session.Manager
-	AccessLogger      *log.Logger
-	Logger            *log.Logger
-	router            *httprouter.Router
+	*Config
+	Logger         *log.Logger
+	SessionManager session.Manager
+	router         *httprouter.Router
 }
 
 func (mux *Mux) initRouter() *httprouter.Router {
@@ -76,12 +69,10 @@ func (mux *Mux) initRouter() *httprouter.Router {
 			mux.Logger.Error("[panic]", v, buf.String())
 		}
 	}
-	if mux.NotFoundHandler != nil {
+	if mux.Root != "" {
+		router.NotFound = &staticMux{mux.Root, mux.NotFoundHandler}
+	} else if mux.NotFoundHandler != nil {
 		router.NotFound = mux.NotFoundHandler
-	} else if mux.Root != "" {
-		if _, err := os.Stat(mux.Root); err == nil || os.IsExist(err) {
-			router.NotFound = &staticMux{mux.Root}
-		}
 	}
 	return router
 }
@@ -240,21 +231,32 @@ func (mux *Mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 type staticMux struct {
-	root string
+	root  string
+	final http.Handler
 }
 
 func (mux *staticMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	rootIndexHTML := path.Join(mux.root, "index.html")
+	rootIndexHTML := utils.CleanPath(path.Join(mux.root, "index.html"))
 	file := utils.CleanPath(path.Join(mux.root, r.URL.Path))
 Re:
 	fi, err := os.Stat(file)
-	if err != nil && os.IsNotExist(err) {
+	if err != nil {
+		if os.IsExist(err) {
+			http.Error(w, http.StatusText(500), 500)
+			return
+		}
+
 		// 404s will fallback to /index.html
 		if file != rootIndexHTML {
 			file = rootIndexHTML
 			goto Re
 		}
-		http.Error(w, http.StatusText(404), 404)
+
+		if mux.final != nil {
+			mux.final.ServeHTTP(w, r)
+		} else {
+			http.Error(w, http.StatusText(404), 404)
+		}
 	}
 
 	if fi.IsDir() {

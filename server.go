@@ -9,22 +9,6 @@ import (
 	"github.com/ije/rex/session"
 )
 
-type Config struct {
-	Port              uint16            `json:"port"`
-	Root              string            `json:"root"`
-	ServerName        string            `json:"serverName"`
-	CustomHTTPHeaders map[string]string `json:"customHTTPHeaders"`
-	SessionCookieName string            `json:"sessionCookieName"`
-	HostRedirectRule  string            `json:"hostRedirectRule"`
-	ReadTimeout       uint32            `json:"readTimeout"`
-	WriteTimeout      uint32            `json:"writeTimeout"`
-	MaxHeaderBytes    uint32            `json:"maxHeaderBytes"`
-	Debug             bool              `json:"debug"`
-	NotFoundHandler   http.Handler      `json:"-"`
-	ErrorLogger       *log.Logger       `json:"-"`
-	AccessLogger      *log.Logger       `json:"-"`
-}
-
 func Serve(config Config) {
 	if config.Port == 0 {
 		config.Port = 80
@@ -43,16 +27,9 @@ func Serve(config Config) {
 	}
 
 	mux := &Mux{
-		Root:              config.Root,
-		Debug:             config.Debug,
-		ServerName:        config.ServerName,
-		CustomHTTPHeaders: config.CustomHTTPHeaders,
-		SessionCookieName: config.SessionCookieName,
-		HostRedirectRule:  config.HostRedirectRule,
-		SessionManager:    session.NewMemorySessionManager(time.Hour / 2),
-		NotFoundHandler:   config.NotFoundHandler,
-		Logger:            logger,
-		AccessLogger:      config.AccessLogger,
+		Config:         &config,
+		Logger:         logger,
+		SessionManager: session.NewMemorySessionManager(time.Hour / 2),
 	}
 
 	for _, apis := range globalAPIServices {
