@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -251,23 +250,25 @@ func (ctx *Context) IfModified(modtime time.Time, then func()) {
 
 func (ctx *Context) ServeFile(name string) {
 	if strings.Contains(ctx.R.Header.Get("Accept-Encoding"), "gzip") {
-		switch strings.ToLower(strings.TrimPrefix(path.Ext(name), ".")) {
-		case "js", "css", "html", "htm", "xml", "svg", "json", "txt":
-			fi, err := os.Stat(name)
-			if err != nil {
-				if os.IsNotExist(err) {
-					ctx.End(404)
-				} else {
-					ctx.End(500)
+		for _, ext := range []string{"js", "js.map", "json", "css", "html", "htm", "xml", "svg", "txt"} {
+			if strings.HasSuffix(strings.ToLower(name), "."+ext) {
+				fi, err := os.Stat(name)
+				if err != nil {
+					if os.IsNotExist(err) {
+						ctx.End(404)
+					} else {
+						ctx.End(500)
+					}
+					return
 				}
-				return
-			}
-			if fi.Size() > 1024 {
-				if w, ok := ctx.W.(*ResponseWriter); ok {
-					gzw := newGzResponseWriter(w.rawWriter)
-					defer gzw.Close()
-					w.rawWriter = gzw
+				if fi.Size() > 1024 {
+					if w, ok := ctx.W.(*ResponseWriter); ok {
+						gzw := newGzResponseWriter(w.rawWriter)
+						defer gzw.Close()
+						w.rawWriter = gzw
+					}
 				}
+				break
 			}
 		}
 	}

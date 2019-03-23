@@ -266,13 +266,14 @@ Re:
 
 	// compress text files when the size is greater than 1024 bytes
 	if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
-		switch strings.ToLower(strings.TrimPrefix(path.Ext(file), ".")) {
-		case "js", "css", "html", "htm", "xml", "svg", "json", "txt":
-			if fi.Size() > 1024 {
-				if w, ok := w.(*ResponseWriter); ok {
-					gzw := newGzResponseWriter(w.rawWriter)
-					defer gzw.Close()
-					w.rawWriter = gzw
+		for _, ext := range []string{"js", "js.map", "json", "css", "html", "htm", "xml", "svg", "txt"} {
+			if strings.HasSuffix(strings.ToLower(file), "."+ext) {
+				if fi.Size() > 1024 {
+					if w, ok := w.(*ResponseWriter); ok {
+						gzw := newGzResponseWriter(w.rawWriter)
+						defer gzw.Close()
+						w.rawWriter = gzw
+					}
 				}
 			}
 		}
