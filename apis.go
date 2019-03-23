@@ -1,10 +1,5 @@
 package rex
 
-import (
-	"strconv"
-	"strings"
-)
-
 type APIHandle func(ctx *Context)
 type MiddlewareHandle func(ctx *Context, next func())
 
@@ -34,33 +29,22 @@ func (s *APIService) Use(middleware MiddlewareHandle) {
 	s.middlewares = append(s.middlewares, middleware)
 }
 
-func (s *APIService) Options(endpoint string, cors *CORS) {
-	if cors == nil {
-		return
+func (s *APIService) UseCORS(cors *CORS) {
+	if cors != nil {
+		s.middlewares = append(s.middlewares, func(ctx *Context, next func()) {
+			cors.Apply(ctx.W)
+			next()
+		})
 	}
+}
 
-	s.register("OPTIONS", endpoint, func(ctx *Context) {
-		if len(cors.Origin) > 0 {
-			wh := ctx.W.Header()
-			wh.Set("Access-Control-Allow-Origin", cors.Origin)
-			wh.Set("Vary", "Origin")
-
-			if len(cors.Methods) > 0 {
-				wh.Set("Access-Control-Allow-Methods", strings.Join(cors.Methods, ", "))
-			}
-			if len(cors.Headers) > 0 {
-				wh.Set("Access-Control-Allow-Headers", strings.Join(cors.Headers, ", "))
-			}
-			if cors.Credentials {
-				wh.Set("Access-Control-Allow-Credentials", "true")
-			}
-			if cors.MaxAge > 0 {
-				wh.Set("Access-Control-Max-Age", strconv.Itoa(cors.MaxAge))
-			}
-		}
-
-		ctx.W.WriteHeader(204)
-	}, nil)
+func (s *APIService) Options(endpoint string, cors *CORS) {
+	if cors != nil {
+		s.register("OPTIONS", endpoint, func(ctx *Context) {
+			cors.Apply(ctx.W)
+			ctx.W.WriteHeader(204)
+		}, nil)
+	}
 }
 
 func (s *APIService) Head(endpoint string, handle APIHandle, privilegeIds ...string) {
@@ -95,7 +79,7 @@ func (s *APIService) register(method string, endpoint string, handle APIHandle, 
 	}
 
 	if endpoint == "*" {
-		endpoint = "*path"
+		endpoint = "/*path"
 	}
 
 	var privileges map[string]struct{}
