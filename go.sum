@@ -1,5 +1,6 @@
 github.com/chzyer/readline v0.0.0-20180603132655-2972be24d48e/go.mod h1:nSuG5e5PlCu98SY8svDHJxuZscDgtXS6KTTbou5AhLI=
-github.com/ije/gox v0.1.2 h1:Whzf0mr4Wz2Ogx8MFuugeW+io7ywnN7OLZ9CiorbpwM=
-github.com/ije/gox v0.1.2/go.mod h1:hVKw+R52vLSqNWi3YcrOzVtdY5kObTDcxvmCzHgGf9Y=
+github.com/ije/gox v0.1.3 h1:tITVl9j5a5o+DAVwyLJmPxIsC6UagDjcXeJ5BPpIWhw=
+github.com/ije/gox v0.1.3/go.mod h1:s15sViDxt3USNKY/LYBV8YZ6zugz+qs45KjmLpmbPVg=
 github.com/julienschmidt/httprouter v1.2.0 h1:TDTW5Yz1mjftljbcKqRcrYhd4XeOoI98t+9HbQbYf7g=
 github.com/julienschmidt/httprouter v1.2.0/go.mod h1:SYymIcj16QtmaHHD7aYtjjsJG7VTCxuUUipMqKk8s4w=
+golang.org/x/sys v0.0.0-20190402142545-baf5eb976a8c/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
