@@ -43,5 +43,5 @@ func Serve(config Config) {
 	if err != nil {
 		fmt.Println("rex server shutdown:", err)
 	}
-	serv.Shutdown()
+	serv.Shutdown(nil)
 }
