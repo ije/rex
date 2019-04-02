@@ -275,6 +275,11 @@ func (ctx *Context) ServeFile(name string) {
 	http.ServeFile(ctx.W, ctx.R, name)
 }
 
+func (ctx *Context) ServeDirAsZip(dir string) {
+	ctx.W.Header().Set("Content-Type", "application/zip")
+	utils.ZipFilesTo(dir, ctx.W)
+}
+
 func (ctx *Context) End(status int, a ...interface{}) {
 	wh := ctx.W.Header()
 	if _, ok := wh["Content-Type"]; !ok {
