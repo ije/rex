@@ -64,7 +64,7 @@ func (ctx *Context) Session() (sess session.Session) {
 	sess = ctx.session
 	if sess == nil {
 		if ctx.mux.SessionManager == nil {
-			panic(&initSessionError{"missing session manager"})
+			panic(&initSessionError{"session manager is nil"})
 		}
 
 		sess, err = ctx.mux.SessionManager.Get(sid)

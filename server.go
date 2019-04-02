@@ -13,25 +13,21 @@ func Serve(config Config) {
 	if config.Port == 0 {
 		config.Port = 80
 	}
-
-	logger := &log.Logger{}
-	if config.ErrorLogger != nil {
-		logger = config.ErrorLogger
+	if config.Logger == nil {
+		config.Logger = &log.Logger{}
+	}
+	if config.SessionManager == nil {
+		config.SessionManager = session.NewMemorySessionManager(time.Hour / 2)
 	}
 	if !config.Debug {
-		logger.SetLevelByName("info")
-		logger.SetQuite(true)
+		config.Logger.SetLevelByName("info")
+		config.Logger.SetQuite(true)
 		if config.AccessLogger != nil {
 			config.AccessLogger.SetQuite(true)
 		}
 	}
 
-	mux := &Mux{
-		Config:         config,
-		Logger:         logger,
-		SessionManager: session.NewMemorySessionManager(time.Hour / 2),
-	}
-
+	mux := &Mux{Config: config}
 	for _, apis := range globalAPIServices {
 		mux.RegisterAPIService(apis)
 	}
@@ -47,4 +43,5 @@ func Serve(config Config) {
 	if err != nil {
 		fmt.Println("rex server shutdown:", err)
 	}
+	serv.Shutdown()
 }

@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/ije/gox/log"
+	"github.com/ije/rex/session"
 )
 
 type Config struct {
@@ -17,7 +18,8 @@ type Config struct {
 	WriteTimeout      uint32            `json:"writeTimeout"`
 	MaxHeaderBytes    uint32            `json:"maxHeaderBytes"`
 	Debug             bool              `json:"debug"`
+	SessionManager    session.Manager   `json:"-"`
 	NotFoundHandler   http.Handler      `json:"-"`
-	ErrorLogger       *log.Logger       `json:"-"`
+	Logger            *log.Logger       `json:"-"`
 	AccessLogger      *log.Logger       `json:"-"`
 }

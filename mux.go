@@ -14,17 +14,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ije/gox/log"
 	"github.com/ije/gox/utils"
-	"github.com/ije/rex/session"
 	"github.com/julienschmidt/httprouter"
 )
 
 type Mux struct {
 	Config
-	Logger         *log.Logger
-	SessionManager session.Manager
-	router         *httprouter.Router
+	router *httprouter.Router
 }
 
 func (mux *Mux) initRouter() *httprouter.Router {
@@ -204,21 +200,16 @@ func (mux *Mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		wh.Set("Server", "rex-serv")
 	}
 
-	if len(mux.HostRedirectRule) > 0 {
-		code := 301 // Permanent redirect, request with GET method
-		if r.Method != "GET" {
-			// Temporary redirect, request with same method
-			// As of Go 1.3, Go does not support status code 308.
-			code = 307
-		}
-		if mux.HostRedirectRule == "force-www" {
+	if len(mux.HostRedirectRule) > 0 && r.Method == "GET" {
+		switch mux.HostRedirectRule {
+		case "force-www":
 			if !strings.HasPrefix(r.Host, "www.") {
-				http.Redirect(w, r, path.Join("www."+r.Host, r.URL.String()), code)
+				http.Redirect(w, r, path.Join("www."+r.Host, r.URL.String()), http.StatusMovedPermanently)
 				return
 			}
-		} else if mux.HostRedirectRule == "remove-www" {
+		case "remove-www":
 			if strings.HasPrefix(r.Host, "www.") {
-				http.Redirect(w, r, path.Join(strings.TrimPrefix(r.Host, "www."), r.URL.String()), code)
+				http.Redirect(w, r, path.Join(strings.TrimPrefix(r.Host, "www."), r.URL.String()), http.StatusMovedPermanently)
 				return
 			}
 		}
