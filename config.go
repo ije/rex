@@ -8,6 +8,7 @@ import (
 )
 
 type AutocertConfig struct {
+	Enable        bool     `json:"enable"`
 	HostWhitelist []string `json:"hostWhitelist"`
 	CacheDir      string   `json:"cacheDir"`
 }
