@@ -14,6 +14,8 @@ type AutocertConfig struct {
 
 type HTTPSConfig struct {
 	Port     uint16         `json:"port"`
+	CertFile string         `json:"certFile"`
+	KeyFile  string         `json:"keyFile"`
 	Autocert AutocertConfig `json:"autocert"`
 }
 

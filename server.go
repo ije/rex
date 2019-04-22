@@ -82,7 +82,7 @@ func Serve(config Config) {
 				MaxHeaderBytes: int(config.MaxHeaderBytes),
 				TLSConfig:      m.TLSConfig(),
 			}
-			err := serv.ListenAndServeTLS("", "")
+			err := serv.ListenAndServeTLS(https.CertFile, https.KeyFile)
 			if err != nil {
 				fmt.Println("rex server(https) shutdown:", err)
 			}
