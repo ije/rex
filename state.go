@@ -16,13 +16,6 @@ func (s *State) Get(key string) (v interface{}) {
 	return s.state[key]
 }
 
-func (s *State) Add(key string, v interface{}) {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-
-	s.state[key] = v
-}
-
 func (s *State) Set(key string, v interface{}) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -30,7 +23,7 @@ func (s *State) Set(key string, v interface{}) {
 	s.state[key] = v
 }
 
-func (s *State) Del(key string) {
+func (s *State) Delete(key string) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
