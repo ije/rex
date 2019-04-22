@@ -18,6 +18,8 @@ import (
 	"github.com/julienschmidt/httprouter"
 )
 
+// Mux is a HTTP request multiplexer.
+// The inner router provides by github.com/julienschmidt/httprouter.
 type Mux struct {
 	Config
 	router *httprouter.Router
@@ -73,6 +75,7 @@ func (mux *Mux) initRouter() *httprouter.Router {
 	return router
 }
 
+// RegisterAPIService registers an APIService of REX
 func (mux *Mux) RegisterAPIService(apis *APIService) {
 	if apis == nil {
 		return
@@ -273,16 +276,19 @@ Re:
 	http.ServeFile(w, r, file)
 }
 
+// A ResponseWriter is used by an rex mux to construct an HTTP response.
 type ResponseWriter struct {
 	status      int
 	writedBytes int
 	rawWriter   http.ResponseWriter
 }
 
+// Header returns the header map that will be sent by WriteHeader.
 func (w *ResponseWriter) Header() http.Header {
 	return w.rawWriter.Header()
 }
 
+// WriteHeader sends an HTTP response header with the provided status code.
 func (w *ResponseWriter) WriteHeader(status int) {
 	w.status = status
 	if w.writedBytes == 0 {
@@ -290,12 +296,14 @@ func (w *ResponseWriter) WriteHeader(status int) {
 	}
 }
 
+// Write writes the data to the connection as part of an HTTP reply.
 func (w *ResponseWriter) Write(p []byte) (n int, err error) {
 	n, err = w.rawWriter.Write(p)
 	w.writedBytes += n
 	return
 }
 
+// Hijack lets the caller take over the connection.
 func (w *ResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	h, ok := w.rawWriter.(http.Hijacker)
 	if ok {
@@ -305,6 +313,7 @@ func (w *ResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	return nil, nil, fmt.Errorf("The raw response writer does not implement the http.Hijacker")
 }
 
+// A gzResponseWriter is used by an rex mux to construct an HTTP response with gzip compress.
 type gzResponseWriter struct {
 	gzipWriter io.WriteCloser
 	rawWriter  http.ResponseWriter
