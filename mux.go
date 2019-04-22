@@ -171,7 +171,7 @@ func (mux *Mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			rw, ok := w.(*ResponseWriter)
 			if ok {
-				mux.AccessLogger.Printf(
+				mux.AccessLogger.Log(
 					`%s %s %s %s %s %d "%s" "%s" %d %d %dms`,
 					r.RemoteAddr,
 					r.Host,
