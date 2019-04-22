@@ -7,8 +7,19 @@ import (
 	"github.com/ije/rex/session"
 )
 
+type AutocertConfig struct {
+	HostWhitelist []string `json:"hostWhitelist"`
+	CacheDir      string   `json:"cacheDir"`
+}
+
+type HTTPSConfig struct {
+	Port     uint16         `json:"port"`
+	Autocert AutocertConfig `json:"autocert"`
+}
+
 type Config struct {
 	Port              uint16            `json:"port"`
+	HTTPS             HTTPSConfig       `json:"https"`
 	Root              string            `json:"root"`
 	ServerName        string            `json:"serverName"`
 	CustomHTTPHeaders map[string]string `json:"customHTTPHeaders"`
