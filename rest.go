@@ -27,34 +27,34 @@ func (s *REST) Use(middlewares ...RESTHandle) {
 }
 
 func (s *REST) Options(endpoint string, handles ...RESTHandle) {
-	s.Handle("OPTIONS", endpoint, handles)
+	s.Handle("OPTIONS", endpoint, handles...)
 }
 
 func (s *REST) Head(endpoint string, handles ...RESTHandle) {
-	s.Handle("HEAD", endpoint, handles)
+	s.Handle("HEAD", endpoint, handles...)
 }
 
 func (s *REST) Get(endpoint string, handles ...RESTHandle) {
-	s.Handle("GET", endpoint, handles)
+	s.Handle("GET", endpoint, handles...)
 }
 
 func (s *REST) Post(endpoint string, handles ...RESTHandle) {
-	s.Handle("POST", endpoint, handles)
+	s.Handle("POST", endpoint, handles...)
 }
 
 func (s *REST) Put(endpoint string, handles ...RESTHandle) {
-	s.Handle("PUT", endpoint, handles)
+	s.Handle("PUT", endpoint, handles...)
 }
 
 func (s *REST) Patch(endpoint string, handles ...RESTHandle) {
-	s.Handle("PATCH", endpoint, handles)
+	s.Handle("PATCH", endpoint, handles...)
 }
 
 func (s *REST) Delete(endpoint string, handles ...RESTHandle) {
-	s.Handle("DELETE", endpoint, handles)
+	s.Handle("DELETE", endpoint, handles...)
 }
 
-func (s *REST) Handle(method string, endpoint string, handles []RESTHandle) {
+func (s *REST) Handle(method string, endpoint string, handles ...RESTHandle) {
 	if len(endpoint) == 0 || len(handles) == 0 {
 		return
 	}
