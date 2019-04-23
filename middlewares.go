@@ -15,7 +15,7 @@ func CORS(cors CORSConfig) RESTHandle {
 	}
 }
 
-func SetPrivileges(privileges ...string) RESTHandle {
+func Privileges(privileges ...string) RESTHandle {
 	return func(ctx *Context) {
 		for _, p := range privileges {
 			ctx.privileges[p] = struct{}{}
