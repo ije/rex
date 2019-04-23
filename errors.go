@@ -1,9 +1,9 @@
 package rex
 
-type initSessionError struct {
+type ctxPanicError struct {
 	msg string
 }
 
-func (err *initSessionError) Error() string {
+func (err *ctxPanicError) Error() string {
 	return err.msg
 }

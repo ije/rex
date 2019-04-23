@@ -1,9 +1,10 @@
 package rex
 
 import (
-	"encoding/base64"
+	"archive/zip"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -14,22 +15,55 @@ import (
 	"github.com/ije/gox/utils"
 	"github.com/ije/rex/acl"
 	"github.com/ije/rex/session"
-	"github.com/julienschmidt/httprouter"
 )
 
-type URL struct {
-	Params httprouter.Params
-	*url.URL
+type Context struct {
+	W           http.ResponseWriter
+	R           *http.Request
+	URL         *URL
+	State       *State
+	session     session.Session
+	privileges  map[string]struct{}
+	basicUser   acl.BasicUser
+	user        acl.User
+	handles     []RESTHandle
+	handleIndex int
+	mux         *Mux
 }
 
-type Context struct {
-	W       http.ResponseWriter
-	R       *http.Request
-	URL     *URL
-	State   *State
-	session session.Session
-	user    acl.User
-	mux     *Mux
+func (ctx *Context) Next() {
+	ctx.handleIndex++
+	if ctx.handleIndex >= len(ctx.handles) {
+		return
+	}
+
+	if len(ctx.privileges) > 0 {
+		var isGranted bool
+		if ctx.user != nil {
+			for _, pid := range ctx.user.Privileges() {
+				_, isGranted = ctx.privileges[pid]
+				if isGranted {
+					break
+				}
+			}
+		}
+		if !isGranted {
+			ctx.End(http.StatusUnauthorized)
+			return
+		}
+	}
+
+	// cache the 'read-only' fields in context firstly
+	w, r, url, state := ctx.W, ctx.R, ctx.URL, ctx.State
+
+	handle := ctx.handles[ctx.handleIndex]
+	handle(ctx)
+
+	// reset(prevent user chanage) the 'read-only' fields in context
+	ctx.W = w
+	ctx.R = r
+	ctx.URL = url
+	ctx.State = state
 }
 
 func (ctx *Context) GetCookie(name string) (cookie *http.Cookie, err error) {
@@ -38,15 +72,23 @@ func (ctx *Context) GetCookie(name string) (cookie *http.Cookie, err error) {
 
 func (ctx *Context) SetCookie(cookie *http.Cookie) {
 	if cookie != nil {
-		ctx.W.Header().Add("Set-Cookie", cookie.String())
+		ctx.AddHeader("Set-Cookie", cookie.String())
 	}
 }
 
 func (ctx *Context) RemoveCookie(cookie *http.Cookie) {
 	if cookie != nil {
-		cookie.Expires = time.Now().Add(-(1000 * time.Hour))
-		ctx.W.Header().Add("Set-Cookie", cookie.String())
+		cookie.Expires = time.Unix(0, 0)
+		ctx.AddHeader("Set-Cookie", cookie.String())
 	}
+}
+
+func (ctx *Context) AddHeader(key string, value string) {
+	ctx.W.Header().Add(key, value)
+}
+
+func (ctx *Context) SetHeader(key string, value string) {
+	ctx.W.Header().Set(key, value)
 }
 
 func (ctx *Context) Session() (sess session.Session) {
@@ -64,12 +106,12 @@ func (ctx *Context) Session() (sess session.Session) {
 	sess = ctx.session
 	if sess == nil {
 		if ctx.mux.SessionManager == nil {
-			panic(&initSessionError{"session manager is nil"})
+			panic(&ctxPanicError{"session manager is undefined"})
 		}
 
 		sess, err = ctx.mux.SessionManager.Get(sid)
 		if err != nil {
-			panic(&initSessionError{err.Error()})
+			panic(&ctxPanicError{err.Error()})
 		}
 
 		if sess.SID() != sid {
@@ -130,57 +172,60 @@ func formatValue(value interface{}) (str string) {
 	return
 }
 
-func (ctx *Context) FormValues(key string) (values []string) {
+func (ctx *Context) FormArray(key string) (a []string) {
 	if ctx.R.Form == nil {
 		ctx.R.ParseMultipartForm(32 << 20) // 32m in memory
 	}
-	values, ok := ctx.R.Form[key]
+	a, ok := ctx.R.Form[key]
 	if !ok {
-		values, _ = ctx.R.Form[key+"[]"]
+		a, _ = ctx.R.Form[key+"[]"]
 	}
 	return
 }
 
-func (ctx *Context) FormString(key string) (value string) {
-	values := ctx.FormValues(key)
+func (ctx *Context) FormString(key string, defaultValue string) string {
+	values := ctx.FormArray(key)
 	if len(values) > 0 {
-		value = values[0]
+		return values[0]
 	}
-	return
+	return defaultValue
 }
 
-func (ctx *Context) FormBool(key string) (b bool) {
-	s := strings.TrimSpace(ctx.FormString(key))
-	if len(s) > 0 {
-		s = strings.ToLower(s)
-		b = s == "true" || s == "1"
+func (ctx *Context) FormBool(key string, defaultValue bool) bool {
+	values := ctx.FormArray(key)
+	if len(values) > 0 {
+		s := strings.ToLower(values[0])
+		return s == "true" || s == "1"
 	}
-	return
+	return defaultValue
 }
 
-func (ctx *Context) FormNumber(key string) (n float64, err error) {
-	s := strings.TrimSpace(ctx.FormString(key))
-	if len(s) == 0 {
-		err = strconv.ErrSyntax
-		return
+func (ctx *Context) FormFloat(key string, defaultValue float64) float64 {
+	values := ctx.FormArray(key)
+	if len(values) > 0 {
+		f, err := strconv.ParseFloat(values[0], 64)
+		if err != nil {
+			return defaultValue
+		}
+		return f
 	}
-
-	n, err = strconv.ParseFloat(s, 64)
-	return
+	return defaultValue
 }
 
-func (ctx *Context) FormInt(key string) (i int, err error) {
-	n, err := ctx.FormNumber(key)
-	if err != nil {
-		return
+func (ctx *Context) FormInt(key string, defaultValue int64) int64 {
+	values := ctx.FormArray(key)
+	if len(values) > 0 {
+		f, err := strconv.ParseInt(values[0], 10, 64)
+		if err != nil {
+			return defaultValue
+		}
+		return f
 	}
-
-	i = int(n)
-	return
+	return defaultValue
 }
 
-func (ctx *Context) RemoteIP() (ip string) {
-	ip = ctx.R.Header.Get("X-Real-IP")
+func (ctx *Context) RemoteIP() string {
+	ip := ctx.R.Header.Get("X-Real-IP")
 	if len(ip) == 0 {
 		ip = ctx.R.Header.Get("X-Forwarded-For")
 		if len(ip) > 0 {
@@ -189,12 +234,22 @@ func (ctx *Context) RemoteIP() (ip string) {
 			ip = ctx.R.RemoteAddr
 		}
 	}
-	ip, _ = utils.SplitByLastByte(strings.TrimSpace(ip), ':')
-	return
+	ip, _ = utils.SplitByLastByte(ip, ':')
+	return strings.TrimSpace(ip)
 }
 
-func (ctx *Context) Redirect(url string, code int) {
-	http.Redirect(ctx.W, ctx.R, url, code)
+func (ctx *Context) Redirect(status int, url string) {
+	http.Redirect(ctx.W, ctx.R, url, status)
+}
+
+func (ctx *Context) IfModified(modtime time.Time, then func()) {
+	if t, err := time.Parse(http.TimeFormat, ctx.R.Header.Get("If-Modified-Since")); err == nil && modtime.Before(t.Add(1*time.Second)) {
+		ctx.End(http.StatusNotModified)
+		return
+	}
+
+	ctx.SetHeader("Last-Modified", modtime.Format(http.TimeFormat))
+	then()
 }
 
 func (ctx *Context) Write(p []byte) (n int, err error) {
@@ -205,27 +260,53 @@ func (ctx *Context) WriteString(s string) (n int, err error) {
 	return ctx.W.Write([]byte(s))
 }
 
-func (ctx *Context) WriteJSON(data interface{}) (n int, err error) {
-	return ctx.writeJSON(200, data)
-}
-
-func (ctx *Context) WriteStatusJSON(status int, data interface{}) (n int, err error) {
-	return ctx.writeJSON(status, data)
-}
-
-func (ctx *Context) writeJSON(status int, data interface{}) (n int, err error) {
-	var jsonData []byte
-	if ctx.mux.Debug {
-		jsonData, err = json.MarshalIndent(data, "", "\t")
+func (ctx *Context) End(status int, a ...string) {
+	wh := ctx.W.Header()
+	if _, ok := wh["Content-Type"]; !ok {
+		wh.Set("Content-Type", "text/plain; charset=utf-8")
+	}
+	ctx.W.WriteHeader(status)
+	if len(a) > 0 {
+		ctx.Write([]byte(strings.Join(a, " ")))
 	} else {
-		jsonData, err = json.Marshal(data)
+		ctx.Write([]byte(http.StatusText(status)))
+	}
+}
+
+func (ctx *Context) Ok(text string) {
+	ctx.End(200, text)
+}
+
+func (ctx *Context) Error(err error) {
+	if ctx.mux.Debug {
+		ctx.End(500, err.Error())
+	} else {
+		if ctx.mux.Logger != nil {
+			ctx.mux.Logger.Error(err)
+		}
+		ctx.End(500)
+	}
+}
+
+func (ctx *Context) Html(html string) {
+	ctx.SetHeader("Content-Type", "text/html; charset=utf-8")
+	ctx.WriteString(html)
+}
+
+func (ctx *Context) Json(status int, v interface{}) {
+	var data []byte
+	var err error
+	if ctx.mux.Debug {
+		data, err = json.MarshalIndent(v, "", "\t")
+	} else {
+		data, err = json.Marshal(v)
 	}
 	if err != nil {
 		ctx.Error(err)
 		return
 	}
 
-	if len(jsonData) > 1024 && strings.Index(ctx.R.Header.Get("Accept-Encoding"), "gzip") > -1 {
+	if len(data) > 1024 && strings.Index(ctx.R.Header.Get("Accept-Encoding"), "gzip") > -1 {
 		if w, ok := ctx.W.(*ResponseWriter); ok {
 			gzw := newGzResponseWriter(w.rawWriter)
 			defer gzw.Close()
@@ -233,31 +314,21 @@ func (ctx *Context) writeJSON(status int, data interface{}) (n int, err error) {
 		}
 	}
 
-	ctx.W.Header().Set("Content-Type", "application/json; charset=utf-8")
+	ctx.SetHeader("Content-Type", "application/json; charset=utf-8")
 	ctx.W.WriteHeader(status)
-	return ctx.Write(jsonData)
+	ctx.Write(data)
 }
 
-func (ctx *Context) IfModified(modtime time.Time, then func()) {
-	if t, err := time.Parse(http.TimeFormat, ctx.R.Header.Get("If-Modified-Since")); err == nil && modtime.Before(t.Add(1*time.Second)) {
-		ctx.End(http.StatusNotModified)
-		return
-	}
-
-	ctx.W.Header().Set("Last-Modified", modtime.Format(http.TimeFormat))
-	then()
-}
-
-func (ctx *Context) ServeFile(name string) {
+func (ctx *Context) File(filepath string) {
 	if strings.Contains(ctx.R.Header.Get("Accept-Encoding"), "gzip") {
 		for _, ext := range []string{"js", "js.map", "json", "css", "html", "htm", "xml", "svg", "txt"} {
-			if strings.HasSuffix(strings.ToLower(name), "."+ext) {
-				fi, err := os.Stat(name)
+			if strings.HasSuffix(strings.ToLower(filepath), "."+ext) {
+				fi, err := os.Stat(filepath)
 				if err != nil {
 					if os.IsNotExist(err) {
 						ctx.End(404)
 					} else {
-						ctx.End(500)
+						ctx.Error(err)
 					}
 					return
 				}
@@ -272,61 +343,61 @@ func (ctx *Context) ServeFile(name string) {
 			}
 		}
 	}
-	http.ServeFile(ctx.W, ctx.R, name)
+	http.ServeFile(ctx.W, ctx.R, filepath)
 }
 
-func (ctx *Context) ServeDirAsZip(dir string) {
-	ctx.W.Header().Set("Content-Type", "application/zip")
-	utils.ZipFilesTo(dir, ctx.W)
-}
-
-func (ctx *Context) End(status int, a ...interface{}) {
-	wh := ctx.W.Header()
-	if _, ok := wh["Content-Type"]; !ok {
-		wh.Set("Content-Type", "text/plain; charset=utf-8")
-	}
-	ctx.W.WriteHeader(status)
-	if len(a) > 0 {
-		ctx.WriteString(fmt.Sprint(a...))
-	} else {
-		ctx.WriteString(http.StatusText(status))
-	}
-}
-
-func (ctx *Context) Error(err error) {
-	if ctx.mux.Debug {
-		ctx.End(500, err.Error())
-	} else {
-		if ctx.mux.Logger != nil {
-			ctx.mux.Logger.Error(err)
+func (ctx *Context) Zip(path string) {
+	fi, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			ctx.End(404)
+		} else {
+			ctx.Error(err)
 		}
-		ctx.End(500)
+		return
+	}
+	ctx.SetHeader("Content-Type", "application/zip")
+	if fi.IsDir() {
+		utils.ZipFilesTo(path, ctx.W)
+	} else {
+		file, err := os.Open(path)
+		if err != nil {
+			ctx.Error(err)
+			return
+		}
+		defer file.Close()
+
+		header, err := zip.FileInfoHeader(fi)
+		if err != nil {
+			ctx.Error(err)
+			return
+		}
+
+		archive := zip.NewWriter(ctx.W)
+		defer archive.Close()
+
+		gzwr, err := archive.CreateHeader(header)
+		if err != nil {
+			ctx.Error(err)
+			return
+		}
+
+		io.Copy(gzwr, file)
 	}
 }
 
-func (ctx *Context) Authenticate(realm string, handle func(user string, password string) (ok bool, err error)) (ok bool, err error) {
-	if auth := ctx.R.Header.Get("Authorization"); len(auth) > 0 {
-		if authType, combination := utils.SplitByFirstByte(auth, ' '); len(combination) > 0 {
-			switch authType {
-			case "Basic":
-				authInfo, e := base64.StdEncoding.DecodeString(combination)
-				if e != nil {
-					return
-				}
-
-				user, password := utils.SplitByFirstByte(string(authInfo), ':')
-				ok, err = handle(user, password)
-				return
-			}
-		}
-	}
-
-	ctx.W.Header().Set("WWW-Authenticate", fmt.Sprintf("Basic realm=\"%s\"", realm))
-	ctx.W.WriteHeader(401)
-	return
+func (ctx *Context) BasicUser() acl.BasicUser {
+	return ctx.basicUser
 }
 
 func (ctx *Context) User() acl.User {
+	return ctx.user
+}
+
+func (ctx *Context) MustUser() acl.User {
+	if ctx.user == nil {
+		panic(&ctxPanicError{"the user is undefined"})
+	}
 	return ctx.user
 }
 

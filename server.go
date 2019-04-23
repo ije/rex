@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path"
 	"sync"
 	"time"
 
@@ -33,34 +34,33 @@ func Serve(config Config) {
 	}
 
 	mux := &Mux{Config: config}
-	for _, apis := range globalAPIServices {
-		mux.RegisterAPIService(apis)
+	for _, rest := range gRESTs {
+		mux.RegisterREST(rest)
 	}
 
 	var wg sync.WaitGroup
+	wg.Add(1)
 
-	if config.Port > 0 {
+	go func() {
+		defer wg.Done()
+		serv := &http.Server{
+			Addr:           fmt.Sprintf((":%d"), config.Port),
+			Handler:        mux,
+			ReadTimeout:    time.Duration(config.ReadTimeout) * time.Second,
+			WriteTimeout:   time.Duration(config.WriteTimeout) * time.Second,
+			MaxHeaderBytes: int(config.MaxHeaderBytes),
+		}
+		err := serv.ListenAndServe()
+		if err != nil {
+			config.Logger.Error("rex server shutdown:", err)
+		}
+		serv.Shutdown(nil)
+	}()
+
+	if https := config.HTTPS; https.Port > 0 && https.Port != config.Port {
 		wg.Add(1)
 		go func() {
-			serv := &http.Server{
-				Addr:           fmt.Sprintf((":%d"), config.Port),
-				Handler:        mux,
-				ReadTimeout:    time.Duration(config.ReadTimeout) * time.Second,
-				WriteTimeout:   time.Duration(config.WriteTimeout) * time.Second,
-				MaxHeaderBytes: int(config.MaxHeaderBytes),
-			}
-			err := serv.ListenAndServe()
-			if err != nil {
-				fmt.Println("rex server shutdown:", err)
-			}
-			serv.Shutdown(nil)
-			wg.Done()
-		}()
-	}
-
-	if https := config.HTTPS; https.Port > 0 {
-		wg.Add(1)
-		go func() {
+			defer wg.Done()
 			serv := &http.Server{
 				Addr:           fmt.Sprintf((":%d"), https.Port),
 				Handler:        mux,
@@ -68,28 +68,37 @@ func Serve(config Config) {
 				WriteTimeout:   time.Duration(config.WriteTimeout) * time.Second,
 				MaxHeaderBytes: int(config.MaxHeaderBytes),
 			}
-			if https.Autocert.Enable {
+			if https.AutoTLS.Enable && !config.Debug {
 				m := &autocert.Manager{
 					Prompt: autocert.AcceptTOS,
 				}
-				m.Cache, _ = cache.New("memory")
-				if https.Autocert.CacheDir != "" {
-					fi, err := os.Stat(https.Autocert.CacheDir)
-					if err == nil && fi.IsDir() {
-						m.Cache = autocert.DirCache(https.Autocert.CacheDir)
+				if https.AutoTLS.CacheDir != "" {
+					fi, err := os.Stat(https.AutoTLS.CacheDir)
+					if err == nil && !fi.IsDir() {
+						config.Logger.Errorf("can not init tls: bad cache dir '%s'", https.AutoTLS.CacheDir)
+						return
 					}
+					m.Cache = autocert.DirCache(https.AutoTLS.CacheDir)
+				} else if https.AutoTLS.CacheURL != "" {
+					cache, err := cache.New(https.AutoTLS.CacheURL)
+					if err != nil {
+						config.Logger.Error("can not init tls:", err)
+						return
+					}
+					m.Cache = cache
+				} else {
+					m.Cache = autocert.DirCache(path.Join(os.TempDir(), ".rex-cert-cache"))
 				}
-				if len(https.Autocert.HostWhitelist) > 0 {
-					m.HostPolicy = autocert.HostWhitelist(https.Autocert.HostWhitelist...)
+				if len(https.AutoTLS.Hosts) > 0 {
+					m.HostPolicy = autocert.HostWhitelist(https.AutoTLS.Hosts...)
 				}
 				serv.TLSConfig = m.TLSConfig()
 			}
 			err := serv.ListenAndServeTLS(https.CertFile, https.KeyFile)
 			if err != nil {
-				fmt.Println("rex server(https) shutdown:", err)
+				config.Logger.Error("rex server(https) shutdown:", err)
 			}
 			serv.Shutdown(nil)
-			wg.Done()
 		}()
 	}
 

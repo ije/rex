@@ -34,9 +34,9 @@ func (mux *Mux) initRouter() *httprouter.Router {
 			http.Error(w, http.StatusText(500), 500)
 		}
 
-		if err, ok := v.(*initSessionError); ok {
+		if err, ok := v.(*ctxPanicError); ok {
 			if mux.Logger != nil {
-				mux.Logger.Errorf("Init session: %s", err.msg)
+				mux.Logger.Errorf(err.msg)
 			}
 			return
 		}
@@ -75,9 +75,9 @@ func (mux *Mux) initRouter() *httprouter.Router {
 	return router
 }
 
-// RegisterAPIService registers an APIService of REX
-func (mux *Mux) RegisterAPIService(apis *APIService) {
-	if apis == nil {
+// RegisterREST registers a REST instacce
+func (mux *Mux) RegisterREST(rest *REST) {
+	if rest == nil {
 		return
 	}
 
@@ -85,8 +85,8 @@ func (mux *Mux) RegisterAPIService(apis *APIService) {
 		mux.router = mux.initRouter()
 	}
 
-	for method, route := range apis.route {
-		for endpoint, handler := range route {
+	for method, route := range rest.route {
+		for endpoint, handles := range route {
 			var routerHandle func(string, httprouter.Handle)
 			switch method {
 			case "OPTIONS":
@@ -107,57 +107,26 @@ func (mux *Mux) RegisterAPIService(apis *APIService) {
 			if routerHandle == nil {
 				continue
 			}
-			if len(apis.Prefix) > 0 {
-				endpoint = path.Join("/"+strings.Trim(apis.Prefix, "/"), endpoint)
+			if len(rest.Prefix) > 0 {
+				endpoint = path.Join("/"+strings.Trim(rest.Prefix, "/"), endpoint)
 			}
-			func(mux *Mux, routerHandle func(string, httprouter.Handle), endpoint string, handler *apiHandler, apis *APIService) {
+			func(mux *Mux, routerHandle func(string, httprouter.Handle), endpoint string, handles []RESTHandle, rest *REST) {
 				routerHandle(endpoint, func(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
 					url := &URL{params, r.URL}
 					state := NewState()
 					ctx := &Context{
-						W:     w,
-						R:     r,
-						URL:   url,
-						State: state,
-						mux:   mux,
+						W:           w,
+						R:           r,
+						URL:         url,
+						State:       state,
+						handles:     append(rest.middlewares, handles...),
+						handleIndex: -1,
+						privileges:  map[string]struct{}{},
+						mux:         mux,
 					}
-
-					if len(apis.middlewares) > 0 {
-						for _, use := range apis.middlewares {
-							shouldContinue := false
-							use(ctx, func() {
-								shouldContinue = true
-							})
-							if !shouldContinue {
-								return
-							}
-
-							// prevent user chanage the 'read-only' fields in context
-							ctx.W = w
-							ctx.R = r
-							ctx.URL = url
-							ctx.State = state
-						}
-					}
-
-					if len(handler.privileges) > 0 {
-						var isGranted bool
-						if ctx.user != nil {
-							for _, pid := range ctx.user.Privileges() {
-								_, isGranted = handler.privileges[pid]
-								if isGranted {
-									break
-								}
-							}
-						}
-						if !isGranted {
-							ctx.End(http.StatusUnauthorized)
-						}
-					}
-
-					handler.handle(ctx)
+					ctx.Next()
 				})
-			}(mux, routerHandle, endpoint, handler, apis)
+			}(mux, routerHandle, endpoint, handles, rest)
 		}
 	}
 }
@@ -204,17 +173,23 @@ func (mux *Mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(mux.HostRedirectRule) > 0 && r.Method == "GET" {
-		switch mux.HostRedirectRule {
-		case "force-www":
+		proto := "http"
+		if r.TLS != nil {
+			proto = "https"
+		}
+		if strings.Contains(mux.HostRedirectRule, "https") {
+			if proto == "http" {
+				proto = "https"
+			}
+		}
+		if strings.Contains(mux.HostRedirectRule, "www") {
 			if !strings.HasPrefix(r.Host, "www.") {
-				http.Redirect(w, r, path.Join("www."+r.Host, r.URL.String()), http.StatusMovedPermanently)
+				http.Redirect(w, r, proto+"://"+path.Join("www."+r.Host, r.URL.String()), http.StatusMovedPermanently)
 				return
 			}
-		case "remove-www":
-			if strings.HasPrefix(r.Host, "www.") {
-				http.Redirect(w, r, path.Join(strings.TrimPrefix(r.Host, "www."), r.URL.String()), http.StatusMovedPermanently)
-				return
-			}
+		} else if strings.HasPrefix(r.Host, "www.") {
+			http.Redirect(w, r, proto+"://"+path.Join(strings.TrimPrefix(r.Host, "www."), r.URL.String()), http.StatusMovedPermanently)
+			return
 		}
 	}
 

@@ -7,20 +7,22 @@ import (
 	"github.com/ije/rex/session"
 )
 
-type AutocertConfig struct {
-	Enable        bool     `json:"enable"`
-	HostWhitelist []string `json:"hostWhitelist"`
-	CacheDir      string   `json:"cacheDir"`
+type AutoTLSConfig struct {
+	Enable   bool     `json:"enable"`
+	CacheDir string   `json:"cacheDir"`
+	CacheURL string   `json:"cacheUrl"`
+	Hosts    []string `json:"hosts"`
 }
 
 type HTTPSConfig struct {
-	Port     uint16         `json:"port"`
-	CertFile string         `json:"certFile"`
-	KeyFile  string         `json:"keyFile"`
-	Autocert AutocertConfig `json:"autocert"`
+	Port     uint16        `json:"port"`
+	CertFile string        `json:"certFile"`
+	KeyFile  string        `json:"keyFile"`
+	AutoTLS  AutoTLSConfig `json:"autotls"`
 }
 
 type Config struct {
+	Debug             bool              `json:"debug"`
 	Port              uint16            `json:"port"`
 	HTTPS             HTTPSConfig       `json:"https"`
 	Root              string            `json:"root"`
@@ -31,9 +33,8 @@ type Config struct {
 	ReadTimeout       uint32            `json:"readTimeout"`
 	WriteTimeout      uint32            `json:"writeTimeout"`
 	MaxHeaderBytes    uint32            `json:"maxHeaderBytes"`
-	Debug             bool              `json:"debug"`
-	SessionManager    session.Manager   `json:"-"`
 	NotFoundHandler   http.Handler      `json:"-"`
+	SessionManager    session.Manager   `json:"-"`
 	Logger            *log.Logger       `json:"-"`
 	AccessLogger      *log.Logger       `json:"-"`
 }

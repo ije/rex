@@ -4,3 +4,8 @@ package acl
 type User interface {
 	Privileges() []string
 }
+
+type BasicUser struct {
+	Name string
+	Pass string
+}
