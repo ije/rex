@@ -4,12 +4,11 @@ import (
 	"encoding/base64"
 	"fmt"
 
-	"github.com/ije/rex/acl"
-
 	"github.com/ije/gox/utils"
+	"github.com/ije/rex/acl"
 )
 
-func CORS(cors *CORSHeaders) RESTHandle {
+func CORS(cors CORSConfig) RESTHandle {
 	return func(ctx *Context) {
 		cors.Apply(ctx.W)
 		ctx.Next()
