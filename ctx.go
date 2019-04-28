@@ -27,7 +27,7 @@ type Context struct {
 	privileges     map[string]struct{}
 	user           acl.User
 	basicAuthUser  acl.BasicAuthUser
-	session        session.Session
+	session        *Session
 	sessionManager session.Manager
 	rest           *REST
 }
@@ -92,7 +92,7 @@ func (ctx *Context) SetHeader(key string, value string) {
 	ctx.W.Header().Set(key, value)
 }
 
-func (ctx *Context) Session() (sess session.Session) {
+func (ctx *Context) Session() *Session {
 	if ctx.sessionManager == nil {
 		panic(&ctxPanicError{"session manager is undefined"})
 	}
@@ -108,10 +108,8 @@ func (ctx *Context) Session() (sess session.Session) {
 		sid = cookie.Value
 	}
 
-	sess = ctx.session
-	if sess == nil {
-
-		sess, err = ctx.sessionManager.GetSession(sid)
+	if ctx.session == nil {
+		sess, err := ctx.sessionManager.GetSession(sid)
 		if err != nil {
 			panic(&ctxPanicError{err.Error()})
 		}
@@ -123,10 +121,10 @@ func (ctx *Context) Session() (sess session.Session) {
 				HttpOnly: true,
 			})
 		}
-		ctx.session = sess
+		ctx.session = &Session{sess}
 	}
 
-	return
+	return ctx.session
 }
 
 func (ctx *Context) ParseMultipartForm(maxMemoryBytes int64) {
@@ -384,8 +382,4 @@ func (ctx *Context) MustUser() acl.User {
 		panic(&ctxPanicError{"user is undefined"})
 	}
 	return ctx.user
-}
-
-func (ctx *Context) SetUser(user acl.User) {
-	ctx.user = user
 }

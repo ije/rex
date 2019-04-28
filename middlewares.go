@@ -38,6 +38,17 @@ func HTTPS() RESTHandle {
 	}
 }
 
+func ACL(getUser func(id interface{}) acl.User) RESTHandle {
+	return func(ctx *Context) {
+		id := ctx.Session().Get("USER")
+		switch id.(type) {
+		case string, int32, int, int64, uint32, uint, uint64:
+			ctx.user = getUser(getUser(id))
+		}
+		ctx.Next()
+	}
+}
+
 func Privileges(privileges ...string) RESTHandle {
 	return func(ctx *Context) {
 		for _, p := range privileges {
