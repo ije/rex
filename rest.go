@@ -181,7 +181,7 @@ func (rest *REST) initRouter() {
 		}
 
 		buf := bytes.NewBuffer(nil)
-		for i := 5; ; i++ {
+		for i := 3; ; i++ {
 			pc, file, line, ok := runtime.Caller(i)
 			if !ok {
 				break
