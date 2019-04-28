@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"html/template"
 
 	"github.com/ije/rex"
@@ -41,6 +40,10 @@ type User struct {
 	privileges []string
 }
 
+func (u *User) ID() interface{} {
+	return u.id
+}
+
 func (u *User) Privileges() []string {
 	return u.privileges
 }
@@ -61,19 +64,20 @@ func main() {
 	)
 
 	rest.Get("/", func(ctx *rex.Context) {
-		user, _ := ctx.Session().Get("USER").(string)
-
-		fmt.Println(user, todos[user])
-		ctx.Render("index", map[string]interface{}{
-			"user":  user,
-			"todos": todos[user],
-		})
+		if user := ctx.User(); user != nil {
+			ctx.Render("index", map[string]interface{}{
+				"user":  user.ID(),
+				"todos": todos[user.ID().(string)],
+			})
+		} else {
+			ctx.Render("index", nil)
+		}
 	})
 
 	rest.Post("/add-todo", rex.Privileges("add"), func(ctx *rex.Context) {
 		todo := ctx.FormString("todo", "")
 		if todo != "" {
-			user := ctx.Session().Get("USER").(string)
+			user := ctx.User().ID().(string)
 			todos[user] = append(todos[user], todo)
 		}
 		ctx.Redirect(301, "/")
