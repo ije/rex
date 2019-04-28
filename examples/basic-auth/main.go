@@ -13,7 +13,6 @@ const indexHTML = `
 
 func main() {
 	rest := rex.New()
-	rest.Use(rex.Header("Server", "nginx"))
 
 	rest.Get("/", func(ctx *rex.Context) {
 		ctx.Html(indexHTML)

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"html/template"
 	"time"
 
 	"github.com/ije/rex"
@@ -20,25 +19,20 @@ const indexHTML = `
 
 func main() {
 	rest := rex.New()
-	rest.Template = template.Must(template.New("index").Parse(indexHTML))
 	rest.Use(
-		rex.Header("Server", "nginx"),
-		rex.SessionManager(session.NewMemorySessionManager(15*time.Second)),
+		rex.SessionManager(session.NewMemorySessionManager(15 * time.Second)),
 	)
 
 	rest.Get("/", func(ctx *rex.Context) {
-		sess := ctx.Session()
-		user, _ := sess.Get("user")
-		ctx.Render("index", map[string]interface{}{
-			"user": user,
+		ctx.Render(indexHTML, map[string]interface{}{
+			"user": ctx.Session().Get("user"),
 		})
 	})
 
 	rest.Post("/login", func(ctx *rex.Context) {
-		sess := ctx.Session()
 		user := ctx.FormString("user", "")
 		if user != "" {
-			sess.Set("user", user)
+			ctx.Session().Set("user", user)
 		}
 		ctx.Redirect(301, "/")
 	})
