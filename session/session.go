@@ -6,7 +6,6 @@ import (
 
 type Session interface {
 	SID() string
-	Values(keys ...string) (values map[string]interface{}, err error)
 	Has(key string) (ok bool, err error)
 	Get(key string) (value interface{}, err error)
 	Set(key string, value interface{}) error

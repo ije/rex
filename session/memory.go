@@ -19,28 +19,6 @@ func (ms *MemorySession) SID() string {
 	return ms.sid
 }
 
-func (ms *MemorySession) Values(keys ...string) (values map[string]interface{}, err error) {
-	ms.storeLock.RLock()
-	if len(ms.store) > 0 {
-		values = map[string]interface{}{}
-		if len(keys) == 0 {
-			for key, value := range ms.store {
-				values[key] = value
-			}
-		} else {
-			for _, key := range keys {
-				if value, ok := ms.store[key]; ok {
-					values[key] = value
-				}
-			}
-		}
-	}
-	ms.storeLock.RUnlock()
-
-	ms.activate()
-	return
-}
-
 func (ms *MemorySession) Has(key string) (ok bool, err error) {
 	ms.storeLock.RLock()
 	_, ok = ms.store[key]
