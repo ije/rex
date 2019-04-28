@@ -2,15 +2,14 @@ package rex
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"path"
+	"strings"
 	"sync"
 	"time"
 
-	"github.com/ije/gox/cache"
-	"github.com/ije/gox/log"
-	"github.com/ije/rex/session"
 	"golang.org/x/crypto/acme/autocert"
 )
 
@@ -19,24 +18,41 @@ func Serve(config Config) {
 	if config.Port == 0 {
 		config.Port = 80
 	}
+
 	if config.Logger == nil {
-		config.Logger = &log.Logger{}
-	}
-	if config.SessionManager == nil {
-		config.SessionManager = session.NewMemorySessionManager(time.Hour / 2)
-	}
-	if !config.Debug {
-		config.Logger.SetLevelByName("info")
-		config.Logger.SetQuite(true)
-		if config.AccessLogger != nil {
-			config.AccessLogger.SetQuite(true)
-		}
+		config.Logger = log.New(os.Stderr, "", log.LstdFlags)
 	}
 
-	mux := &Mux{Config: config}
+	var rests []*REST
 	for _, rest := range gRESTs {
-		mux.RegisterREST(rest)
+		rest.SendError = config.Debug
+		if rest.AccessLogger == nil {
+			rest.AccessLogger = config.AccessLogger
+		}
+		if rest.Logger == nil {
+			rest.Logger = config.Logger
+		}
+		rests = append(rests, rest)
 	}
+
+	mux := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		wh := w.Header()
+		wh.Set("Connection", "keep-alive")
+		wh.Set("Server", "rex-serv")
+
+		if len(rests) > 0 {
+			for _, rest := range rests {
+				if strings.HasPrefix(r.URL.Path, "/"+strings.Trim(rest.Prefix, "/")) {
+					rest.ServeHTTP(w, r)
+					return
+				}
+			}
+			rests[len(rests)-1].ServeHTTP(w, r)
+			return
+		}
+
+		http.Error(w, http.StatusText(404), 404)
+	})
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -52,7 +68,7 @@ func Serve(config Config) {
 		}
 		err := serv.ListenAndServe()
 		if err != nil {
-			config.Logger.Error("rex server shutdown:", err)
+			config.Logger.Println("[error] rex server shutdown:", err)
 		}
 		serv.Shutdown(nil)
 	}()
@@ -72,20 +88,15 @@ func Serve(config Config) {
 				m := &autocert.Manager{
 					Prompt: autocert.AcceptTOS,
 				}
-				if https.AutoTLS.CacheDir != "" {
+				if https.AutoTLS.Cache != nil {
+					m.Cache = https.AutoTLS.Cache
+				} else if https.AutoTLS.CacheDir != "" {
 					fi, err := os.Stat(https.AutoTLS.CacheDir)
 					if err == nil && !fi.IsDir() {
-						config.Logger.Errorf("can not init tls: bad cache dir '%s'", https.AutoTLS.CacheDir)
+						config.Logger.Printf("[fatal] can not init tls: bad cache dir '%s'", https.AutoTLS.CacheDir)
 						return
 					}
 					m.Cache = autocert.DirCache(https.AutoTLS.CacheDir)
-				} else if https.AutoTLS.CacheURL != "" {
-					cache, err := cache.New(https.AutoTLS.CacheURL)
-					if err != nil {
-						config.Logger.Error("can not init tls:", err)
-						return
-					}
-					m.Cache = cache
 				} else {
 					m.Cache = autocert.DirCache(path.Join(os.TempDir(), ".rex-cert-cache"))
 				}
@@ -96,7 +107,7 @@ func Serve(config Config) {
 			}
 			err := serv.ListenAndServeTLS(https.CertFile, https.KeyFile)
 			if err != nil {
-				config.Logger.Error("rex server(https) shutdown:", err)
+				config.Logger.Println("[error] rex server(https) shutdown:", err)
 			}
 			serv.Shutdown(nil)
 		}()

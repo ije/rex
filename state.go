@@ -9,11 +9,20 @@ type State struct {
 	state map[string]interface{}
 }
 
+func (s *State) Has(key string) (ok bool) {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
+
+	_, ok = s.state[key]
+	return
+}
+
 func (s *State) Get(key string) (v interface{}) {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
 
-	return s.state[key]
+	v, _ = s.state[key]
+	return
 }
 
 func (s *State) Set(key string, v interface{}) {

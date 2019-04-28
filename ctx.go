@@ -1,10 +1,9 @@
 package rex
 
 import (
-	"archive/zip"
 	"encoding/json"
 	"fmt"
-	"io"
+	"html/template"
 	"net/http"
 	"net/url"
 	"os"
@@ -18,17 +17,19 @@ import (
 )
 
 type Context struct {
-	W           http.ResponseWriter
-	R           *http.Request
-	URL         *URL
-	State       *State
-	session     session.Session
-	privileges  map[string]struct{}
-	basicUser   acl.BasicUser
-	user        acl.User
-	handles     []RESTHandle
-	handleIndex int
-	mux         *Mux
+	W              http.ResponseWriter
+	R              *http.Request
+	URL            *URL
+	State          *State
+	startTime      time.Time
+	handles        []RESTHandle
+	handleIndex    int
+	privileges     map[string]struct{}
+	user           acl.User
+	basicAuthUser  acl.BasicAuthUser
+	session        session.Session
+	sessionManager session.Manager
+	rest           *REST
 }
 
 func (ctx *Context) Next() {
@@ -59,7 +60,7 @@ func (ctx *Context) Next() {
 	handle := ctx.handles[ctx.handleIndex]
 	handle(ctx)
 
-	// reset(prevent user chanage) the 'read-only' fields in context
+	// reset(to prevent user change) the 'read-only' fields in context
 	ctx.W = w
 	ctx.R = r
 	ctx.URL = url
@@ -92,9 +93,13 @@ func (ctx *Context) SetHeader(key string, value string) {
 }
 
 func (ctx *Context) Session() (sess session.Session) {
+	if ctx.sessionManager == nil {
+		panic(&ctxPanicError{"session manager is undefined"})
+	}
+
 	cookieName := "x-session"
-	if len(ctx.mux.SessionCookieName) > 0 {
-		cookieName = ctx.mux.SessionCookieName
+	if name := ctx.sessionManager.CookieName(); name != "" {
+		cookieName = name
 	}
 
 	var sid string
@@ -105,11 +110,8 @@ func (ctx *Context) Session() (sess session.Session) {
 
 	sess = ctx.session
 	if sess == nil {
-		if ctx.mux.SessionManager == nil {
-			panic(&ctxPanicError{"session manager is undefined"})
-		}
 
-		sess, err = ctx.mux.SessionManager.Get(sid)
+		sess, err = ctx.sessionManager.GetSession(sid)
 		if err != nil {
 			panic(&ctxPanicError{err.Error()})
 		}
@@ -172,7 +174,7 @@ func formatValue(value interface{}) (str string) {
 	return
 }
 
-func (ctx *Context) FormArray(key string) (a []string) {
+func (ctx *Context) FormValues(key string) (a []string) {
 	if ctx.R.Form == nil {
 		ctx.R.ParseMultipartForm(32 << 20) // 32m in memory
 	}
@@ -184,7 +186,7 @@ func (ctx *Context) FormArray(key string) (a []string) {
 }
 
 func (ctx *Context) FormString(key string, defaultValue string) string {
-	values := ctx.FormArray(key)
+	values := ctx.FormValues(key)
 	if len(values) > 0 {
 		return values[0]
 	}
@@ -192,7 +194,7 @@ func (ctx *Context) FormString(key string, defaultValue string) string {
 }
 
 func (ctx *Context) FormBool(key string, defaultValue bool) bool {
-	values := ctx.FormArray(key)
+	values := ctx.FormValues(key)
 	if len(values) > 0 {
 		s := strings.ToLower(values[0])
 		return s == "true" || s == "1"
@@ -201,7 +203,7 @@ func (ctx *Context) FormBool(key string, defaultValue bool) bool {
 }
 
 func (ctx *Context) FormFloat(key string, defaultValue float64) float64 {
-	values := ctx.FormArray(key)
+	values := ctx.FormValues(key)
 	if len(values) > 0 {
 		f, err := strconv.ParseFloat(values[0], 64)
 		if err != nil {
@@ -213,7 +215,7 @@ func (ctx *Context) FormFloat(key string, defaultValue float64) float64 {
 }
 
 func (ctx *Context) FormInt(key string, defaultValue int64) int64 {
-	values := ctx.FormArray(key)
+	values := ctx.FormValues(key)
 	if len(values) > 0 {
 		f, err := strconv.ParseInt(values[0], 10, 64)
 		if err != nil {
@@ -252,6 +254,16 @@ func (ctx *Context) IfModified(modtime time.Time, then func()) {
 	then()
 }
 
+func (ctx *Context) IfNotMatch(etag string, then func()) {
+	if ctx.R.Header.Get("If-Not-Match") == etag {
+		ctx.End(http.StatusNotModified)
+		return
+	}
+
+	ctx.SetHeader("ETag", etag)
+	then()
+}
+
 func (ctx *Context) Write(p []byte) (n int, err error) {
 	return ctx.W.Write(p)
 }
@@ -267,9 +279,9 @@ func (ctx *Context) End(status int, a ...string) {
 	}
 	ctx.W.WriteHeader(status)
 	if len(a) > 0 {
-		ctx.Write([]byte(strings.Join(a, " ")))
+		ctx.WriteString(strings.Join(a, " "))
 	} else {
-		ctx.Write([]byte(http.StatusText(status)))
+		ctx.WriteString(http.StatusText(status))
 	}
 }
 
@@ -278,13 +290,13 @@ func (ctx *Context) Ok(text string) {
 }
 
 func (ctx *Context) Error(err error) {
-	if ctx.mux.Debug {
+	if ctx.rest.SendError {
 		ctx.End(500, err.Error())
 	} else {
-		if ctx.mux.Logger != nil {
-			ctx.mux.Logger.Error(err)
-		}
 		ctx.End(500)
+	}
+	if ctx.rest.Logger != nil {
+		ctx.rest.Logger.Println("[error]", err)
 	}
 }
 
@@ -293,22 +305,31 @@ func (ctx *Context) Html(html string) {
 	ctx.WriteString(html)
 }
 
-func (ctx *Context) Json(status int, v interface{}) {
-	var data []byte
-	var err error
-	if ctx.mux.Debug {
-		data, err = json.MarshalIndent(v, "", "\t")
+func (ctx *Context) Render(t string, data interface{}) {
+	if ctx.rest.Template != nil && ctx.rest.Template.Lookup(t) != nil {
+		ctx.SetHeader("Content-Type", "text/html; charset=utf-8")
+		ctx.rest.Template.ExecuteTemplate(ctx.W, t, data)
 	} else {
-		data, err = json.Marshal(v)
+		t, err := template.New("temp").Parse(t)
+		if err != nil {
+			ctx.Error(err)
+		} else {
+			ctx.SetHeader("Content-Type", "text/html; charset=utf-8")
+			t.Execute(ctx.W, data)
+		}
 	}
+}
+
+func (ctx *Context) Json(status int, v interface{}) {
+	data, err := json.Marshal(v)
 	if err != nil {
 		ctx.Error(err)
 		return
 	}
 
-	if len(data) > 1024 && strings.Index(ctx.R.Header.Get("Accept-Encoding"), "gzip") > -1 {
-		if w, ok := ctx.W.(*ResponseWriter); ok {
-			gzw := newGzResponseWriter(w.rawWriter)
+	if len(data) > 1000 && strings.Index(ctx.R.Header.Get("Accept-Encoding"), "gzip") > -1 {
+		if w, ok := ctx.W.(*clearResponseWriter); ok {
+			gzw := newGzipWriter(w.rawWriter)
 			defer gzw.Close()
 			w.rawWriter = gzw
 		}
@@ -321,20 +342,24 @@ func (ctx *Context) Json(status int, v interface{}) {
 
 func (ctx *Context) File(filepath string) {
 	if strings.Contains(ctx.R.Header.Get("Accept-Encoding"), "gzip") {
-		for _, ext := range []string{"js", "js.map", "json", "css", "html", "htm", "xml", "svg", "txt"} {
+		for _, ext := range []string{"html", "htm", "xml", "svg", "js", "jsx", "js.map", "ts", "tsx", "json", "css", "txt"} {
 			if strings.HasSuffix(strings.ToLower(filepath), "."+ext) {
 				fi, err := os.Stat(filepath)
 				if err != nil {
 					if os.IsNotExist(err) {
-						ctx.End(404)
+						if ctx.rest.NotFound != nil {
+							ctx.rest.NotFound.ServeHTTP(ctx.W, ctx.R)
+						} else {
+							ctx.End(404)
+						}
 					} else {
 						ctx.Error(err)
 					}
 					return
 				}
-				if fi.Size() > 1024 {
-					if w, ok := ctx.W.(*ResponseWriter); ok {
-						gzw := newGzResponseWriter(w.rawWriter)
+				if fi.Size() > 1000 {
+					if w, ok := ctx.W.(*clearResponseWriter); ok {
+						gzw := newGzipWriter(w.rawWriter)
 						defer gzw.Close()
 						w.rawWriter = gzw
 					}
@@ -346,48 +371,8 @@ func (ctx *Context) File(filepath string) {
 	http.ServeFile(ctx.W, ctx.R, filepath)
 }
 
-func (ctx *Context) Zip(path string) {
-	fi, err := os.Stat(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			ctx.End(404)
-		} else {
-			ctx.Error(err)
-		}
-		return
-	}
-	ctx.SetHeader("Content-Type", "application/zip")
-	if fi.IsDir() {
-		utils.ZipFilesTo(path, ctx.W)
-	} else {
-		file, err := os.Open(path)
-		if err != nil {
-			ctx.Error(err)
-			return
-		}
-		defer file.Close()
-
-		header, err := zip.FileInfoHeader(fi)
-		if err != nil {
-			ctx.Error(err)
-			return
-		}
-
-		archive := zip.NewWriter(ctx.W)
-		defer archive.Close()
-
-		gzwr, err := archive.CreateHeader(header)
-		if err != nil {
-			ctx.Error(err)
-			return
-		}
-
-		io.Copy(gzwr, file)
-	}
-}
-
-func (ctx *Context) BasicUser() acl.BasicUser {
-	return ctx.basicUser
+func (ctx *Context) BasicAuthUser() acl.BasicAuthUser {
+	return ctx.basicAuthUser
 }
 
 func (ctx *Context) User() acl.User {
@@ -396,7 +381,7 @@ func (ctx *Context) User() acl.User {
 
 func (ctx *Context) MustUser() acl.User {
 	if ctx.user == nil {
-		panic(&ctxPanicError{"the user is undefined"})
+		panic(&ctxPanicError{"user is undefined"})
 	}
 	return ctx.user
 }

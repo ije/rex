@@ -15,8 +15,9 @@ type Session interface {
 }
 
 type Manager interface {
-	Get(sid string) (Session, error)
-	Destroy(sid string) error
+	CookieName() string
+	GetSession(sid string) (Session, error)
+	SetLifetime(d time.Duration) error
 	GC() error
-	SetGCInterval(d time.Duration) error
+	Destroy(sid string) error
 }
