@@ -43,7 +43,7 @@ func ACL(getUser func(id interface{}) acl.User) RESTHandle {
 		id := ctx.Session().Get("USER")
 		switch id.(type) {
 		case string, int32, int, int64, uint32, uint, uint64:
-			ctx.user = getUser(getUser(id))
+			ctx.user = getUser(id)
 		}
 		ctx.Next()
 	}
