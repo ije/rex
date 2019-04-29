@@ -52,16 +52,18 @@ var todos = map[string][]string{}
 
 func main() {
 	rest := rex.New()
-	rest.Template = template.Must(template.New("index").Parse(indexHTML))
 
-	rest.Use(
-		rex.ACL(func(id interface{}) acl.User {
+	rest.SetTemplate(template.Must(template.New("index").Parse(indexHTML)))
+
+	rest.Use(rex.ACL(func(ctx *rex.Context) acl.User {
+		if ctx.Session().Has("USER") {
 			return &User{
-				id:         id,
+				id:         ctx.Session().Get("USER"),
 				privileges: []string{"add"},
 			}
-		}),
-	)
+		}
+		return nil
+	}))
 
 	rest.Get("/", func(ctx *rex.Context) {
 		if user := ctx.User(); user != nil {
