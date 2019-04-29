@@ -38,13 +38,9 @@ func HTTPS() RESTHandle {
 	}
 }
 
-func ACL(getUser func(id interface{}) acl.User) RESTHandle {
+func ACL(getUser func(ctx *Context) acl.User) RESTHandle {
 	return func(ctx *Context) {
-		id := ctx.Session().Get("USER")
-		switch id.(type) {
-		case string, int32, int, int64, uint32, uint, uint64:
-			ctx.user = getUser(id)
-		}
+		ctx.user = getUser(ctx)
 		ctx.Next()
 	}
 }
