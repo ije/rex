@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -23,7 +24,7 @@ func Serve(config Config) {
 		config.Logger = log.New(os.Stderr, "", log.LstdFlags)
 	}
 
-	var rests []*REST
+	sort.Sort(gRESTs)
 	for _, rest := range gRESTs {
 		rest.SendError = config.Debug
 		if rest.AccessLogger == nil {
@@ -32,7 +33,6 @@ func Serve(config Config) {
 		if rest.Logger == nil {
 			rest.Logger = config.Logger
 		}
-		rests = append(rests, rest)
 	}
 
 	mux := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -40,18 +40,20 @@ func Serve(config Config) {
 		wh.Set("Connection", "keep-alive")
 		wh.Set("Server", "rex-serv")
 
-		if len(rests) > 0 {
-			for _, rest := range rests {
+		if len(gRESTs) > 0 {
+			for _, rest := range gRESTs {
 				if strings.HasPrefix(r.URL.Path, "/"+strings.Trim(rest.Prefix, "/")) {
 					rest.ServeHTTP(w, r)
 					return
 				}
 			}
-			rests[len(rests)-1].ServeHTTP(w, r)
+			if rest := gRESTs[len(gRESTs)-1]; rest.Prefix == "" {
+				rest.ServeHTTP(w, r)
+			}
 			return
 		}
 
-		http.Error(w, http.StatusText(404), 404)
+		http.NotFound(w, r)
 	})
 
 	var wg sync.WaitGroup

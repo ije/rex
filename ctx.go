@@ -21,7 +21,6 @@ type Context struct {
 	R              *http.Request
 	URL            *URL
 	State          *State
-	startTime      time.Time
 	handles        []RESTHandle
 	handleIndex    int
 	privileges     map[string]struct{}
@@ -304,9 +303,9 @@ func (ctx *Context) Html(html string) {
 }
 
 func (ctx *Context) Render(t string, data interface{}) {
-	if ctx.rest.Template != nil && ctx.rest.Template.Lookup(t) != nil {
+	if tpl := ctx.rest.template; tpl != nil && tpl.Lookup(t) != nil {
 		ctx.SetHeader("Content-Type", "text/html; charset=utf-8")
-		ctx.rest.Template.ExecuteTemplate(ctx.W, t, data)
+		tpl.ExecuteTemplate(ctx.W, t, data)
 	} else {
 		t, err := template.New("temp").Parse(t)
 		if err != nil {

@@ -22,29 +22,33 @@ type REST struct {
 	// For example if the Prefix equals "v2", the route path "/path" will be "/v2/path"
 	Prefix string
 
-	// Loggers to log accesses and errors
+	// Logger to log accesses
 	AccessLogger Logger
-	Logger       Logger
+
+	// Logger to log  errors
+	Logger Logger
 
 	// If enabled, errors will be sent to the client.
 	// should be disable in production
 	SendError bool
 
-	// Configurations for httprouter
-	// see https://godoc.org/github.com/julienschmidt/httprouter#Router
-	RedirectTrailingSlash bool
-	RedirectFixedPath     bool
-	NotFound              http.Handler
+	// Configurable http.Handler which is called when no matching route is
+	// found. If it is not set, http.NotFound is used.
+	NotFound http.Handler
 
-	// Template to render html
-	Template *template.Template
-
+	template    *template.Template
 	middlewares []RESTHandle
 	router      *httprouter.Router
 }
 
+type restSlice []*REST
+
+func (p restSlice) Len() int           { return len(p) }
+func (p restSlice) Less(i, j int) bool { return len(p[i].Prefix) > len(p[j].Prefix) }
+func (p restSlice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
+
 var (
-	gRESTs                = []*REST{}
+	gRESTs                = restSlice{}
 	defaultSessionManager = session.NewMemorySessionManager(time.Hour / 2)
 )
 
@@ -52,10 +56,16 @@ var (
 func New(prefix ...string) *REST {
 	rest := &REST{}
 	if len(prefix) > 0 {
-		rest.Prefix = strings.TrimSpace(prefix[0])
+		rest.Prefix = strings.Trim(strings.ReplaceAll(prefix[0], " ", ""), "/")
 	}
 	gRESTs = append(gRESTs, rest)
 	return rest
+}
+
+// SetTemplate sets template
+func (rest *REST) SetTemplate(template *template.Template) {
+	rest.template = template
+	return
 }
 
 // Use injects middlewares to REST
@@ -112,19 +122,20 @@ func (rest *REST) Handle(method string, path string, handles ...RESTHandle) {
 		path = "/*path"
 	}
 	if prefix := strings.Trim(rest.Prefix, "/"); prefix != "" {
-		path = "/" + prefix + "/" + strings.TrimLeft(path, "/")
+		path = "/" + prefix + "/" + strings.Trim(path, "/")
 	}
 
 	if rest.router == nil {
 		rest.initRouter()
 	}
+
 	rest.router.Handle(method, path, func(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
+		startTime := time.Now()
 		ctx := &Context{
 			W:              &clearResponseWriter{status: 200, rawWriter: w},
 			R:              r,
 			URL:            &URL{params, r.URL},
 			State:          NewState(),
-			startTime:      time.Now(),
 			handles:        append(rest.middlewares, handles...),
 			handleIndex:    -1,
 			privileges:     map[string]struct{}{},
@@ -149,7 +160,7 @@ func (rest *REST) Handle(method string, path string, handles ...RESTHandle) {
 					strings.ReplaceAll(r.UserAgent(), `"`, "'"),
 					w.status,
 					w.writed,
-					time.Since(ctx.startTime)/time.Millisecond,
+					time.Since(startTime)/time.Millisecond,
 				)
 			}
 		}
@@ -158,8 +169,6 @@ func (rest *REST) Handle(method string, path string, handles ...RESTHandle) {
 
 func (rest *REST) initRouter() {
 	router := httprouter.New()
-	router.RedirectTrailingSlash = rest.RedirectTrailingSlash
-	router.RedirectFixedPath = rest.RedirectFixedPath
 	router.NotFound = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if rest.NotFound != nil {
 			rest.NotFound.ServeHTTP(w, r)
