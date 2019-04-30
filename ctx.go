@@ -1,12 +1,15 @@
 package rex
 
 import (
+	"archive/zip"
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -66,29 +69,19 @@ func (ctx *Context) Next() {
 	ctx.State = state
 }
 
-func (ctx *Context) GetCookie(name string) (cookie *http.Cookie, err error) {
-	return ctx.R.Cookie(name)
+func (ctx *Context) BasicAuthUser() acl.BasicAuthUser {
+	return ctx.basicAuthUser
 }
 
-func (ctx *Context) SetCookie(cookie *http.Cookie) {
-	if cookie != nil {
-		ctx.AddHeader("Set-Cookie", cookie.String())
+func (ctx *Context) User() acl.User {
+	return ctx.user
+}
+
+func (ctx *Context) MustUser() acl.User {
+	if ctx.user == nil {
+		panic(&ctxPanicError{"user is undefined"})
 	}
-}
-
-func (ctx *Context) RemoveCookie(cookie *http.Cookie) {
-	if cookie != nil {
-		cookie.Expires = time.Unix(0, 0)
-		ctx.AddHeader("Set-Cookie", cookie.String())
-	}
-}
-
-func (ctx *Context) AddHeader(key string, value string) {
-	ctx.W.Header().Add(key, value)
-}
-
-func (ctx *Context) SetHeader(key string, value string) {
-	ctx.W.Header().Set(key, value)
+	return ctx.user
 }
 
 func (ctx *Context) Session() *Session {
@@ -124,6 +117,31 @@ func (ctx *Context) Session() *Session {
 	}
 
 	return ctx.session
+}
+
+func (ctx *Context) GetCookie(name string) (cookie *http.Cookie, err error) {
+	return ctx.R.Cookie(name)
+}
+
+func (ctx *Context) SetCookie(cookie *http.Cookie) {
+	if cookie != nil {
+		ctx.AddHeader("Set-Cookie", cookie.String())
+	}
+}
+
+func (ctx *Context) RemoveCookie(cookie *http.Cookie) {
+	if cookie != nil {
+		cookie.Expires = time.Unix(0, 0)
+		ctx.AddHeader("Set-Cookie", cookie.String())
+	}
+}
+
+func (ctx *Context) AddHeader(key string, value string) {
+	ctx.W.Header().Add(key, value)
+}
+
+func (ctx *Context) SetHeader(key string, value string) {
+	ctx.W.Header().Set(key, value)
 }
 
 func (ctx *Context) ParseMultipartForm(maxMemoryBytes int64) {
@@ -362,17 +380,91 @@ func (ctx *Context) File(filename string) {
 	http.ServeFile(ctx.W, ctx.R, filename)
 }
 
-func (ctx *Context) BasicAuthUser() acl.BasicAuthUser {
-	return ctx.basicAuthUser
-}
-
-func (ctx *Context) User() acl.User {
-	return ctx.user
-}
-
-func (ctx *Context) MustUser() acl.User {
-	if ctx.user == nil {
-		panic(&ctxPanicError{"user is undefined"})
+func (ctx *Context) Zip(path string) {
+	fi, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			ctx.End(404)
+		} else {
+			ctx.Error(err)
+		}
+		return
 	}
-	return ctx.user
+
+	if fi.IsDir() {
+		dir, err := filepath.Abs(path)
+		if err != nil {
+			ctx.Error(err)
+			return
+		}
+
+		archive := zip.NewWriter(ctx.W)
+		defer archive.Close()
+
+		ctx.SetHeader("Content-Type", "application/zip")
+		filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+
+			header, err := zip.FileInfoHeader(info)
+			if err != nil {
+				return err
+			}
+
+			header.Name = strings.TrimPrefix(strings.TrimPrefix(path, dir), "/")
+			if header.Name == "" {
+				return nil
+			}
+
+			if info.IsDir() {
+				header.Name += "/"
+			} else {
+				header.Method = zip.Deflate
+			}
+
+			gzw, err := archive.CreateHeader(header)
+			if err != nil {
+				return err
+			}
+
+			if info.IsDir() {
+				return nil
+			}
+
+			file, err := os.Open(path)
+			if err != nil {
+				return err
+			}
+			defer file.Close()
+
+			_, err = io.Copy(gzw, file)
+			return err
+		})
+	} else {
+		header, err := zip.FileInfoHeader(fi)
+		if err != nil {
+			ctx.Error(err)
+			return
+		}
+
+		file, err := os.Open(path)
+		if err != nil {
+			ctx.Error(err)
+			return
+		}
+		defer file.Close()
+
+		archive := zip.NewWriter(ctx.W)
+		defer archive.Close()
+
+		gzw, err := archive.CreateHeader(header)
+		if err != nil {
+			ctx.Error(err)
+			return
+		}
+
+		ctx.SetHeader("Content-Type", "application/zip")
+		io.Copy(gzw, file)
+	}
 }
