@@ -125,7 +125,7 @@ func (rest *REST) Handle(method string, path string, handles ...RESTHandle) {
 	})
 }
 
-func (rest *REST) HandleNotFound(handles ...RESTHandle) {
+func (rest *REST) NotFound(handles ...RESTHandle) {
 	rest.notFoundHandles = append(rest.notFoundHandles, handles...)
 }
 
