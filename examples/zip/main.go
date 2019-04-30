@@ -19,9 +19,9 @@ func main() {
 		ctx.Html(indexHTML)
 	})
 
-	rest.Get("/nil.zip", rex.Zip("../static/root/nil"))
-	rest.Get("/main.js.zip", rex.Zip("../static/root/main.js"))
-	rest.Get("/root.zip", rex.Zip("../static/root"))
+	rest.Get("/nil.zip", func(ctx *rex.Context) { ctx.Zip("../static/root/nil") })
+	rest.Get("/main.js.zip", func(ctx *rex.Context) { ctx.Zip("../static/root/main.js") })
+	rest.Get("/root.zip", func(ctx *rex.Context) { ctx.Zip("../static/root") })
 
 	rex.Serve(rex.Config{
 		Port:  8080,
