@@ -324,7 +324,7 @@ func (ctx *Context) Json(status int, v interface{}) {
 		return
 	}
 
-	if len(data) > 1000 && strings.Index(ctx.R.Header.Get("Accept-Encoding"), "gzip") > -1 {
+	if len(data) > 1000 && strings.Contains(ctx.R.Header.Get("Accept-Encoding"), "gzip") {
 		if w, ok := ctx.W.(*clearResponseWriter); ok {
 			gzw := newGzipWriter(w.rawWriter)
 			defer gzw.Close()
@@ -337,35 +337,29 @@ func (ctx *Context) Json(status int, v interface{}) {
 	ctx.Write(data)
 }
 
-func (ctx *Context) File(filepath string) {
-	if strings.Contains(ctx.R.Header.Get("Accept-Encoding"), "gzip") {
+func (ctx *Context) File(filename string) {
+	fi, err := os.Stat(filename)
+	if err != nil {
+		if os.IsNotExist(err) {
+			ctx.End(404)
+		} else {
+			ctx.Error(err)
+		}
+		return
+	}
+	if fi.Size() > 1000 && strings.Contains(ctx.R.Header.Get("Accept-Encoding"), "gzip") {
 		for _, ext := range []string{"html", "htm", "xml", "svg", "js", "jsx", "js.map", "ts", "tsx", "json", "css", "txt"} {
-			if strings.HasSuffix(strings.ToLower(filepath), "."+ext) {
-				fi, err := os.Stat(filepath)
-				if err != nil {
-					if os.IsNotExist(err) {
-						if ctx.rest.NotFound != nil {
-							ctx.rest.NotFound.ServeHTTP(ctx.W, ctx.R)
-						} else {
-							ctx.End(404)
-						}
-					} else {
-						ctx.Error(err)
-					}
-					return
-				}
-				if fi.Size() > 1000 {
-					if w, ok := ctx.W.(*clearResponseWriter); ok {
-						gzw := newGzipWriter(w.rawWriter)
-						defer gzw.Close()
-						w.rawWriter = gzw
-					}
+			if strings.HasSuffix(strings.ToLower(filename), "."+ext) {
+				if w, ok := ctx.W.(*clearResponseWriter); ok {
+					gzw := newGzipWriter(w.rawWriter)
+					defer gzw.Close()
+					w.rawWriter = gzw
 				}
 				break
 			}
 		}
 	}
-	http.ServeFile(ctx.W, ctx.R, filepath)
+	http.ServeFile(ctx.W, ctx.R, filename)
 }
 
 func (ctx *Context) BasicAuthUser() acl.BasicAuthUser {

@@ -116,11 +116,7 @@ func Static(root string, fallbackPaths ...string) RESTHandle {
 				goto Re
 			}
 
-			if ctx.rest.NotFound != nil {
-				ctx.rest.NotFound.ServeHTTP(ctx.W, ctx.R)
-			} else {
-				ctx.End(404)
-			}
+			ctx.End(404)
 			return
 		}
 
@@ -138,11 +134,7 @@ func Zip(path string) RESTHandle {
 		fi, err := os.Stat(path)
 		if err != nil {
 			if os.IsNotExist(err) {
-				if ctx.rest.NotFound != nil {
-					ctx.rest.NotFound.ServeHTTP(ctx.W, ctx.R)
-				} else {
-					ctx.End(404)
-				}
+				ctx.End(404)
 			} else {
 				ctx.Error(err)
 			}

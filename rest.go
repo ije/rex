@@ -32,20 +32,11 @@ type REST struct {
 	// should be disable in production
 	SendError bool
 
-	// Configurable http.Handler which is called when no matching route is
-	// found. If it is not set, http.NotFound is used.
-	NotFound http.Handler
-
-	template    *template.Template
-	middlewares []RESTHandle
-	router      *httprouter.Router
+	template        *template.Template
+	middlewares     []RESTHandle
+	notFoundHandles []RESTHandle
+	router          *httprouter.Router
 }
-
-type restSlice []*REST
-
-func (p restSlice) Len() int           { return len(p) }
-func (p restSlice) Less(i, j int) bool { return len(p[i].Prefix) > len(p[j].Prefix) }
-func (p restSlice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 
 var (
 	gRESTs                = restSlice{}
@@ -130,50 +121,58 @@ func (rest *REST) Handle(method string, path string, handles ...RESTHandle) {
 	}
 
 	rest.router.Handle(method, path, func(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
-		startTime := time.Now()
-		ctx := &Context{
-			W:              &clearResponseWriter{status: 200, rawWriter: w},
-			R:              r,
-			URL:            &URL{params, r.URL},
-			State:          NewState(),
-			handles:        append(rest.middlewares, handles...),
-			handleIndex:    -1,
-			privileges:     map[string]struct{}{},
-			sessionManager: defaultSessionManager,
-			rest:           rest,
-		}
-
-		ctx.Next()
-
-		if rest.AccessLogger != nil {
-			w, ok := ctx.W.(*clearResponseWriter)
-			if ok {
-				rest.AccessLogger.Printf(
-					`%s %s %s %s %s %d "%s" "%s" %d %d %dms`,
-					r.RemoteAddr,
-					r.Host,
-					r.Proto,
-					r.Method,
-					r.RequestURI,
-					r.ContentLength,
-					strings.ReplaceAll(r.Referer(), `"`, "'"),
-					strings.ReplaceAll(r.UserAgent(), `"`, "'"),
-					w.status,
-					w.writed,
-					time.Since(startTime)/time.Millisecond,
-				)
-			}
-		}
+		rest.serve(w, r, params, handles...)
 	})
+}
+
+func (rest *REST) HandleNotFound(handles ...RESTHandle) {
+	rest.notFoundHandles = append(rest.notFoundHandles, handles...)
+}
+
+func (rest *REST) serve(w http.ResponseWriter, r *http.Request, params httprouter.Params, handles ...RESTHandle) {
+	startTime := time.Now()
+	ctx := &Context{
+		W:              &clearResponseWriter{status: 200, rawWriter: w},
+		R:              r,
+		URL:            &URL{params, r.URL},
+		State:          NewState(),
+		handles:        append(rest.middlewares, handles...),
+		handleIndex:    -1,
+		privileges:     map[string]struct{}{},
+		sessionManager: defaultSessionManager,
+		rest:           rest,
+	}
+
+	ctx.Next()
+
+	if rest.AccessLogger != nil {
+		w, ok := ctx.W.(*clearResponseWriter)
+		if ok {
+			rest.AccessLogger.Printf(
+				`%s %s %s %s %s %d "%s" "%s" %d %d %dms`,
+				r.RemoteAddr,
+				r.Host,
+				r.Proto,
+				r.Method,
+				r.RequestURI,
+				r.ContentLength,
+				strings.ReplaceAll(r.Referer(), `"`, "'"),
+				strings.ReplaceAll(r.UserAgent(), `"`, "'"),
+				w.status,
+				w.writed,
+				time.Since(startTime)/time.Millisecond,
+			)
+		}
+	}
 }
 
 func (rest *REST) initRouter() {
 	router := httprouter.New()
 	router.NotFound = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if rest.NotFound != nil {
-			rest.NotFound.ServeHTTP(w, r)
+		if len(rest.notFoundHandles) > 0 {
+			rest.serve(w, r, httprouter.Params{}, rest.notFoundHandles...)
 		} else {
-			http.Error(w, http.StatusText(404), 404)
+			http.NotFound(w, r)
 		}
 	})
 	router.PanicHandler = func(w http.ResponseWriter, r *http.Request, v interface{}) {
