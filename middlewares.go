@@ -1,14 +1,10 @@
 package rex
 
 import (
-	"archive/zip"
 	"encoding/base64"
 	"fmt"
-	"io"
 	"os"
 	"path"
-	"path/filepath"
-	"strings"
 
 	"github.com/ije/gox/utils"
 	"github.com/ije/rex/acl"
@@ -126,94 +122,5 @@ func Static(root string, fallbackPaths ...string) RESTHandle {
 		}
 
 		ctx.File(fp)
-	}
-}
-
-func Zip(path string) RESTHandle {
-	return func(ctx *Context) {
-		fi, err := os.Stat(path)
-		if err != nil {
-			if os.IsNotExist(err) {
-				ctx.End(404)
-			} else {
-				ctx.Error(err)
-			}
-			return
-		}
-		ctx.SetHeader("Content-Type", "application/zip")
-		if fi.IsDir() {
-			dir, err := filepath.Abs(path)
-			if err != nil {
-				ctx.Error(err)
-				return
-			}
-
-			archive := zip.NewWriter(ctx.W)
-			defer archive.Close()
-
-			filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-				if err != nil {
-					return err
-				}
-
-				header, err := zip.FileInfoHeader(info)
-				if err != nil {
-					return err
-				}
-
-				header.Name = strings.TrimPrefix(strings.TrimPrefix(path, dir), "/")
-				if header.Name == "" {
-					return nil
-				}
-
-				if info.IsDir() {
-					header.Name += "/"
-				} else {
-					header.Method = zip.Deflate
-				}
-
-				gzw, err := archive.CreateHeader(header)
-				if err != nil {
-					return err
-				}
-
-				if info.IsDir() {
-					return nil
-				}
-
-				file, err := os.Open(path)
-				if err != nil {
-					return err
-				}
-				defer file.Close()
-
-				_, err = io.Copy(gzw, file)
-				return err
-			})
-		} else {
-			header, err := zip.FileInfoHeader(fi)
-			if err != nil {
-				ctx.Error(err)
-				return
-			}
-
-			file, err := os.Open(path)
-			if err != nil {
-				ctx.Error(err)
-				return
-			}
-			defer file.Close()
-
-			archive := zip.NewWriter(ctx.W)
-			defer archive.Close()
-
-			gzw, err := archive.CreateHeader(header)
-			if err != nil {
-				ctx.Error(err)
-				return
-			}
-
-			io.Copy(gzw, file)
-		}
 	}
 }
