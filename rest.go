@@ -45,9 +45,19 @@ var (
 
 // New returns a new REST
 func New(prefix ...string) *REST {
-	rest := &REST{}
+	var p string
 	if len(prefix) > 0 {
-		rest.Prefix = strings.Trim(strings.ReplaceAll(prefix[0], " ", ""), "/")
+		p = strings.Trim(strings.ReplaceAll(prefix[0], " ", ""), "/")
+	}
+
+	for _, rest := range gRESTs {
+		if rest.Prefix == p {
+			return rest
+		}
+	}
+
+	rest := &REST{
+		Prefix: p,
 	}
 	gRESTs = append(gRESTs, rest)
 	return rest
