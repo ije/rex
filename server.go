@@ -75,7 +75,7 @@ func Serve(config Config) {
 		serv.Shutdown(nil)
 	}()
 
-	if https := config.HTTPS; https.Port > 0 && https.Port != config.Port {
+	if https := config.HTTPS; https.Port > 0 && https.Port != config.Port && !config.Debug {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -86,7 +86,7 @@ func Serve(config Config) {
 				WriteTimeout:   time.Duration(config.WriteTimeout) * time.Second,
 				MaxHeaderBytes: int(config.MaxHeaderBytes),
 			}
-			if https.AutoTLS.Enable && !config.Debug {
+			if https.AutoTLS.Enable {
 				m := &autocert.Manager{
 					Prompt: autocert.AcceptTOS,
 				}
@@ -95,7 +95,7 @@ func Serve(config Config) {
 				} else if https.AutoTLS.CacheDir != "" {
 					fi, err := os.Stat(https.AutoTLS.CacheDir)
 					if err == nil && !fi.IsDir() {
-						config.Logger.Printf("[fatal] can not init tls: bad cache dir '%s'", https.AutoTLS.CacheDir)
+						config.Logger.Printf("[fatal] can not init tls: bad cert cache dir '%s'", https.AutoTLS.CacheDir)
 						return
 					}
 					m.Cache = autocert.DirCache(https.AutoTLS.CacheDir)
@@ -106,6 +106,9 @@ func Serve(config Config) {
 					m.HostPolicy = autocert.HostWhitelist(https.AutoTLS.Hosts...)
 				}
 				serv.TLSConfig = m.TLSConfig()
+			} else if https.CertFile == "" || https.KeyFile == "" {
+				config.Logger.Println("[fatal] can not init tls: bad cert files")
+				return
 			}
 			err := serv.ListenAndServeTLS(https.CertFile, https.KeyFile)
 			if err != nil {
