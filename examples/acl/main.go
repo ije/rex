@@ -36,12 +36,8 @@ const indexHTML = `
 `
 
 type User struct {
-	id         interface{}
+	id         string
 	privileges []string
-}
-
-func (u *User) ID() interface{} {
-	return u.id
 }
 
 func (u *User) Privileges() []string {
@@ -58,7 +54,7 @@ func main() {
 	rest.Use(rex.ACL(func(ctx *rex.Context) acl.User {
 		if ctx.Session().Has("USER") {
 			return &User{
-				id:         ctx.Session().Get("USER"),
+				id:         ctx.Session().Get("USER").(string),
 				privileges: []string{"add"},
 			}
 		}
@@ -68,8 +64,8 @@ func main() {
 	rest.Get("/", func(ctx *rex.Context) {
 		if user := ctx.User(); user != nil {
 			ctx.Render("index", map[string]interface{}{
-				"user":  user.ID(),
-				"todos": todos[user.ID().(string)],
+				"user":  user.(*User).id,
+				"todos": todos[user.(*User).id],
 			})
 		} else {
 			ctx.Render("index", nil)
@@ -79,7 +75,7 @@ func main() {
 	rest.Post("/add-todo", rex.Privileges("add"), func(ctx *rex.Context) {
 		todo := ctx.FormString("todo", "")
 		if todo != "" {
-			user := ctx.User().ID().(string)
+			user := ctx.User().(*User).id
 			todos[user] = append(todos[user], todo)
 		}
 		ctx.Redirect(301, "/")
