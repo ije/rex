@@ -27,8 +27,8 @@ type Context struct {
 	handles        []RESTHandle
 	handleIndex    int
 	privileges     map[string]struct{}
-	user           acl.User
-	basicAuthUser  acl.BasicAuthUser
+	aclUser        acl.User
+	basicUser      acl.BasicUser
 	session        *Session
 	sessionManager session.Manager
 	rest           *REST
@@ -46,8 +46,8 @@ func (ctx *Context) Next() {
 
 	if len(ctx.privileges) > 0 {
 		var isGranted bool
-		if ctx.user != nil {
-			for _, pid := range ctx.user.Privileges() {
+		if ctx.aclUser != nil {
+			for _, pid := range ctx.aclUser.Privileges() {
 				_, isGranted = ctx.privileges[pid]
 				if isGranted {
 					break
@@ -73,24 +73,24 @@ func (ctx *Context) Next() {
 	ctx.State = state
 }
 
-func (ctx *Context) BasicAuthUser() acl.BasicAuthUser {
-	return ctx.basicAuthUser
+func (ctx *Context) BasicUser() acl.BasicUser {
+	return ctx.basicUser
 }
 
-func (ctx *Context) User() acl.User {
-	return ctx.user
+func (ctx *Context) ACLUser() acl.User {
+	return ctx.aclUser
 }
 
-func (ctx *Context) MustUser() acl.User {
-	if ctx.user == nil {
-		panic(&ctxPanicError{"user is undefined"})
+func (ctx *Context) MustACLUser() acl.User {
+	if ctx.aclUser == nil {
+		panic(&ctxPanicError{"ACL user of context is nil"})
 	}
-	return ctx.user
+	return ctx.aclUser
 }
 
 func (ctx *Context) Session() *Session {
 	if ctx.sessionManager == nil {
-		panic(&ctxPanicError{"session manager is undefined"})
+		panic(&ctxPanicError{"session manager is nil"})
 	}
 
 	cookieName := "x-session"

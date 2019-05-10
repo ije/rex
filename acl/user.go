@@ -5,7 +5,7 @@ type User interface {
 	Privileges() []string
 }
 
-type BasicAuthUser struct {
+type BasicUser struct {
 	Name     string
 	Password string
 }

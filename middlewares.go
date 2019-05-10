@@ -73,10 +73,10 @@ func Privileges(privileges ...string) RESTHandle {
 	}
 }
 
-func ACLAuth(getUserFn func(ctx *Context) acl.User) RESTHandle {
+func ACLAuth(getUserFunc func(ctx *Context) acl.User) RESTHandle {
 	return func(ctx *Context) {
-		if getUserFn != nil {
-			ctx.user = getUserFn(ctx)
+		if getUserFunc != nil {
+			ctx.aclUser = getUserFunc(ctx)
 		}
 		ctx.Next()
 	}
@@ -98,7 +98,7 @@ func BasicAuth(realm string, check func(name string, password string) (ok bool, 
 					ctx.Error(err)
 					return
 				} else if ok {
-					ctx.basicAuthUser = acl.BasicAuthUser{
+					ctx.basicUser = acl.BasicUser{
 						Name:     name,
 						Password: password,
 					}
