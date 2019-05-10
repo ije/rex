@@ -1,8 +1,12 @@
 package rex
 
 import (
+	"time"
+
 	"github.com/ije/rex/session"
 )
+
+var defaultSessionManager = session.NewMemorySessionManager(time.Hour / 2)
 
 type Session struct {
 	sess session.Session

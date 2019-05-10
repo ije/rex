@@ -3,8 +3,11 @@ package rex
 import (
 	"encoding/base64"
 	"fmt"
+	"net/http"
 	"os"
 	"path"
+	"strconv"
+	"strings"
 
 	"github.com/ije/gox/utils"
 	"github.com/ije/rex/acl"
@@ -34,9 +37,27 @@ func HTTPS() RESTHandle {
 	}
 }
 
-func ACL(getUser func(ctx *Context) acl.User) RESTHandle {
+func CORS(cors CORSOptions) RESTHandle {
 	return func(ctx *Context) {
-		ctx.user = getUser(ctx)
+		if len(cors.AllowOrigin) > 0 {
+			ctx.SetHeader("Access-Control-Allow-Origin", cors.AllowOrigin)
+			if cors.AllowCredentials {
+				ctx.SetHeader("Access-Control-Allow-Credentials", "true")
+			}
+			if ctx.R.Method == "OPTIONS" {
+				if len(cors.AllowMethods) > 0 {
+					ctx.SetHeader("Access-Control-Allow-Methods", strings.Join(cors.AllowMethods, ", "))
+				}
+				if len(cors.AllowHeaders) > 0 {
+					ctx.SetHeader("Access-Control-Allow-Headers", strings.Join(cors.AllowHeaders, ", "))
+				}
+				if cors.MaxAge > 0 {
+					ctx.SetHeader("Access-Control-Max-Age", strconv.Itoa(cors.MaxAge))
+				}
+				ctx.End(http.StatusNoContent)
+				return
+			}
+		}
 		ctx.Next()
 	}
 }
@@ -52,10 +73,10 @@ func Privileges(privileges ...string) RESTHandle {
 	}
 }
 
-func SessionManager(manager session.Manager) RESTHandle {
+func ACLAuth(getUserFn func(ctx *Context) acl.User) RESTHandle {
 	return func(ctx *Context) {
-		if manager != nil {
-			ctx.sessionManager = manager
+		if getUserFn != nil {
+			ctx.user = getUserFn(ctx)
 		}
 		ctx.Next()
 	}
@@ -89,6 +110,15 @@ func BasicAuth(realm string, check func(name string, password string) (ok bool, 
 
 		ctx.SetHeader("WWW-Authenticate", fmt.Sprintf("Basic realm=\"%s\"", realm))
 		ctx.W.WriteHeader(401)
+	}
+}
+
+func SessionManager(manager session.Manager) RESTHandle {
+	return func(ctx *Context) {
+		if manager != nil {
+			ctx.sessionManager = manager
+		}
+		ctx.Next()
 	}
 }
 

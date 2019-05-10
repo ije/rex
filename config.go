@@ -34,6 +34,26 @@ type Logger interface {
 	Printf(format string, v ...interface{})
 }
 
+type CORSOptions struct {
+	AllowOrigin      string
+	AllowMethods     []string
+	AllowHeaders     []string
+	ExposeHeaders    []string
+	AllowCredentials bool
+	MaxAge           int // in seconds
+}
+
+func PublicCORS() CORSOptions {
+	return CORSOptions{
+		AllowOrigin:      "*",
+		AllowMethods:     []string{"OPTIONS", "HEAD", "GET", "POST", "PUT", "PATCH", "DELETE"},
+		AllowHeaders:     []string{"Origin", "Accept", "Accept-Encoding", "Accept-Lang", "Content-Type", "Authorization", "X-Requested-With"},
+		ExposeHeaders:    []string{},
+		AllowCredentials: true,
+		MaxAge:           60,
+	}
+}
+
 type restSlice []*REST
 
 func (p restSlice) Len() int           { return len(p) }

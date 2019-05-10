@@ -9,20 +9,20 @@ import (
 	"net/http"
 )
 
-// A clearResponseWriter is used by rex.Context to construct a HTTP response.
-type clearResponseWriter struct {
+// A responseWriter is used by rex.Context to construct a HTTP response.
+type responseWriter struct {
 	status    int
 	writed    int
 	rawWriter http.ResponseWriter
 }
 
 // Header returns the header map that will be sent by WriteHeader.
-func (w *clearResponseWriter) Header() http.Header {
+func (w *responseWriter) Header() http.Header {
 	return w.rawWriter.Header()
 }
 
 // WriteHeader sends an HTTP response header with the provided status code.
-func (w *clearResponseWriter) WriteHeader(status int) {
+func (w *responseWriter) WriteHeader(status int) {
 	w.status = status
 	if w.writed == 0 {
 		w.rawWriter.WriteHeader(status)
@@ -30,14 +30,14 @@ func (w *clearResponseWriter) WriteHeader(status int) {
 }
 
 // Write writes the data to the connection as part of an HTTP reply.
-func (w *clearResponseWriter) Write(p []byte) (n int, err error) {
+func (w *responseWriter) Write(p []byte) (n int, err error) {
 	n, err = w.rawWriter.Write(p)
 	w.writed += n
 	return
 }
 
 // Hijack lets the caller take over the connection.
-func (w *clearResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+func (w *responseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	h, ok := w.rawWriter.(http.Hijacker)
 	if ok {
 		return h.Hijack()

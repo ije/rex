@@ -3,13 +3,11 @@ package rex
 import (
 	"bytes"
 	"fmt"
-	"html/template"
 	"net/http"
 	"runtime"
 	"strings"
 	"time"
 
-	"github.com/ije/rex/session"
 	"github.com/julienschmidt/httprouter"
 )
 
@@ -32,16 +30,12 @@ type REST struct {
 	// should be disable in production
 	SendError bool
 
-	template        *template.Template
 	middlewares     []RESTHandle
 	notFoundHandles []RESTHandle
 	router          *httprouter.Router
 }
 
-var (
-	gRESTs                = restSlice{}
-	defaultSessionManager = session.NewMemorySessionManager(time.Hour / 2)
-)
+var gRESTs restSlice
 
 // New returns a new REST
 func New(prefix ...string) *REST {
@@ -61,12 +55,6 @@ func New(prefix ...string) *REST {
 	}
 	gRESTs = append(gRESTs, rest)
 	return rest
-}
-
-// SetTemplate sets template
-func (rest *REST) SetTemplate(template *template.Template) {
-	rest.template = template
-	return
 }
 
 // Use injects middlewares to REST
@@ -142,7 +130,7 @@ func (rest *REST) NotFound(handles ...RESTHandle) {
 func (rest *REST) serve(w http.ResponseWriter, r *http.Request, params httprouter.Params, handles ...RESTHandle) {
 	startTime := time.Now()
 	ctx := &Context{
-		W:              &clearResponseWriter{status: 200, rawWriter: w},
+		W:              &responseWriter{status: 200, rawWriter: w},
 		R:              r,
 		URL:            &URL{params, r.URL},
 		State:          NewState(),
@@ -156,7 +144,7 @@ func (rest *REST) serve(w http.ResponseWriter, r *http.Request, params httproute
 	ctx.Next()
 
 	if rest.AccessLogger != nil {
-		w, ok := ctx.W.(*clearResponseWriter)
+		w, ok := ctx.W.(*responseWriter)
 		if ok {
 			rest.AccessLogger.Printf(
 				`%s %s %s %s %s %d "%s" "%s" %d %d %dms`,

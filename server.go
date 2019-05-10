@@ -49,8 +49,8 @@ func Serve(config Config) {
 			}
 			if rest := gRESTs[len(gRESTs)-1]; rest.Prefix == "" {
 				rest.ServeHTTP(w, r)
+				return
 			}
-			return
 		}
 
 		http.NotFound(w, r)

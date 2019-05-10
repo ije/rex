@@ -34,6 +34,10 @@ type Context struct {
 	rest           *REST
 }
 
+type Template interface {
+	Execute(wr io.Writer, data interface{}) error
+}
+
 func (ctx *Context) Next() {
 	ctx.handleIndex++
 	if ctx.handleIndex >= len(ctx.handles) {
@@ -320,19 +324,18 @@ func (ctx *Context) Html(html string) {
 	ctx.WriteString(html)
 }
 
-func (ctx *Context) Render(t string, data interface{}) {
-	if tpl := ctx.rest.template; tpl != nil && tpl.Lookup(t) != nil {
-		ctx.SetHeader("Content-Type", "text/html; charset=utf-8")
-		tpl.ExecuteTemplate(ctx.W, t, data)
-	} else {
-		t, err := template.New("temp").Parse(t)
-		if err != nil {
-			ctx.Error(err)
-		} else {
-			ctx.SetHeader("Content-Type", "text/html; charset=utf-8")
-			t.Execute(ctx.W, data)
-		}
+func (ctx *Context) Render(template Template, data interface{}) {
+	ctx.SetHeader("Content-Type", "text/html; charset=utf-8")
+	template.Execute(ctx.W, data)
+}
+
+func (ctx *Context) RenderHTML(text string, data interface{}) {
+	t, err := template.New("").Parse(text)
+	if err != nil {
+		ctx.Error(err)
+		return
 	}
+	ctx.Render(t, data)
 }
 
 func (ctx *Context) Json(status int, v interface{}) {
@@ -342,8 +345,8 @@ func (ctx *Context) Json(status int, v interface{}) {
 		return
 	}
 
-	if len(data) > 1000 && strings.Contains(ctx.R.Header.Get("Accept-Encoding"), "gzip") {
-		if w, ok := ctx.W.(*clearResponseWriter); ok {
+	if len(data) > 1024 && strings.Contains(ctx.R.Header.Get("Accept-Encoding"), "gzip") {
+		if w, ok := ctx.W.(*responseWriter); ok {
 			gzw := newGzipWriter(w.rawWriter)
 			defer gzw.Close()
 			w.rawWriter = gzw
@@ -365,10 +368,10 @@ func (ctx *Context) File(filename string) {
 		}
 		return
 	}
-	if fi.Size() > 1000 && strings.Contains(ctx.R.Header.Get("Accept-Encoding"), "gzip") {
+	if fi.Size() > 1024 && strings.Contains(ctx.R.Header.Get("Accept-Encoding"), "gzip") {
 		for _, ext := range []string{"html", "htm", "xml", "svg", "js", "jsx", "js.map", "ts", "tsx", "json", "css", "txt"} {
 			if strings.HasSuffix(strings.ToLower(filename), "."+ext) {
-				if w, ok := ctx.W.(*clearResponseWriter); ok {
+				if w, ok := ctx.W.(*responseWriter); ok {
 					gzw := newGzipWriter(w.rawWriter)
 					defer gzw.Close()
 					w.rawWriter = gzw
