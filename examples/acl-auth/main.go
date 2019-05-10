@@ -44,14 +44,12 @@ func (u *User) Privileges() []string {
 	return u.privileges
 }
 
-var todos = map[string][]string{}
-
 func main() {
 	rest := rex.New()
+	tpl := template.Must(template.New("").Parse(indexHTML))
+	todos := map[string][]string{}
 
-	rest.SetTemplate(template.Must(template.New("index").Parse(indexHTML)))
-
-	rest.Use(rex.ACL(func(ctx *rex.Context) acl.User {
+	rest.Use(rex.ACLAuth(func(ctx *rex.Context) acl.User {
 		if ctx.Session().Has("USER") {
 			return &User{
 				id:         ctx.Session().Get("USER").(string),
@@ -63,12 +61,12 @@ func main() {
 
 	rest.Get("/", func(ctx *rex.Context) {
 		if user := ctx.User(); user != nil {
-			ctx.Render("index", map[string]interface{}{
+			ctx.Render(tpl, map[string]interface{}{
 				"user":  user.(*User).id,
 				"todos": todos[user.(*User).id],
 			})
 		} else {
-			ctx.Render("index", nil)
+			ctx.Render(tpl, nil)
 		}
 	})
 

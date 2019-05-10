@@ -24,7 +24,7 @@ func main() {
 	)
 
 	rest.Get("/", func(ctx *rex.Context) {
-		ctx.Render(indexHTML, map[string]interface{}{
+		ctx.RenderHTML(indexHTML, map[string]interface{}{
 			"user": ctx.Session().Get("user"),
 		})
 	})
