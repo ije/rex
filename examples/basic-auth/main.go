@@ -21,7 +21,7 @@ func main() {
 	rest.Get("/admin", rex.BasicAuth("rex", func(name string, password string) (bool, error) {
 		return name == "test" && password == "test", nil
 	}), func(ctx *rex.Context) {
-		ctx.Ok(fmt.Sprintf("Hello, %s/%s!", ctx.BasicAuthUser().Name, ctx.BasicAuthUser().Password))
+		ctx.Ok(fmt.Sprintf("Hello, %s/%s!", ctx.BasicUser().Name, ctx.BasicUser().Password))
 	})
 
 	rex.Serve(rex.Config{
