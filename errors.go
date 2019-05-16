@@ -1,9 +1,9 @@
 package rex
 
-type ctxPanicError struct {
+type contextPanicError struct {
 	msg string
 }
 
-func (err *ctxPanicError) Error() string {
+func (err *contextPanicError) Error() string {
 	return err.msg
 }

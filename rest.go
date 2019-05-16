@@ -174,7 +174,7 @@ func (rest *REST) initRouter() {
 		}
 	})
 	router.PanicHandler = func(w http.ResponseWriter, r *http.Request, v interface{}) {
-		if err, ok := v.(*ctxPanicError); ok {
+		if err, ok := v.(*contextPanicError); ok {
 			if rest.SendError {
 				http.Error(w, err.msg, 500)
 			} else {

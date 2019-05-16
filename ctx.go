@@ -10,13 +10,11 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/ije/gox/utils"
 	"github.com/ije/rex/acl"
-	"github.com/ije/rex/session"
 )
 
 type Context struct {
@@ -29,8 +27,8 @@ type Context struct {
 	privileges     map[string]struct{}
 	aclUser        acl.User
 	basicUser      acl.BasicUser
-	session        *Session
-	sessionManager session.Manager
+	session        *ContextSession
+	sessionManager *SessionManager
 	rest           *REST
 }
 
@@ -83,41 +81,29 @@ func (ctx *Context) ACLUser() acl.User {
 
 func (ctx *Context) MustACLUser() acl.User {
 	if ctx.aclUser == nil {
-		panic(&ctxPanicError{"ACL user of context is nil"})
+		panic(&contextPanicError{"ACL user of context is nil"})
 	}
 	return ctx.aclUser
 }
 
-func (ctx *Context) Session() *Session {
-	if ctx.sessionManager == nil {
-		panic(&ctxPanicError{"session manager is nil"})
-	}
-
-	cookieName := "x-session"
-	if name := ctx.sessionManager.CookieName(); name != "" {
-		cookieName = name
-	}
-
-	var sid string
-	cookie, err := ctx.GetCookie(cookieName)
-	if err == nil {
-		sid = cookie.Value
+func (ctx *Context) Session() *ContextSession {
+	if ctx.sessionManager.Pool == nil {
+		panic(&contextPanicError{"session pool is nil"})
 	}
 
 	if ctx.session == nil {
-		sess, err := ctx.sessionManager.GetSession(sid)
+		sid := ctx.sessionManager.SIDStore.Get(ctx)
+		sess, err := ctx.sessionManager.Pool.GetSession(sid)
 		if err != nil {
-			panic(&ctxPanicError{err.Error()})
+			panic(&contextPanicError{err.Error()})
 		}
 
+		ctx.session = &ContextSession{sess}
+
+		// restore sid
 		if sess.SID() != sid {
-			ctx.SetCookie(&http.Cookie{
-				Name:     cookieName,
-				Value:    sess.SID(),
-				HttpOnly: true,
-			})
+			ctx.sessionManager.SIDStore.Set(ctx, sess.SID())
 		}
-		ctx.session = &Session{sess}
 	}
 
 	return ctx.session
@@ -204,45 +190,15 @@ func (ctx *Context) FormValues(key string) (a []string) {
 	return
 }
 
-func (ctx *Context) FormString(key string, defaultValue string) string {
+func (ctx *Context) FormValue(key string, defaultValue ...string) FormValue {
 	values := ctx.FormValues(key)
 	if len(values) > 0 {
-		return values[0]
+		return FormValue(values[0])
 	}
-	return defaultValue
-}
-
-func (ctx *Context) FormBool(key string, defaultValue bool) bool {
-	values := ctx.FormValues(key)
-	if len(values) > 0 {
-		s := strings.ToLower(values[0])
-		return s == "true" || s == "1"
+	if len(defaultValue) > 0 {
+		return FormValue(defaultValue[0])
 	}
-	return defaultValue
-}
-
-func (ctx *Context) FormFloat(key string, defaultValue float64) float64 {
-	values := ctx.FormValues(key)
-	if len(values) > 0 {
-		f, err := strconv.ParseFloat(values[0], 64)
-		if err != nil {
-			return defaultValue
-		}
-		return f
-	}
-	return defaultValue
-}
-
-func (ctx *Context) FormInt(key string, defaultValue int64) int64 {
-	values := ctx.FormValues(key)
-	if len(values) > 0 {
-		f, err := strconv.ParseInt(values[0], 10, 64)
-		if err != nil {
-			return defaultValue
-		}
-		return f
-	}
-	return defaultValue
+	return FormValue("")
 }
 
 func (ctx *Context) RemoteIP() string {
@@ -283,14 +239,6 @@ func (ctx *Context) IfNotMatch(etag string, then func()) {
 	then()
 }
 
-func (ctx *Context) Write(p []byte) (n int, err error) {
-	return ctx.W.Write(p)
-}
-
-func (ctx *Context) WriteString(s string) (n int, err error) {
-	return ctx.W.Write([]byte(s))
-}
-
 func (ctx *Context) End(status int, a ...string) {
 	wh := ctx.W.Header()
 	if _, ok := wh["Content-Type"]; !ok {
@@ -298,9 +246,9 @@ func (ctx *Context) End(status int, a ...string) {
 	}
 	ctx.W.WriteHeader(status)
 	if len(a) > 0 {
-		ctx.WriteString(strings.Join(a, " "))
+		ctx.W.Write([]byte(strings.Join(a, " ")))
 	} else {
-		ctx.WriteString(http.StatusText(status))
+		ctx.W.Write([]byte(http.StatusText(status)))
 	}
 }
 
@@ -319,14 +267,9 @@ func (ctx *Context) Error(err error) {
 	}
 }
 
-func (ctx *Context) Html(html string) {
+func (ctx *Context) Html(html []byte) {
 	ctx.SetHeader("Content-Type", "text/html; charset=utf-8")
-	ctx.WriteString(html)
-}
-
-func (ctx *Context) Render(template Template, data interface{}) {
-	ctx.SetHeader("Content-Type", "text/html; charset=utf-8")
-	template.Execute(ctx.W, data)
+	ctx.W.Write(html)
 }
 
 func (ctx *Context) RenderHTML(text string, data interface{}) {
@@ -335,7 +278,12 @@ func (ctx *Context) RenderHTML(text string, data interface{}) {
 		ctx.Error(err)
 		return
 	}
-	ctx.Render(t, data)
+	ctx.RenderTemplate(t, data)
+}
+
+func (ctx *Context) RenderTemplate(template Template, data interface{}) {
+	ctx.SetHeader("Content-Type", "text/html; charset=utf-8")
+	template.Execute(ctx.W, data)
 }
 
 func (ctx *Context) Json(status int, v interface{}) {
@@ -355,7 +303,7 @@ func (ctx *Context) Json(status int, v interface{}) {
 
 	ctx.SetHeader("Content-Type", "application/json; charset=utf-8")
 	ctx.W.WriteHeader(status)
-	ctx.Write(data)
+	ctx.W.Write(data)
 }
 
 func (ctx *Context) File(filename string) {

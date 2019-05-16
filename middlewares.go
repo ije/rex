@@ -11,7 +11,6 @@ import (
 
 	"github.com/ije/gox/utils"
 	"github.com/ije/rex/acl"
-	"github.com/ije/rex/session"
 )
 
 func Header(key string, value string) RESTHandle {
@@ -113,10 +112,19 @@ func BasicAuth(realm string, check func(name string, password string) (ok bool, 
 	}
 }
 
-func SessionManager(manager session.Manager) RESTHandle {
+func Session(manager SessionManager) RESTHandle {
 	return func(ctx *Context) {
-		if manager != nil {
-			ctx.sessionManager = manager
+		pool := manager.Pool
+		sidStore := manager.SIDStore
+		if pool == nil {
+			pool = defaultSessionManager.Pool
+		}
+		if sidStore == nil {
+			sidStore = defaultSessionManager.SIDStore
+		}
+		ctx.sessionManager = &SessionManager{
+			SIDStore: sidStore,
+			Pool:     pool,
 		}
 		ctx.Next()
 	}
