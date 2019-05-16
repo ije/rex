@@ -13,8 +13,7 @@ type Session interface {
 	Flush() error
 }
 
-type Manager interface {
-	CookieName() string
+type Pool interface {
 	GetSession(sid string) (Session, error)
 	SetLifetime(d time.Duration) error
 	GC() error

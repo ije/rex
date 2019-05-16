@@ -61,17 +61,17 @@ func main() {
 
 	rest.Get("/", func(ctx *rex.Context) {
 		if user := ctx.ACLUser(); user != nil {
-			ctx.Render(tpl, map[string]interface{}{
+			ctx.RenderTemplate(tpl, map[string]interface{}{
 				"user":  user.(*User).id,
 				"todos": todos[user.(*User).id],
 			})
 		} else {
-			ctx.Render(tpl, nil)
+			ctx.RenderTemplate(tpl, nil)
 		}
 	})
 
 	rest.Post("/add-todo", rex.Privileges("add"), func(ctx *rex.Context) {
-		todo := ctx.FormString("todo", "")
+		todo := ctx.FormValue("todo").String()
 		if todo != "" {
 			user := ctx.ACLUser().(*User).id
 			todos[user] = append(todos[user], todo)
@@ -80,7 +80,7 @@ func main() {
 	})
 
 	rest.Post("/login", func(ctx *rex.Context) {
-		user := ctx.FormString("user", "")
+		user := ctx.FormValue("user").String()
 		if user != "" {
 			ctx.Session().Set("USER", user)
 		}

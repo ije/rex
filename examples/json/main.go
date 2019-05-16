@@ -17,7 +17,7 @@ func main() {
 	rest := rex.New()
 
 	rest.Get("/", func(ctx *rex.Context) {
-		ctx.Html(indexHTML)
+		ctx.Html([]byte(indexHTML))
 	})
 
 	rest.Get("/json1", func(ctx *rex.Context) {

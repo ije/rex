@@ -17,7 +17,7 @@ func main() {
 	rest.NotFound(rex.Static("../static/root", "e404.html"))
 
 	rest.Get("/", func(ctx *rex.Context) {
-		ctx.Html(indexHTML)
+		ctx.Html([]byte(indexHTML))
 	})
 
 	rex.Serve(rex.Config{

@@ -20,7 +20,9 @@ const indexHTML = `
 func main() {
 	rest := rex.New()
 	rest.Use(
-		rex.SessionManager(session.NewMemorySessionManager(15 * time.Second)),
+		rex.Session(rex.SessionManager{
+			Pool: session.NewMemorySessionPool(15 * time.Second),
+		}),
 	)
 
 	rest.Get("/", func(ctx *rex.Context) {
@@ -30,7 +32,7 @@ func main() {
 	})
 
 	rest.Post("/login", func(ctx *rex.Context) {
-		user := ctx.FormString("user", "")
+		user := ctx.FormValue("user").String()
 		if user != "" {
 			ctx.Session().Set("user", user)
 		}

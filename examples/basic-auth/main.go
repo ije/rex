@@ -15,7 +15,7 @@ func main() {
 	rest := rex.New()
 
 	rest.Get("/", func(ctx *rex.Context) {
-		ctx.Html(indexHTML)
+		ctx.Html([]byte(indexHTML))
 	})
 
 	rest.Get("/admin", rex.BasicAuth("rex", func(name string, password string) (bool, error) {

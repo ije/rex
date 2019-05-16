@@ -12,7 +12,7 @@ type MemorySession struct {
 	expires   time.Time
 	storeLock sync.RWMutex
 	store     map[string]interface{}
-	manager   *MemorySessionManager
+	pool      *MemorySessionPool
 }
 
 func (ms *MemorySession) SID() string {
@@ -65,39 +65,39 @@ func (ms *MemorySession) Flush() error {
 }
 
 func (ms *MemorySession) activate() {
-	ms.expires = time.Now().Add(ms.manager.lifetime)
+	ms.expires = time.Now().Add(ms.pool.lifetime)
 }
 
-type MemorySessionManager struct {
+type MemorySessionPool struct {
 	lock     sync.RWMutex
 	sessions map[string]*MemorySession
 	lifetime time.Duration
 	gcTimer  *time.Timer
 }
 
-func NewMemorySessionManager(lifetime time.Duration) *MemorySessionManager {
-	manager := &MemorySessionManager{
+func NewMemorySessionPool(lifetime time.Duration) *MemorySessionPool {
+	pool := &MemorySessionPool{
 		sessions: map[string]*MemorySession{},
 	}
-	manager.SetLifetime(lifetime)
-	return manager
+	pool.SetLifetime(lifetime)
+	return pool
 }
 
-func (manager *MemorySessionManager) CookieName() string {
+func (pool *MemorySessionPool) CookieName() string {
 	return ""
 }
 
-func (manager *MemorySessionManager) GetSession(sid string) (session Session, err error) {
+func (pool *MemorySessionPool) GetSession(sid string) (session Session, err error) {
 	now := time.Now()
 
-	manager.lock.RLock()
-	ms, ok := manager.sessions[sid]
-	manager.lock.RUnlock()
+	pool.lock.RLock()
+	ms, ok := pool.sessions[sid]
+	pool.lock.RUnlock()
 
 	if ok && ms.expires.Before(now) {
-		manager.lock.Lock()
-		delete(manager.sessions, sid)
-		manager.lock.Unlock()
+		pool.lock.Lock()
+		delete(pool.sessions, sid)
+		pool.lock.Unlock()
 		ms, ok = nil, false
 	}
 
@@ -105,9 +105,9 @@ func (manager *MemorySessionManager) GetSession(sid string) (session Session, er
 		if len(sid) != 64 {
 		RE:
 			sid = rs.Base64.String(64)
-			manager.lock.RLock()
-			_, ok := manager.sessions[sid]
-			manager.lock.RUnlock()
+			pool.lock.RLock()
+			_, ok := pool.sessions[sid]
+			pool.lock.RUnlock()
 			if ok {
 				goto RE
 			}
@@ -115,72 +115,72 @@ func (manager *MemorySessionManager) GetSession(sid string) (session Session, er
 
 		ms = &MemorySession{
 			sid:     sid,
-			expires: now.Add(manager.lifetime),
+			expires: now.Add(pool.lifetime),
 			store:   map[string]interface{}{},
-			manager: manager,
+			pool:    pool,
 		}
-		manager.lock.Lock()
-		manager.sessions[sid] = ms
-		manager.lock.Unlock()
+		pool.lock.Lock()
+		pool.sessions[sid] = ms
+		pool.lock.Unlock()
 	} else {
-		manager.lock.Lock()
-		ms.expires = now.Add(manager.lifetime)
-		manager.lock.Unlock()
+		pool.lock.Lock()
+		ms.expires = now.Add(pool.lifetime)
+		pool.lock.Unlock()
 	}
 
 	session = ms
 	return
 }
 
-func (manager *MemorySessionManager) SetLifetime(lifetime time.Duration) error {
+func (pool *MemorySessionPool) SetLifetime(lifetime time.Duration) error {
 	if lifetime < time.Second {
 		return nil
 	}
 
-	manager.lifetime = lifetime
-	manager.gcLoop()
+	pool.lifetime = lifetime
+	pool.gcLoop()
 
 	return nil
 }
 
-func (manager *MemorySessionManager) GC() error {
+func (pool *MemorySessionPool) GC() error {
 	now := time.Now()
 
-	manager.lock.RLock()
-	defer manager.lock.RUnlock()
+	pool.lock.RLock()
+	defer pool.lock.RUnlock()
 
-	for sid, session := range manager.sessions {
+	for sid, session := range pool.sessions {
 		if session.expires.Before(now) {
-			manager.lock.RUnlock()
-			manager.lock.Lock()
-			delete(manager.sessions, sid)
-			manager.lock.Unlock()
-			manager.lock.RLock()
+			pool.lock.RUnlock()
+			pool.lock.Lock()
+			delete(pool.sessions, sid)
+			pool.lock.Unlock()
+			pool.lock.RLock()
 		}
 	}
 
 	return nil
 }
 
-func (manager *MemorySessionManager) gcLoop() {
-	if manager.gcTimer != nil {
-		manager.gcTimer.Stop()
+func (pool *MemorySessionPool) gcLoop() {
+	if pool.gcTimer != nil {
+		pool.gcTimer.Stop()
 	}
-	manager.gcTimer = time.AfterFunc(manager.lifetime, func() {
-		manager.gcTimer = nil
-		manager.GC()
-		manager.gcLoop()
+	pool.gcTimer = time.AfterFunc(pool.lifetime, func() {
+		pool.gcTimer = nil
+		pool.GC()
+		pool.gcLoop()
 	})
 }
 
-func (manager *MemorySessionManager) Destroy(sid string) error {
-	manager.lock.Lock()
-	delete(manager.sessions, sid)
-	manager.lock.Unlock()
+func (pool *MemorySessionPool) Destroy(sid string) error {
+	pool.lock.Lock()
+	delete(pool.sessions, sid)
+	pool.lock.Unlock()
 
 	return nil
 }
 
 func init() {
-	var _ Manager = (*MemorySessionManager)(nil)
+	var _ Pool = (*MemorySessionPool)(nil)
 }
