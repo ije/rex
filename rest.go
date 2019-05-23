@@ -116,8 +116,8 @@ func (rest *REST) Handle(method string, path string, handles ...RESTHandle) {
 	if rest.router == nil {
 		rest.initRouter()
 	}
- 
-	rest.router.Handle(method, path, func(w http.ResponseWriter, r *http.Request, params map[string]string) {
+
+	rest.router.Handle(method, path, func(w http.ResponseWriter, r *http.Request, params router.Params) {
 		rest.serve(w, r, params, handles...)
 	})
 }
@@ -165,14 +165,14 @@ func (rest *REST) serve(w http.ResponseWriter, r *http.Request, params map[strin
 
 func (rest *REST) initRouter() {
 	router := router.New()
-	router.NotFound = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	router.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		if len(rest.notFoundHandles) > 0 {
 			rest.serve(w, r, map[string]string{}, rest.notFoundHandles...)
 		} else {
 			http.NotFound(w, r)
 		}
 	})
-	router.PanicHandler = func(w http.ResponseWriter, r *http.Request, v interface{}) {
+	router.Panic(func(w http.ResponseWriter, r *http.Request, v interface{}) {
 		if err, ok := v.(*contextPanicError); ok {
 			if rest.SendError {
 				http.Error(w, err.msg, 500)
@@ -201,7 +201,7 @@ func (rest *REST) initRouter() {
 		if rest.Logger != nil {
 			rest.Logger.Printf("[panic] %v\n%s", v, buf.String())
 		}
-	}
+	})
 	rest.router = router
 }
 

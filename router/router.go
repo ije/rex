@@ -6,58 +6,47 @@ import (
 	"sync"
 
 	"github.com/ije/gox/utils"
-	"github.com/ije/gox/valid"
 )
 
-type nodeType uint8
-
-const (
-	root nodeType = iota
-	static
-	param
-	catchAll
-)
-
-type node struct {
-	lock           sync.RWMutex
-	name           string
-	nodeType       nodeType
-	staticChildren map[string]*node
-	wildChild      *node
-	validate       Validate
-	handle         Handle
-}
-
-type Handle func(w http.ResponseWriter, r *http.Request, params map[string]string)
-type Validate func(s string) (ok bool)
-
+// Router is a http.Handler which can be used to dispatch requests to different handler functions.
 type Router struct {
-	lock         sync.RWMutex
-	NotFound     http.HandlerFunc
-	PanicHandler func(http.ResponseWriter, *http.Request, interface{})
-	validators   map[string]Validate
-	methods      map[string]*node
+	lock        sync.RWMutex
+	trees       map[string]*node
+	validates   Validates
+	notFound    func(http.ResponseWriter, *http.Request)
+	panicHandle func(http.ResponseWriter, *http.Request, interface{})
 }
 
+// New returns a new initialized Router.
 func New() *Router {
 	return &Router{
-		methods: map[string]*node{},
-		validators: map[string]Validate{
-			"number": valid.IsNumber,
-		},
+		trees:     map[string]*node{},
+		validates: Validates{},
 	}
 }
 
-func (router *Router) AddValidate(name string, validate Validate) {
+// Validates sets param validates.
+func (router *Router) Validates(validates Validates) {
 	router.lock.Lock()
 	defer router.lock.Unlock()
 
-	if router.validators == nil {
-		router.validators = map[string]Validate{}
+	if validates == nil {
+		validates = Validates{}
 	}
-	router.validators[name] = validate
+	router.validates = validates
 }
 
+// Panic sets a NotFound handle.
+func (router *Router) NotFound(handle http.HandlerFunc) {
+	router.notFound = handle
+}
+
+// Panic sets a panic handle.
+func (router *Router) Panic(handle func(http.ResponseWriter, *http.Request, interface{})) {
+	router.panicHandle = handle
+}
+
+// Handle registers a new request handle with the given path and method.
 func (router *Router) Handle(method string, path string, handle Handle) {
 	root := router.getRootNode(method)
 
@@ -85,10 +74,10 @@ func (router *Router) Handle(method string, path string, handle Handle) {
 func (router *Router) getRootNode(method string) *node {
 	method = strings.ToUpper(method)
 	router.lock.RLock()
-	if router.methods == nil {
-		router.methods = map[string]*node{}
+	if router.trees == nil {
+		router.trees = map[string]*node{}
 	}
-	rootNode, ok := router.methods[method]
+	rootNode, ok := router.trees[method]
 	router.lock.RUnlock()
 	if !ok {
 		rootNode = &node{
@@ -97,7 +86,7 @@ func (router *Router) getRootNode(method string) *node {
 			staticChildren: map[string]*node{},
 		}
 		router.lock.Lock()
-		router.methods[method] = rootNode
+		router.trees[method] = rootNode
 		router.lock.Unlock()
 	}
 	return rootNode
@@ -154,9 +143,9 @@ func (router *Router) mapPath(n *node, fullPath string, pathSegs []string, handl
 				staticChildren: map[string]*node{},
 			}
 		}
-		if validateName != "" && len(router.validators) > 0 {
+		if validateName != "" && len(router.validates) > 0 {
 			router.lock.RLock()
-			validate, ok := router.validators[validateName]
+			validate, ok := router.validates[validateName]
 			router.lock.RUnlock()
 			if ok {
 				n.wildChild.validate = validate
@@ -200,26 +189,26 @@ func (router *Router) mapPath(n *node, fullPath string, pathSegs []string, handl
 
 // ServeHTTP implements the http.Handler interface.
 func (router *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if router.PanicHandler != nil {
+	if router.panicHandle != nil {
 		defer router.recover(w, r)
 	}
 
 	router.lock.RLock()
-	root, ok := router.methods[r.Method]
+	root, ok := router.trees[r.Method]
 	router.lock.RUnlock()
 	if !ok {
-		router.handleNotFound(w, r)
+		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 		return
 	}
 
 	path := utils.CleanPath(r.URL.Path)
 	if path == "/" {
 		if root.wildChild != nil && root.wildChild.handle != nil {
-			root.wildChild.handle(w, r, map[string]string{
+			root.wildChild.handle(w, r, Params{
 				root.wildChild.name: "/",
 			})
 		} else if root.handle != nil {
-			root.handle(w, r, map[string]string{})
+			root.handle(w, r, Params{})
 		} else {
 			router.handleNotFound(w, r)
 		}
@@ -229,7 +218,7 @@ func (router *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// fmt.Println(path)
 	pathSegs := strings.Split(path, "/")[1:]
 	parentNode := root
-	params := map[string]string{}
+	params := Params{}
 	for len(pathSegs) > 0 {
 		fs := pathSegs[0]
 		// fmt.Println("+ " + fs)
@@ -272,8 +261,8 @@ func (router *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (router *Router) handleNotFound(w http.ResponseWriter, r *http.Request) {
-	if router.NotFound != nil {
-		router.NotFound(w, r)
+	if router.notFound != nil {
+		router.notFound(w, r)
 	} else {
 		http.NotFound(w, r)
 	}
@@ -281,6 +270,6 @@ func (router *Router) handleNotFound(w http.ResponseWriter, r *http.Request) {
 
 func (router *Router) recover(w http.ResponseWriter, r *http.Request) {
 	if v := recover(); v != nil {
-		router.PanicHandler(w, r, v)
+		router.panicHandle(w, r, v)
 	}
 }

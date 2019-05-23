@@ -2,11 +2,13 @@ package rex
 
 import (
 	"net/url"
+
+	"github.com/ije/rex/router"
 )
 
 // A URL is a *url.URL with httprouter.Params
 type URL struct {
-	Params map[string]string
+	Params router.Params
 	*url.URL
 }
 

@@ -10,54 +10,57 @@ import (
 
 func TestRouter(t *testing.T) {
 	router := New()
-	router.AddValidate("email", valid.IsEmail)
+	router.Validates(map[string]Validate{
+		"number": valid.IsNumber,
+		"email":  valid.IsEmail,
+	})
 
 	var routed int
 	var expectRouted int
 
-	router.Handle("GET", "/", func(w http.ResponseWriter, r *http.Request, params map[string]string) {
+	router.Handle("GET", "/", func(w http.ResponseWriter, r *http.Request, params Params) {
 		routed++
-		want := map[string]string{}
+		want := Params{}
 		if !reflect.DeepEqual(params, want) {
 			t.Fatalf("invalid params: want %v, got %v", want, params)
 		}
 	})
 
-	router.Handle("GET", "/user/:name", func(w http.ResponseWriter, r *http.Request, params map[string]string) {
+	router.Handle("GET", "/user/:name", func(w http.ResponseWriter, r *http.Request, params Params) {
 		routed++
-		want := map[string]string{"name": "gopher"}
+		want := Params{"name": "gopher"}
 		if !reflect.DeepEqual(params, want) {
 			t.Fatalf("invalid params: want %v, got %v", want, params)
 		}
 	})
 
-	router.Handle("GET", "/user/:name/{age:number}", func(w http.ResponseWriter, r *http.Request, params map[string]string) {
+	router.Handle("GET", "/user/:name/{age:number}", func(w http.ResponseWriter, r *http.Request, params Params) {
 		routed++
-		want := map[string]string{"name": "gopher", "age": "20"}
+		want := Params{"name": "gopher", "age": "20"}
 		if !reflect.DeepEqual(params, want) {
 			t.Fatalf("invalid params: want %v, got %v", want, params)
 		}
 	})
 
-	router.Handle("GET", "/:version/user", func(w http.ResponseWriter, r *http.Request, params map[string]string) {
+	router.Handle("GET", "/:version/user", func(w http.ResponseWriter, r *http.Request, params Params) {
 		routed++
-		want := map[string]string{"version": "v1"}
+		want := Params{"version": "v1"}
 		if !reflect.DeepEqual(params, want) {
 			t.Fatalf("invalid params: want %v, got %v", want, params)
 		}
 	})
 
-	router.Handle("GET", "/assets/*", func(w http.ResponseWriter, r *http.Request, params map[string]string) {
+	router.Handle("GET", "/assets/*", func(w http.ResponseWriter, r *http.Request, params Params) {
 		routed++
-		want := map[string]string{"path": "/scripts/main.dist.js"}
+		want := Params{"path": "/scripts/main.dist.js"}
 		if !reflect.DeepEqual(params, want) {
 			t.Fatalf("invalid params: want %v, got %v", want, params)
 		}
 	})
 
-	router.Handle("POST", "/send/{email:email}", func(w http.ResponseWriter, r *http.Request, params map[string]string) {
+	router.Handle("POST", "/send/{email:email}", func(w http.ResponseWriter, r *http.Request, params Params) {
 		routed++
-		want := map[string]string{"email": "go@gmail.com"}
+		want := Params{"email": "go@gmail.com"}
 		if !reflect.DeepEqual(params, want) {
 			t.Fatalf("invalid params: want %v, got %v", want, params)
 		}
