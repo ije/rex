@@ -36,22 +36,22 @@ func HTTPS() RESTHandle {
 	}
 }
 
-func CORS(cors CORSOptions) RESTHandle {
+func CORS(opts CORSOptions) RESTHandle {
 	return func(ctx *Context) {
-		if len(cors.AllowOrigin) > 0 {
-			ctx.SetHeader("Access-Control-Allow-Origin", cors.AllowOrigin)
-			if cors.AllowCredentials {
+		if len(opts.AllowOrigin) > 0 {
+			ctx.SetHeader("Access-Control-Allow-Origin", opts.AllowOrigin)
+			if opts.AllowCredentials {
 				ctx.SetHeader("Access-Control-Allow-Credentials", "true")
 			}
 			if ctx.R.Method == "OPTIONS" {
-				if len(cors.AllowMethods) > 0 {
-					ctx.SetHeader("Access-Control-Allow-Methods", strings.Join(cors.AllowMethods, ", "))
+				if len(opts.AllowMethods) > 0 {
+					ctx.SetHeader("Access-Control-Allow-Methods", strings.Join(opts.AllowMethods, ", "))
 				}
-				if len(cors.AllowHeaders) > 0 {
-					ctx.SetHeader("Access-Control-Allow-Headers", strings.Join(cors.AllowHeaders, ", "))
+				if len(opts.AllowHeaders) > 0 {
+					ctx.SetHeader("Access-Control-Allow-Headers", strings.Join(opts.AllowHeaders, ", "))
 				}
-				if cors.MaxAge > 0 {
-					ctx.SetHeader("Access-Control-Max-Age", strconv.Itoa(cors.MaxAge))
+				if opts.MaxAge > 0 {
+					ctx.SetHeader("Access-Control-Max-Age", strconv.Itoa(opts.MaxAge))
 				}
 				ctx.End(http.StatusNoContent)
 				return
@@ -72,10 +72,25 @@ func Privileges(privileges ...string) RESTHandle {
 	}
 }
 
-func ACLAuth(getUserFunc func(ctx *Context) acl.User) RESTHandle {
+func ACLAuth(getUserFunc func(ctx *Context) (acl.User, error)) RESTHandle {
 	return func(ctx *Context) {
 		if getUserFunc != nil {
-			ctx.aclUser = getUserFunc(ctx)
+			var err error
+			ctx.aclUser, err = getUserFunc(&Context{
+				W:              ctx.W,
+				R:              ctx.R,
+				URL:            ctx.URL,
+				State:          ctx.State,
+				handles:        []RESTHandle{},
+				handleIndex:    -1,
+				privileges:     ctx.privileges,
+				sessionManager: ctx.sessionManager,
+				rest:           ctx.rest,
+			})
+			if err != nil {
+				ctx.Error(err)
+				return
+			}
 		}
 		ctx.Next()
 	}
@@ -85,8 +100,8 @@ func ACLAuth(getUserFunc func(ctx *Context) acl.User) RESTHandle {
 func BasicAuth(realm string, check func(name string, password string) (ok bool, err error)) RESTHandle {
 	return func(ctx *Context) {
 		if auth := ctx.R.Header.Get("Authorization"); len(auth) > 0 {
-			if authType, combination := utils.SplitByFirstByte(auth, ' '); len(combination) > 0 && authType == "Basic" {
-				authInfo, e := base64.StdEncoding.DecodeString(combination)
+			if authType, authSecret := utils.SplitByFirstByte(auth, ' '); len(authSecret) > 0 && authType == "Basic" {
+				authInfo, e := base64.StdEncoding.DecodeString(authSecret)
 				if e != nil {
 					return
 				}
@@ -107,7 +122,10 @@ func BasicAuth(realm string, check func(name string, password string) (ok bool, 
 			}
 		}
 
-		ctx.SetHeader("WWW-Authenticate", fmt.Sprintf("Basic realm=\"%s\"", realm))
+		if realm == "" {
+			realm = "Authorization Required"
+		}
+		ctx.SetHeader("WWW-Authenticate", fmt.Sprintf(`Basic realm="%s"`, realm))
 		ctx.W.WriteHeader(401)
 	}
 }
@@ -116,10 +134,14 @@ func Session(manager SessionManager) RESTHandle {
 	return func(ctx *Context) {
 		pool := manager.Pool
 		sidStore := manager.SIDStore
+		if pool == nil && sidStore == nil {
+			ctx.Next()
+			return
+		}
+
 		if pool == nil {
 			pool = defaultSessionManager.Pool
-		}
-		if sidStore == nil {
+		} else if sidStore == nil {
 			sidStore = defaultSessionManager.SIDStore
 		}
 		ctx.sessionManager = &SessionManager{

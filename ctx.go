@@ -272,18 +272,18 @@ func (ctx *Context) Html(html []byte) {
 	ctx.W.Write(html)
 }
 
+func (ctx *Context) Render(template Template, data interface{}) {
+	ctx.SetHeader("Content-Type", "text/html; charset=utf-8")
+	template.Execute(ctx.W, data)
+}
+
 func (ctx *Context) RenderHTML(text string, data interface{}) {
 	t, err := template.New("").Parse(text)
 	if err != nil {
 		ctx.Error(err)
 		return
 	}
-	ctx.RenderTemplate(t, data)
-}
-
-func (ctx *Context) RenderTemplate(template Template, data interface{}) {
-	ctx.SetHeader("Content-Type", "text/html; charset=utf-8")
-	template.Execute(ctx.W, data)
+	ctx.Render(t, data)
 }
 
 func (ctx *Context) Json(status int, v interface{}) {

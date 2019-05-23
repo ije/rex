@@ -49,24 +49,24 @@ func main() {
 	tpl := template.Must(template.New("").Parse(indexHTML))
 	todos := map[string][]string{}
 
-	rest.Use(rex.ACLAuth(func(ctx *rex.Context) acl.User {
+	rest.Use(rex.ACLAuth(func(ctx *rex.Context) (acl.User, error) {
 		if ctx.Session().Has("USER") {
 			return &User{
 				id:         ctx.Session().Get("USER").(string),
 				privileges: []string{"add"},
-			}
+			}, nil
 		}
-		return nil
+		return nil, nil
 	}))
 
 	rest.Get("/", func(ctx *rex.Context) {
 		if user := ctx.ACLUser(); user != nil {
-			ctx.RenderTemplate(tpl, map[string]interface{}{
+			ctx.Render(tpl, map[string]interface{}{
 				"user":  user.(*User).id,
 				"todos": todos[user.(*User).id],
 			})
 		} else {
-			ctx.RenderTemplate(tpl, nil)
+			ctx.Render(tpl, nil)
 		}
 	})
 

@@ -4,37 +4,49 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/ije/gox/valid"
+
 	"github.com/ije/rex/session"
 )
 
 var defaultSessionManager = &SessionManager{
-	SIDStore: &defaultSIDtore{},
+	SIDStore: &CookieSIDtore{},
 	Pool:     session.NewMemorySessionPool(time.Hour / 2),
 }
 
 type SessionManager struct {
-	SIDStore SessionSIDStore
+	SIDStore SIDStore
 	Pool     session.Pool
 }
 
-type SessionSIDStore interface {
+type SIDStore interface {
 	Get(ctx *Context) string
 	Set(ctx *Context, sid string)
 }
 
-type defaultSIDtore struct{}
+type CookieSIDtore struct {
+	CookieName string
+}
 
-func (s *defaultSIDtore) Get(ctx *Context) string {
-	cookie, err := ctx.GetCookie("x-session")
+func (s *CookieSIDtore) cookieName() string {
+	name := "x-session"
+	if valid.IsSlug(s.CookieName) {
+		name = s.CookieName
+	}
+	return name
+}
+
+func (s *CookieSIDtore) Get(ctx *Context) string {
+	cookie, err := ctx.GetCookie(s.cookieName())
 	if err != nil {
 		return ""
 	}
 	return cookie.Value
 }
 
-func (s *defaultSIDtore) Set(ctx *Context, sid string) {
+func (s *CookieSIDtore) Set(ctx *Context, sid string) {
 	ctx.SetCookie(&http.Cookie{
-		Name:     "x-session",
+		Name:     s.cookieName(),
 		Value:    sid,
 		HttpOnly: true,
 	})
