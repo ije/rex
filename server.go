@@ -42,12 +42,12 @@ func Serve(config Config) {
 
 		if len(gRESTs) > 0 {
 			for _, rest := range gRESTs {
-				if strings.HasPrefix(r.URL.Path, "/"+strings.Trim(rest.Prefix, "/")) {
+				if rest.prefix != "" && strings.HasPrefix(r.URL.Path, "/"+rest.prefix) {
 					rest.ServeHTTP(w, r)
 					return
 				}
 			}
-			if rest := gRESTs[len(gRESTs)-1]; rest.Prefix == "" {
+			if rest := gRESTs[len(gRESTs)-1]; rest.prefix == "" {
 				rest.ServeHTTP(w, r)
 				return
 			}

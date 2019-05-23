@@ -8,7 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/julienschmidt/httprouter"
+	"github.com/ije/gox/utils"
+
+	"github.com/ije/rex/router"
 )
 
 // RESTHandle defines the handle of route or middleware of REST
@@ -18,7 +20,7 @@ type RESTHandle func(ctx *Context)
 type REST struct {
 	// Prefix to add base path at beginning of each route path
 	// For example if the Prefix equals "v2", the route path "/path" will be "/v2/path"
-	Prefix string
+	prefix string
 
 	// Logger to log accesses
 	AccessLogger Logger
@@ -32,7 +34,7 @@ type REST struct {
 
 	middlewares     []RESTHandle
 	notFoundHandles []RESTHandle
-	router          *httprouter.Router
+	router          *router.Router
 }
 
 var gRESTs restSlice
@@ -45,13 +47,13 @@ func New(prefix ...string) *REST {
 	}
 
 	for _, rest := range gRESTs {
-		if rest.Prefix == p {
+		if rest.prefix == p {
 			return rest
 		}
 	}
 
 	rest := &REST{
-		Prefix: p,
+		prefix: p,
 	}
 	gRESTs = append(gRESTs, rest)
 	return rest
@@ -107,18 +109,15 @@ func (rest *REST) Handle(method string, path string, handles ...RESTHandle) {
 		return
 	}
 
-	if path == "*" {
-		path = "/*path"
-	}
-	if prefix := strings.Trim(rest.Prefix, "/"); prefix != "" {
-		path = "/" + prefix + "/" + strings.Trim(path, "/")
+	if rest.prefix != "" {
+		path = utils.CleanPath(rest.prefix + "/" + path)
 	}
 
 	if rest.router == nil {
 		rest.initRouter()
 	}
-
-	rest.router.Handle(method, path, func(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
+ 
+	rest.router.Handle(method, path, func(w http.ResponseWriter, r *http.Request, params map[string]string) {
 		rest.serve(w, r, params, handles...)
 	})
 }
@@ -127,7 +126,7 @@ func (rest *REST) NotFound(handles ...RESTHandle) {
 	rest.notFoundHandles = append(rest.notFoundHandles, handles...)
 }
 
-func (rest *REST) serve(w http.ResponseWriter, r *http.Request, params httprouter.Params, handles ...RESTHandle) {
+func (rest *REST) serve(w http.ResponseWriter, r *http.Request, params map[string]string, handles ...RESTHandle) {
 	startTime := time.Now()
 	ctx := &Context{
 		W:              &responseWriter{status: 200, rawWriter: w},
@@ -165,10 +164,10 @@ func (rest *REST) serve(w http.ResponseWriter, r *http.Request, params httproute
 }
 
 func (rest *REST) initRouter() {
-	router := httprouter.New()
+	router := router.New()
 	router.NotFound = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if len(rest.notFoundHandles) > 0 {
-			rest.serve(w, r, httprouter.Params{}, rest.notFoundHandles...)
+			rest.serve(w, r, map[string]string{}, rest.notFoundHandles...)
 		} else {
 			http.NotFound(w, r)
 		}
@@ -210,5 +209,7 @@ func (rest *REST) initRouter() {
 func (rest *REST) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if rest.router != nil {
 		rest.router.ServeHTTP(w, r)
+	} else {
+		http.NotFound(w, r)
 	}
 }
