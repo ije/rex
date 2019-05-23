@@ -27,7 +27,7 @@ const (
 
 func main() {
 	rest := rex.New()
-	restUser := rex.New("user", "ignored/arg")
+	restUser := rex.New("user", "unused")
 	restV2 := rex.New("v2")
 	restV2User := rex.New("v2/user")
 	restV3 := rex.New("v3")

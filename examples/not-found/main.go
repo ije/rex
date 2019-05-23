@@ -6,7 +6,7 @@ import (
 
 const indexHTML = `
 <h1>Welcome to use REX!</h1>
-<p><a href="/alice">Goto Alice</p>
+<p><a href="/hello/World">Say hello!</a></p>
 `
 
 func main() {
