@@ -2,32 +2,49 @@ package router
 
 import (
 	"net/http"
-	"sync"
-)
-
-type nodeType uint8
-
-const (
-	root nodeType = iota
-	static
-	param
-	catchAll
 )
 
 type node struct {
-	lock           sync.RWMutex
 	name           string
-	nodeType       nodeType
-	staticChildren map[string]*node
-	wildChild      *node
-	validate       Validate
+	staticChildren []*node
+	paramChild     *node
+	catchAllChild  *node
+	validate       string
 	handle         Handle
 }
 
-// Params is a map, as returned by the router.
-type Params map[string]string
+func (n *node) lookup(name string) (*node, bool) {
+	for _, nod := range n.staticChildren {
+		if nod.name == name {
+			return nod, true
+		}
+	}
+	return nil, false
+}
 
-// Validates is a Validate-map to validate router params.
+// Param is a single URL parameter, consisting of a key and a value.
+type Param struct {
+	Key   string
+	Value string
+}
+
+// Params is a Param-slice, as returned by the router.
+// The slice is ordered, the first URL parameter is also the first slice value.
+// It is therefore safe to read values by the index.
+type Params []Param
+
+// ByName returns the value of the first Param which key matches the given name.
+// If no matching Param is found, an empty string is returned.
+func (ps Params) ByName(name string) string {
+	for i := range ps {
+		if ps[i].Key == name {
+			return ps[i].Value
+		}
+	}
+	return ""
+}
+
+// Validates is a validate map to validate router params.
 type Validates map[string]Validate
 
 // Handle is a function that can be registered to a route to handle HTTP requests.

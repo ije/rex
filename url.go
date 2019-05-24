@@ -15,5 +15,8 @@ type URL struct {
 // Param returns the value of the first Param which key matches the given name.
 // If no matching Param is found, an empty string is returned.
 func (url *URL) Param(name string) string {
-	return url.Params[name]
+	if url.Params != nil {
+		return url.Params.ByName(name)
+	}
+	return ""
 }

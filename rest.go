@@ -126,7 +126,7 @@ func (rest *REST) NotFound(handles ...RESTHandle) {
 	rest.notFoundHandles = append(rest.notFoundHandles, handles...)
 }
 
-func (rest *REST) serve(w http.ResponseWriter, r *http.Request, params map[string]string, handles ...RESTHandle) {
+func (rest *REST) serve(w http.ResponseWriter, r *http.Request, params router.Params, handles ...RESTHandle) {
 	startTime := time.Now()
 	ctx := &Context{
 		W:              &responseWriter{status: 200, rawWriter: w},
@@ -167,7 +167,7 @@ func (rest *REST) initRouter() {
 	router := router.New()
 	router.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		if len(rest.notFoundHandles) > 0 {
-			rest.serve(w, r, map[string]string{}, rest.notFoundHandles...)
+			rest.serve(w, r, nil, rest.notFoundHandles...)
 		} else {
 			http.NotFound(w, r)
 		}

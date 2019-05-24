@@ -3,14 +3,12 @@ package router
 import (
 	"net/http"
 	"strings"
-	"sync"
 
 	"github.com/ije/gox/utils"
 )
 
 // Router is a http.Handler which can be used to dispatch requests to different handler functions.
 type Router struct {
-	lock        sync.RWMutex
 	trees       map[string]*node
 	validates   Validates
 	notFound    func(http.ResponseWriter, *http.Request)
@@ -27,16 +25,13 @@ func New() *Router {
 
 // Validates sets param validates.
 func (router *Router) Validates(validates Validates) {
-	router.lock.Lock()
-	defer router.lock.Unlock()
-
 	if validates == nil {
 		validates = Validates{}
 	}
 	router.validates = validates
 }
 
-// Panic sets a NotFound handle.
+// NotFound sets a NotFound handle.
 func (router *Router) NotFound(handle http.HandlerFunc) {
 	router.notFound = handle
 }
@@ -60,12 +55,12 @@ func (router *Router) Handle(method string, path string, handle Handle) {
 		if root.handle == nil {
 			root.handle = handle
 		} else {
-			panic("duplicate root route: '/'")
+			panic("conflicting root route: '/'")
 		}
 		return
 	}
 
-	pathSegs := strings.Split(strings.TrimRight(fullPath, "/"), "/")[1:]
+	pathSegs := strings.Split(strings.Trim(fullPath, "/"), "/")
 	if len(pathSegs) > 0 {
 		router.mapPath(root, fullPath, pathSegs, handle)
 	}
@@ -73,21 +68,16 @@ func (router *Router) Handle(method string, path string, handle Handle) {
 
 func (router *Router) getRootNode(method string) *node {
 	method = strings.ToUpper(method)
-	router.lock.RLock()
 	if router.trees == nil {
 		router.trees = map[string]*node{}
 	}
 	rootNode, ok := router.trees[method]
-	router.lock.RUnlock()
 	if !ok {
+
 		rootNode = &node{
-			name:           "/",
-			nodeType:       root,
-			staticChildren: map[string]*node{},
+			name: "/",
 		}
-		router.lock.Lock()
 		router.trees[method] = rootNode
-		router.lock.Unlock()
 	}
 	return rootNode
 }
@@ -98,92 +88,108 @@ func (router *Router) mapPath(n *node, fullPath string, pathSegs []string, handl
 		panic("empty path segments")
 	}
 
-	fs := pathSegs[0]
+	fn := ""
+	fs := strings.TrimSpace(pathSegs[0])
 	fl := len(fs)
 	isCatchAll := fl > 0 && strings.HasPrefix(fs, "*")
-	isParam := fl > 1 && strings.HasPrefix(fs, ":")
-	fn := ""
-	validateName := ""
-	if isCatchAll || isParam {
-		fn = fs[1:]
-	}
-	if !isParam {
-		isParam = fl > 2 && strings.HasPrefix(fs, "{") && strings.HasSuffix(fs, "}")
-		if isParam {
-			fn, validateName = utils.SplitByFirstByte(fs[1:fl-1], ':')
-		}
-	}
+	isParam := fl > 0 && strings.HasPrefix(fs, ":")
+
 	if isCatchAll {
-		if isCatchAll && segs > 1 {
+		if segs > 1 {
 			panic("bad route path: '" + fs + "' must be at the end of path '" + fullPath + "'")
 		}
-		if n.wildChild != nil {
-			panic("duplicate wildcard route: '" + fullPath + "'")
+		if n.catchAllChild != nil {
+			panic("conflicting wildcard route: '" + fullPath + "'")
 		}
+		fn = fs[1:]
 		if fn == "" {
 			fn = "path"
 		}
-		n.wildChild = &node{
-			name:     fn,
-			nodeType: catchAll,
-			handle:   handle,
+		n.catchAllChild = &node{
+			name:   fn,
+			handle: handle,
 		}
 		return
 	}
 
-	if isParam {
-		if n.wildChild != nil {
-			if n.wildChild.name != fn {
-				panic("duplicate wildcard route: '" + fullPath + "'")
-			}
-		} else {
-			n.wildChild = &node{
-				name:           fn,
-				nodeType:       param,
-				staticChildren: map[string]*node{},
-			}
-		}
-		if validateName != "" && len(router.validates) > 0 {
-			router.lock.RLock()
-			validate, ok := router.validates[validateName]
-			router.lock.RUnlock()
-			if ok {
-				n.wildChild.validate = validate
-			}
-		}
-		if segs == 1 {
-			if n.wildChild.handle != nil {
-				panic("duplicate wildcard route: '" + fullPath + "'")
-			}
-			n.wildChild.handle = handle
-		} else {
-			router.mapPath(n.wildChild, fullPath, pathSegs[1:], handle)
-		}
-		return
-	}
-
-	n.lock.RLock()
-	sn, ok := n.staticChildren[fs]
-	n.lock.RUnlock()
-	if !ok {
-		sn = &node{
-			name:           fs,
-			nodeType:       static,
-			staticChildren: map[string]*node{},
-		}
-		n.lock.Lock()
-		n.staticChildren[fs] = sn
-		n.lock.Unlock()
-	}
-
-	if segs == 1 {
-		if sn.handle != nil {
-			panic("duplicate static route: '" + fullPath + "'")
-		} else {
-			sn.handle = handle
+	validate := ""
+	if !isParam {
+		isParam = fl > 1 && strings.HasPrefix(fs, "{") && strings.HasSuffix(fs, "}")
+		if isParam {
+			s1, s2 := utils.SplitByFirstByte(fs[1:fl-1], ':')
+			fn = strings.TrimSpace(s1)
+			validate = strings.TrimSpace(s2)
 		}
 	} else {
-		router.mapPath(sn, fullPath, pathSegs[1:], handle)
+		fn = fs[1:]
+	}
+	if isParam {
+		if fn == "" {
+			panic("bad route path: missing param names of path '" + fullPath + "'")
+		}
+		if validate != "" && len(router.validates) > 0 {
+			_, ok := router.validates[validate]
+			if !ok {
+				panic("bad route path: bad validate '" + validate + "' of path '" + fullPath + "'")
+			}
+		}
+
+		if n.paramChild != nil {
+			if n.paramChild.name != fn || n.paramChild.validate != validate {
+				panic("duplicate wildcard route: '" + fullPath + "'")
+			}
+		} else {
+			n.paramChild = &node{
+				name: fn,
+			}
+			n.paramChild.validate = validate
+		}
+
+		if segs == 1 {
+			if n.paramChild.handle != nil {
+				panic("duplicate wildcard route: '" + fullPath + "'")
+			}
+			n.paramChild.handle = handle
+		} else {
+			router.mapPath(n.paramChild, fullPath, pathSegs[1:], handle)
+		}
+		return
+	}
+
+	names := map[string]struct{}{}
+	if fl > 1 && strings.HasPrefix(fs, "(") && strings.HasSuffix(fs, ")") {
+		fs = fs[1 : fl-1]
+		for _, name := range strings.Split(fs, "|") {
+			name = strings.TrimSpace(name)
+			if name != "" {
+				names[name] = struct{}{}
+			}
+		}
+		if len(names) == 0 {
+			panic("bad route path: '" + fullPath + "'")
+		}
+	} else {
+		names[fs] = struct{}{}
+	}
+
+	for name := range names {
+		sn, ok := n.lookup(name)
+		if !ok {
+			sn = &node{
+				name: name,
+			}
+			n.staticChildren = append(n.staticChildren, sn)
+		}
+
+		if segs == 1 {
+			if sn.handle != nil {
+				panic("conflicting static route: '" + fullPath + "'")
+			} else {
+				sn.handle = handle
+			}
+		} else {
+			router.mapPath(sn, fullPath, pathSegs[1:], handle)
+		}
 	}
 }
 
@@ -193,79 +199,109 @@ func (router *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		defer router.recover(w, r)
 	}
 
-	router.lock.RLock()
+	// router.lock.RLock()
 	root, ok := router.trees[r.Method]
-	router.lock.RUnlock()
+	// router.lock.RUnlock()
 	if !ok {
 		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 		return
 	}
 
-	path := utils.CleanPath(r.URL.Path)
-	if path == "/" {
-		if root.wildChild != nil && root.wildChild.handle != nil {
-			root.wildChild.handle(w, r, Params{
-				root.wildChild.name: "/",
-			})
-		} else if root.handle != nil {
-			root.handle(w, r, Params{})
+	handle, params := router.getHandle(root, r.URL.Path)
+	if handle != nil {
+		handle(w, r, params)
+	} else {
+		if router.notFound != nil {
+			router.notFound(w, r)
 		} else {
-			router.handleNotFound(w, r)
+			http.NotFound(w, r)
 		}
-		return
-	}
-
-	// fmt.Println(path)
-	pathSegs := strings.Split(path, "/")[1:]
-	parentNode := root
-	params := Params{}
-	for len(pathSegs) > 0 {
-		fs := pathSegs[0]
-		// fmt.Println("+ " + fs)
-		parentNode.lock.RLock()
-		childNode, ok := parentNode.staticChildren[fs]
-		parentNode.lock.RUnlock()
-		if !ok {
-			ok = parentNode.wildChild != nil
-			if ok {
-				childNode = parentNode.wildChild
-			}
-		}
-		// fmt.Println("?", ok)
-		if !ok {
-			router.handleNotFound(w, r)
-			return
-		}
-		if childNode.nodeType == param {
-			if childNode.validate != nil {
-				if !childNode.validate(fs) && len(pathSegs) == 1 {
-					router.handleNotFound(w, r)
-					return
-				}
-			}
-			params[childNode.name] = fs
-		} else if childNode.nodeType == catchAll {
-			params[childNode.name] = "/" + strings.Join(pathSegs, "/")
-		}
-		if len(pathSegs) == 1 || childNode.nodeType == catchAll {
-			if childNode.handle != nil {
-				childNode.handle(w, r, params)
-			} else {
-				router.handleNotFound(w, r)
-			}
-			return
-		}
-		parentNode = childNode
-		pathSegs = pathSegs[1:]
 	}
 }
 
-func (router *Router) handleNotFound(w http.ResponseWriter, r *http.Request) {
-	if router.notFound != nil {
-		router.notFound(w, r)
-	} else {
-		http.NotFound(w, r)
+func (router *Router) getHandle(root *node, path string) (Handle, Params) {
+	if path == "/" {
+		if root.catchAllChild != nil {
+			return root.catchAllChild.handle, Params{
+				{
+					Key:   "path",
+					Value: "/",
+				},
+			}
+		}
+		if root.handle != nil {
+			return root.handle, Params{}
+		}
+		return nil, nil
 	}
+
+	pathLen := len(path)
+	seg := ""
+	segStart := 1
+	parentNode := root
+	params := make(Params, 0, 10)
+	addParam := func(key string, value string) {
+		l := len(params)
+		if l == 10 {
+			buf := make(Params, 10, 100)
+			copy(buf, params)
+			params = buf
+		}
+		params = params[:l+1]
+		params[l].Key = key
+		params[l].Value = value
+	}
+
+	for {
+		if pathLen > 1 && path[pathLen-1] == '/' {
+			pathLen--
+		} else {
+			break
+		}
+	}
+
+	for i := 1; i < pathLen; i++ {
+		end := i == pathLen-1
+		if path[i] == '/' || end {
+			if end {
+				seg = path[segStart : i+1]
+			} else {
+				seg = path[segStart:i]
+			}
+
+			childNode, ok := parentNode.lookup(seg)
+
+			if !ok {
+				ok = parentNode.paramChild != nil
+				if ok && parentNode.paramChild.validate != "" {
+					ok = router.validates[parentNode.paramChild.validate](seg)
+				}
+				if ok {
+					childNode = parentNode.paramChild
+				}
+				if ok {
+					addParam(childNode.name, seg)
+				}
+			}
+
+			if !ok {
+				if parentNode.catchAllChild != nil {
+					addParam(parentNode.catchAllChild.name, "/"+path[segStart:])
+					return parentNode.catchAllChild.handle, params
+				}
+				return nil, nil
+			}
+
+			if end {
+				return childNode.handle, params
+			}
+
+			parentNode = childNode
+			segStart = i + 1
+		}
+	}
+
+	return nil, nil
 }
 
 func (router *Router) recover(w http.ResponseWriter, r *http.Request) {
