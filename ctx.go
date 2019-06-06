@@ -267,7 +267,7 @@ func (ctx *Context) Error(err error) {
 	}
 }
 
-func (ctx *Context) Html(html []byte) {
+func (ctx *Context) HTML(html []byte) {
 	ctx.SetHeader("Content-Type", "text/html; charset=utf-8")
 	ctx.W.Write(html)
 }
@@ -277,8 +277,8 @@ func (ctx *Context) Render(template Template, data interface{}) {
 	template.Execute(ctx.W, data)
 }
 
-func (ctx *Context) RenderHTML(text string, data interface{}) {
-	t, err := template.New("").Parse(text)
+func (ctx *Context) RenderHTML(html string, data interface{}) {
+	t, err := template.New("").Parse(html)
 	if err != nil {
 		ctx.Error(err)
 		return
@@ -286,7 +286,7 @@ func (ctx *Context) RenderHTML(text string, data interface{}) {
 	ctx.Render(t, data)
 }
 
-func (ctx *Context) Json(status int, v interface{}) {
+func (ctx *Context) JSON(status int, v interface{}) {
 	data, err := json.Marshal(v)
 	if err != nil {
 		ctx.Error(err)
@@ -304,6 +304,15 @@ func (ctx *Context) Json(status int, v interface{}) {
 	ctx.SetHeader("Content-Type", "application/json; charset=utf-8")
 	ctx.W.WriteHeader(status)
 	ctx.W.Write(data)
+}
+
+func (ctx *Context) ErrorJSON(code int, message string) {
+	ctx.JSON(code, map[string]interface{}{
+		"error": map[string]interface{}{
+			"code":    code,
+			"message": message,
+		},
+	})
 }
 
 func (ctx *Context) File(filename string) {
