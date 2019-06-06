@@ -13,7 +13,7 @@ func main() {
 	rest := rex.New()
 
 	rest.Get("/", func(ctx *rex.Context) {
-		ctx.Html([]byte(indexHTML))
+		ctx.HTML([]byte(indexHTML))
 	})
 
 	rest.Get("/hello/:name", func(ctx *rex.Context) {

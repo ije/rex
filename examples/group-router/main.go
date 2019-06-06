@@ -34,7 +34,7 @@ func main() {
 	restV3User := rex.New("v3/user")
 
 	rest.Get("/", func(ctx *rex.Context) {
-		ctx.Html([]byte(indexHTML))
+		ctx.HTML([]byte(indexHTML))
 	})
 
 	restUser.Get("/:id", func(ctx *rex.Context) {
@@ -42,7 +42,7 @@ func main() {
 	})
 
 	restV2.Get("/", func(ctx *rex.Context) {
-		ctx.Html([]byte(indexHTML2))
+		ctx.HTML([]byte(indexHTML2))
 	})
 
 	restV2User.Get("/:id", func(ctx *rex.Context) {
@@ -50,7 +50,7 @@ func main() {
 	})
 
 	restV3.Get("/", func(ctx *rex.Context) {
-		ctx.Html([]byte(indexHTML3))
+		ctx.HTML([]byte(indexHTML3))
 	})
 
 	restV3User.Get("/:id", func(ctx *rex.Context) {
