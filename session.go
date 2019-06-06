@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/ije/gox/valid"
-
 	"github.com/ije/rex/session"
 )
 

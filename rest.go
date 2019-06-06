@@ -25,7 +25,7 @@ type REST struct {
 	// Logger to log accesses
 	AccessLogger Logger
 
-	// Logger to log  errors
+	// Logger to log errors
 	Logger Logger
 
 	// If enabled, errors will be sent to the client.

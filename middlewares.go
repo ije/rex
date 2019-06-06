@@ -72,6 +72,7 @@ func Privileges(privileges ...string) RESTHandle {
 	}
 }
 
+// ACLAuth returns a ACL Authorization middleware.
 func ACLAuth(getUserFunc func(ctx *Context) (acl.User, error)) RESTHandle {
 	return func(ctx *Context) {
 		if getUserFunc != nil {
