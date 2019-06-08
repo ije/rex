@@ -11,6 +11,7 @@ const indexHTML = `
 <h1>Welcome to use REX!</h1>
 <p><a href="/json1">JSON #1(small)</a></p>
 <p><a href="/json2">JSON #2(big)</a></p>
+<p><a href="/json3">JSON #3(500)</a></p>
 `
 
 func main() {
@@ -41,6 +42,14 @@ func main() {
 		}
 
 		ctx.JSON(200, ret)
+	})
+
+	rest.Get("/json3", func(ctx *rex.Context) {
+		ctx.JSONError(rex.Invalid(404, "json not found"))
+	})
+
+	rest.Get("/json4", func(ctx *rex.Context) {
+		ctx.JSONError(rex.ServerError("boom!"))
 	})
 
 	rex.Serve(rex.Config{
