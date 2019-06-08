@@ -263,7 +263,7 @@ func (ctx *Context) Error(err error) {
 		ctx.End(500)
 	}
 	if ctx.rest.Logger != nil {
-		ctx.rest.Logger.Println("[error]", err)
+		ctx.rest.Logger.Println("[error] [rex]", err)
 	}
 }
 
@@ -306,13 +306,30 @@ func (ctx *Context) JSON(status int, v interface{}) {
 	ctx.W.Write(data)
 }
 
-func (ctx *Context) ErrorJSON(code int, message string) {
-	ctx.JSON(code, map[string]interface{}{
-		"error": map[string]interface{}{
-			"code":    code,
-			"message": message,
-		},
-	})
+func (ctx *Context) JSONError(err error) {
+	ie, ok := err.(*InvalidError)
+	if ok {
+		ctx.JSON(ie.Code, map[string]interface{}{
+			"error": map[string]interface{}{
+				"code":    ie.Code,
+				"message": ie.Message,
+			},
+		})
+	} else {
+		message := "internal server error"
+		if ctx.rest.SendError {
+			message = err.Error()
+		}
+		ctx.JSON(500, map[string]interface{}{
+			"error": map[string]interface{}{
+				"code":    500,
+				"message": message,
+			},
+		})
+		if ctx.rest.Logger != nil {
+			ctx.rest.Logger.Println("[error] [rex]", err)
+		}
+	}
 }
 
 func (ctx *Context) File(filename string) {
