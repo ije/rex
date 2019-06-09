@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"os"
@@ -122,6 +123,7 @@ func (ctx *Context) SetCookie(cookie *http.Cookie) {
 func (ctx *Context) RemoveCookie(cookie *http.Cookie) {
 	if cookie != nil {
 		cookie.Expires = time.Unix(0, 0)
+		cookie.Value = "-"
 		ctx.AddHeader("Set-Cookie", cookie.String())
 	}
 }
@@ -135,7 +137,7 @@ func (ctx *Context) SetHeader(key string, value string) {
 }
 
 func (ctx *Context) ParseMultipartForm(maxMemoryBytes int64) {
-	if strings.Contains(ctx.R.Header.Get("Content-Type"), "/json") {
+	if strings.HasSuffix(ctx.R.Header.Get("Content-Type"), "/json") {
 		form := url.Values{}
 		var obj map[string]interface{}
 		if json.NewDecoder(ctx.R.Body).Decode(&obj) == nil {
@@ -199,6 +201,14 @@ func (ctx *Context) FormValue(key string, defaultValue ...string) FormValue {
 		return FormValue(defaultValue[0])
 	}
 	return FormValue("")
+}
+
+func (ctx *Context) FormString(key string, defaultValue ...string) string {
+	return ctx.FormValue(key, defaultValue...).String()
+}
+
+func (ctx *Context) FormFile(key string) (multipart.File, *multipart.FileHeader, error) {
+	return ctx.R.FormFile(key)
 }
 
 func (ctx *Context) RemoteIP() string {
