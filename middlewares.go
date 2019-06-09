@@ -38,12 +38,16 @@ func HTTPS() RESTHandle {
 
 func CORS(opts CORSOptions) RESTHandle {
 	return func(ctx *Context) {
+		isPreflight := ctx.R.Method == "OPTIONS"
 		if len(opts.AllowOrigin) > 0 {
 			ctx.SetHeader("Access-Control-Allow-Origin", opts.AllowOrigin)
 			if opts.AllowCredentials {
 				ctx.SetHeader("Access-Control-Allow-Credentials", "true")
 			}
-			if ctx.R.Method == "OPTIONS" {
+			if len(opts.ExposeHeaders) > 0 {
+				ctx.SetHeader("Access-Control-Expose-Headers", strings.Join(opts.ExposeHeaders, ", "))
+			}
+			if isPreflight {
 				if len(opts.AllowMethods) > 0 {
 					ctx.SetHeader("Access-Control-Allow-Methods", strings.Join(opts.AllowMethods, ", "))
 				}
@@ -55,6 +59,12 @@ func CORS(opts CORSOptions) RESTHandle {
 				}
 				ctx.End(http.StatusNoContent)
 				return
+			}
+		} else {
+			ctx.AddHeader("Vary", "Origin")
+			if isPreflight {
+				ctx.AddHeader("Vary", "Access-Control-Request-Method")
+				ctx.AddHeader("Vary", "Access-Control-Request-Headers")
 			}
 		}
 		ctx.Next()
