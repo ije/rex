@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/ije/gox/utils"
-
 	"github.com/ije/rex/router"
 )
 
@@ -169,10 +168,17 @@ func (rest *REST) initRouter() {
 		if len(rest.notFoundHandles) > 0 {
 			rest.serve(w, r, nil, rest.notFoundHandles...)
 		} else {
-			http.NotFound(w, r)
+			rest.serve(w, r, nil, func(ctx *Context) {
+				ctx.End(404)
+			})
 		}
 	})
-	router.Panic(func(w http.ResponseWriter, r *http.Request, v interface{}) {
+	router.HandleOptions(func(w http.ResponseWriter, r *http.Request) {
+		rest.serve(w, r, nil, func(ctx *Context) {
+			ctx.End(http.StatusNoContent)
+		})
+	})
+	router.HandlePanic(func(w http.ResponseWriter, r *http.Request, v interface{}) {
 		if err, ok := v.(*contextPanicError); ok {
 			if rest.SendError {
 				http.Error(w, err.msg, 500)

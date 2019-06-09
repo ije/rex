@@ -9,10 +9,11 @@ import (
 
 // Router is a http.Handler which can be used to dispatch requests to different handler functions.
 type Router struct {
-	trees       map[string]*node
-	validates   Validates
-	notFound    func(http.ResponseWriter, *http.Request)
-	panicHandle func(http.ResponseWriter, *http.Request, interface{})
+	trees         map[string]*node
+	validates     Validates
+	notFound      func(http.ResponseWriter, *http.Request)
+	optionsHandle func(http.ResponseWriter, *http.Request)
+	panicHandle   func(http.ResponseWriter, *http.Request, interface{})
 }
 
 // New returns a new initialized Router.
@@ -36,9 +37,14 @@ func (router *Router) NotFound(handle http.HandlerFunc) {
 	router.notFound = handle
 }
 
-// Panic sets a panic handle.
-func (router *Router) Panic(handle func(http.ResponseWriter, *http.Request, interface{})) {
+// HandlePanic sets a panic handle.
+func (router *Router) HandlePanic(handle func(http.ResponseWriter, *http.Request, interface{})) {
 	router.panicHandle = handle
+}
+
+// HandleOptions sets a options handle.
+func (router *Router) HandleOptions(handle func(http.ResponseWriter, *http.Request)) {
+	router.optionsHandle = handle
 }
 
 // Handle registers a new request handle with the given path and method.
@@ -199,10 +205,12 @@ func (router *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		defer router.recover(w, r)
 	}
 
-	// router.lock.RLock()
 	root, ok := router.trees[r.Method]
-	// router.lock.RUnlock()
 	if !ok {
+		if r.Method == "OPTIONS" && router.optionsHandle != nil {
+			router.optionsHandle(w, r)
+			return
+		}
 		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 		return
 	}
