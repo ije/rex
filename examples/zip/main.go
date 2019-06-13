@@ -16,7 +16,7 @@ func main() {
 	rest.Use(rex.Header("Server", "nginx"))
 
 	rest.Get("/", func(ctx *rex.Context) {
-		ctx.HTML([]byte(indexHTML))
+		ctx.HTML(indexHTML)
 	})
 
 	rest.Get("/nil.zip", func(ctx *rex.Context) { ctx.Zip("../static/root/nil") })

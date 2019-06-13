@@ -18,11 +18,11 @@ func main() {
 	rest := rex.New()
 
 	rest.Get("/", func(ctx *rex.Context) {
-		ctx.HTML([]byte(indexHTML))
+		ctx.HTML(indexHTML)
 	})
 
 	rest.Get("/json1", func(ctx *rex.Context) {
-		ctx.JSON(200, map[string]string{
+		ctx.JSON(map[string]string{
 			"foo": "bar",
 		})
 	})
@@ -41,7 +41,7 @@ func main() {
 			return
 		}
 
-		ctx.JSON(200, ret)
+		ctx.JSON(ret)
 	})
 
 	rest.Get("/json3", func(ctx *rex.Context) {

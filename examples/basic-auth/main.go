@@ -15,10 +15,10 @@ func main() {
 	rest := rex.New()
 
 	rest.Get("/", func(ctx *rex.Context) {
-		ctx.HTML([]byte(indexHTML))
+		ctx.HTML(indexHTML)
 	})
 
-	rest.Get("/admin", rex.BasicAuth("rex", func(name string, password string) (bool, error) {
+	rest.Get("/admin", rex.BasicAuth(func(name string, password string) (bool, error) {
 		return name == "test" && password == "test", nil
 	}), func(ctx *rex.Context) {
 		ctx.Ok(fmt.Sprintf("Hello, %s/%s!", ctx.BasicUser().Name, ctx.BasicUser().Password))

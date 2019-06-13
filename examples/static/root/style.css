@@ -1,3 +1,7 @@
 h1 {
     font-size: 100px
 }
+
+h2 {
+    text-decoration: line-through;
+}

@@ -19,11 +19,7 @@ const indexHTML = `
 
 func main() {
 	rest := rex.New()
-	rest.Use(
-		rex.Session(rex.SessionManager{
-			Pool: session.NewMemorySessionPool(15 * time.Second),
-		}),
-	)
+	rest.Use(rex.SessionManager(nil, session.NewMemorySessionPool(15*time.Second)))
 
 	rest.Get("/", func(ctx *rex.Context) {
 		ctx.RenderHTML(indexHTML, map[string]interface{}{

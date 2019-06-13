@@ -27,14 +27,14 @@ const (
 
 func main() {
 	rest := rex.New()
-	restUser := rex.New("user", "unused")
+	restUser := rex.New("user")
 	restV2 := rex.New("v2")
-	restV2User := rex.New("v2/user")
+	restV2User := restV2.New("user")
 	restV3 := rex.New("v3")
-	restV3User := rex.New("v3/user")
+	restV3User := restV3.New("user")
 
 	rest.Get("/", func(ctx *rex.Context) {
-		ctx.HTML([]byte(indexHTML))
+		ctx.HTML(indexHTML)
 	})
 
 	restUser.Get("/:id", func(ctx *rex.Context) {
@@ -42,7 +42,7 @@ func main() {
 	})
 
 	restV2.Get("/", func(ctx *rex.Context) {
-		ctx.HTML([]byte(indexHTML2))
+		ctx.HTML(indexHTML2)
 	})
 
 	restV2User.Get("/:id", func(ctx *rex.Context) {
@@ -50,7 +50,7 @@ func main() {
 	})
 
 	restV3.Get("/", func(ctx *rex.Context) {
-		ctx.HTML([]byte(indexHTML3))
+		ctx.HTML(indexHTML3)
 	})
 
 	restV3User.Get("/:id", func(ctx *rex.Context) {
