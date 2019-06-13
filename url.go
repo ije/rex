@@ -8,7 +8,8 @@ import (
 
 // A URL is a *url.URL with httprouter.Params
 type URL struct {
-	Params router.Params
+	Params    router.Params
+	RoutePath string
 	*url.URL
 }
 

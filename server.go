@@ -118,5 +118,9 @@ func Serve(config Config) {
 		}()
 	}
 
+	if config.Debug {
+		config.Logger.Println("[debug] rex server startd.")
+	}
+
 	wg.Wait()
 }

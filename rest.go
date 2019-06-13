@@ -12,8 +12,8 @@ import (
 	"github.com/ije/rex/router"
 )
 
-// RESTHandle defines the handle of route or middleware of REST
-type RESTHandle func(ctx *Context)
+// Handle defines the handle of route or middleware of REST
+type Handle func(ctx *Context)
 
 // REST is a http.Handler which contains the router, middlewares and configuration settings
 type REST struct {
@@ -31,8 +31,8 @@ type REST struct {
 	// should be disable in production
 	SendError bool
 
-	middlewares     []RESTHandle
-	notFoundHandles []RESTHandle
+	middlewares     []Handle
+	notFoundHandles []Handle
 	router          *router.Router
 }
 
@@ -40,26 +40,35 @@ var gRESTs restSlice
 
 // New returns a new REST
 func New(prefix ...string) *REST {
-	var p string
-	if len(prefix) > 0 {
-		p = strings.Trim(strings.ReplaceAll(prefix[0], " ", ""), "/")
+	var s []string
+	for _, p := range prefix {
+		p = strings.Trim(strings.TrimSpace(p), "/")
+		if p != "" {
+			s = append(s, p)
+		}
 	}
+	ps := strings.Join(s, "/")
 
 	for _, rest := range gRESTs {
-		if rest.prefix == p {
+		if rest.prefix == ps {
 			return rest
 		}
 	}
 
 	rest := &REST{
-		prefix: p,
+		prefix: ps,
 	}
 	gRESTs = append(gRESTs, rest)
 	return rest
 }
 
+// New returns a nested REST
+func (rest *REST) New(prefix ...string) *REST {
+	return New(append([]string{rest.prefix}, prefix...)...)
+}
+
 // Use injects middlewares to REST
-func (rest *REST) Use(middlewares ...RESTHandle) {
+func (rest *REST) Use(middlewares ...Handle) {
 	for _, handle := range middlewares {
 		if handle != nil {
 			rest.middlewares = append(rest.middlewares, handle)
@@ -68,42 +77,42 @@ func (rest *REST) Use(middlewares ...RESTHandle) {
 }
 
 // Options is a shortcut for router.Handle("OPTIONS", path, handles)
-func (rest *REST) Options(path string, handles ...RESTHandle) {
+func (rest *REST) Options(path string, handles ...Handle) {
 	rest.Handle("OPTIONS", path, handles...)
 }
 
 // Head is a shortcut for router.Handle("HEAD", path, handles)
-func (rest *REST) Head(path string, handles ...RESTHandle) {
+func (rest *REST) Head(path string, handles ...Handle) {
 	rest.Handle("HEAD", path, handles...)
 }
 
 // Get is a shortcut for router.Handle("GET", path, handles)
-func (rest *REST) Get(path string, handles ...RESTHandle) {
+func (rest *REST) Get(path string, handles ...Handle) {
 	rest.Handle("GET", path, handles...)
 }
 
 // Post is a shortcut for router.Handle("POST", path, handles)
-func (rest *REST) Post(path string, handles ...RESTHandle) {
+func (rest *REST) Post(path string, handles ...Handle) {
 	rest.Handle("POST", path, handles...)
 }
 
 // Put is a shortcut for router.Handle("PUT", path, handles)
-func (rest *REST) Put(path string, handles ...RESTHandle) {
+func (rest *REST) Put(path string, handles ...Handle) {
 	rest.Handle("PUT", path, handles...)
 }
 
 // Patch is a shortcut for router.Handle("PATCH", path, handles)
-func (rest *REST) Patch(path string, handles ...RESTHandle) {
+func (rest *REST) Patch(path string, handles ...Handle) {
 	rest.Handle("PATCH", path, handles...)
 }
 
 // Delete is a shortcut for router.Handle("DELETE", path, handles)
-func (rest *REST) Delete(path string, handles ...RESTHandle) {
+func (rest *REST) Delete(path string, handles ...Handle) {
 	rest.Handle("DELETE", path, handles...)
 }
 
 // Handle registers a new request handle with the given method and path.
-func (rest *REST) Handle(method string, path string, handles ...RESTHandle) {
+func (rest *REST) Handle(method string, path string, handles ...Handle) {
 	if method == "" || path == "" || len(handles) == 0 {
 		return
 	}
@@ -121,16 +130,20 @@ func (rest *REST) Handle(method string, path string, handles ...RESTHandle) {
 	})
 }
 
-func (rest *REST) NotFound(handles ...RESTHandle) {
+func (rest *REST) NotFound(handles ...Handle) {
 	rest.notFoundHandles = append(rest.notFoundHandles, handles...)
 }
 
-func (rest *REST) serve(w http.ResponseWriter, r *http.Request, params router.Params, handles ...RESTHandle) {
+func (rest *REST) serve(w http.ResponseWriter, r *http.Request, params router.Params, handles ...Handle) {
 	startTime := time.Now()
+	routePath := r.URL.Path
+	if rest.prefix != "" {
+		routePath = "/" + strings.TrimPrefix(strings.TrimPrefix(r.URL.Path, "/"+rest.prefix), "/")
+	}
 	ctx := &Context{
 		W:              &responseWriter{status: 200, rawWriter: w},
 		R:              r,
-		URL:            &URL{params, r.URL},
+		URL:            &URL{params, routePath, r.URL},
 		State:          NewState(),
 		handles:        append(rest.middlewares, handles...),
 		handleIndex:    -1,

@@ -8,19 +8,19 @@ import (
 	"github.com/ije/rex/session"
 )
 
-var defaultSessionManager = &SessionManager{
-	SIDStore: &CookieSIDtore{},
-	Pool:     session.NewMemorySessionPool(time.Hour / 2),
+type sessionManager struct {
+	sidStore SIDStore
+	pool     session.Pool
 }
 
-type SessionManager struct {
-	SIDStore SIDStore
-	Pool     session.Pool
+var defaultSessionManager = &sessionManager{
+	sidStore: &CookieSIDtore{},
+	pool:     session.NewMemorySessionPool(time.Hour / 2),
 }
 
 type SIDStore interface {
 	Get(ctx *Context) string
-	Set(ctx *Context, sid string)
+	Put(ctx *Context, sid string)
 }
 
 type CookieSIDtore struct {
@@ -43,7 +43,7 @@ func (s *CookieSIDtore) Get(ctx *Context) string {
 	return cookie.Value
 }
 
-func (s *CookieSIDtore) Set(ctx *Context, sid string) {
+func (s *CookieSIDtore) Put(ctx *Context, sid string) {
 	ctx.SetCookie(&http.Cookie{
 		Name:     s.cookieName(),
 		Value:    sid,

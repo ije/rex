@@ -23,13 +23,13 @@ type Context struct {
 	R              *http.Request
 	URL            *URL
 	State          *State
-	handles        []RESTHandle
+	handles        []Handle
 	handleIndex    int
 	privileges     map[string]struct{}
 	aclUser        acl.User
 	basicUser      acl.BasicUser
 	session        *ContextSession
-	sessionManager *SessionManager
+	sessionManager *sessionManager
 	rest           *REST
 }
 
@@ -76,25 +76,32 @@ func (ctx *Context) BasicUser() acl.BasicUser {
 	return ctx.basicUser
 }
 
+func (ctx *Context) MustBasicUser() acl.BasicUser {
+	if ctx.aclUser == nil {
+		panic(&contextPanicError{"the basic user of context is nil"})
+	}
+	return ctx.basicUser
+}
+
 func (ctx *Context) ACLUser() acl.User {
 	return ctx.aclUser
 }
 
 func (ctx *Context) MustACLUser() acl.User {
 	if ctx.aclUser == nil {
-		panic(&contextPanicError{"ACL user of context is nil"})
+		panic(&contextPanicError{"the acl user of context is nil"})
 	}
 	return ctx.aclUser
 }
 
 func (ctx *Context) Session() *ContextSession {
-	if ctx.sessionManager.Pool == nil {
+	if ctx.sessionManager.pool == nil {
 		panic(&contextPanicError{"session pool is nil"})
 	}
 
 	if ctx.session == nil {
-		sid := ctx.sessionManager.SIDStore.Get(ctx)
-		sess, err := ctx.sessionManager.Pool.GetSession(sid)
+		sid := ctx.sessionManager.sidStore.Get(ctx)
+		sess, err := ctx.sessionManager.pool.GetSession(sid)
 		if err != nil {
 			panic(&contextPanicError{err.Error()})
 		}
@@ -103,7 +110,7 @@ func (ctx *Context) Session() *ContextSession {
 
 		// restore sid
 		if sess.SID() != sid {
-			ctx.sessionManager.SIDStore.Set(ctx, sess.SID())
+			ctx.sessionManager.sidStore.Put(ctx, sess.SID())
 		}
 	}
 
@@ -122,10 +129,24 @@ func (ctx *Context) SetCookie(cookie *http.Cookie) {
 
 func (ctx *Context) RemoveCookie(cookie *http.Cookie) {
 	if cookie != nil {
-		cookie.Expires = time.Unix(0, 0)
 		cookie.Value = "-"
-		ctx.AddHeader("Set-Cookie", cookie.String())
+		cookie.Expires = time.Unix(0, 0)
+		ctx.SetCookie(cookie)
 	}
+}
+
+func (ctx *Context) RemoveCookieByName(name string, path string, domain string) {
+	ctx.SetCookie(&http.Cookie{
+		Name:    name,
+		Path:    path,
+		Domain:  domain,
+		Value:   "-",
+		Expires: time.Unix(0, 0),
+	})
+}
+
+func (ctx *Context) GetHeader(key string) string {
+	return ctx.R.Header.Get(key)
 }
 
 func (ctx *Context) AddHeader(key string, value string) {
@@ -277,26 +298,7 @@ func (ctx *Context) Error(err error) {
 	}
 }
 
-func (ctx *Context) HTML(html []byte) {
-	ctx.SetHeader("Content-Type", "text/html; charset=utf-8")
-	ctx.W.Write(html)
-}
-
-func (ctx *Context) Render(template Template, data interface{}) {
-	ctx.SetHeader("Content-Type", "text/html; charset=utf-8")
-	template.Execute(ctx.W, data)
-}
-
-func (ctx *Context) RenderHTML(html string, data interface{}) {
-	t, err := template.New("").Parse(html)
-	if err != nil {
-		ctx.Error(err)
-		return
-	}
-	ctx.Render(t, data)
-}
-
-func (ctx *Context) JSON(status int, v interface{}) {
+func (ctx *Context) json(status int, v interface{}) {
 	data, err := json.Marshal(v)
 	if err != nil {
 		ctx.Error(err)
@@ -316,10 +318,14 @@ func (ctx *Context) JSON(status int, v interface{}) {
 	ctx.W.Write(data)
 }
 
+func (ctx *Context) JSON(v interface{}) {
+	ctx.json(200, v)
+}
+
 func (ctx *Context) JSONError(err error) {
 	ie, ok := err.(*InvalidError)
 	if ok {
-		ctx.JSON(ie.Code, map[string]interface{}{
+		ctx.json(ie.Code, map[string]interface{}{
 			"error": map[string]interface{}{
 				"code":    ie.Code,
 				"message": ie.Message,
@@ -330,7 +336,7 @@ func (ctx *Context) JSONError(err error) {
 		if ctx.rest.SendError {
 			message = err.Error()
 		}
-		ctx.JSON(500, map[string]interface{}{
+		ctx.json(500, map[string]interface{}{
 			"error": map[string]interface{}{
 				"code":    500,
 				"message": message,
@@ -340,6 +346,25 @@ func (ctx *Context) JSONError(err error) {
 			ctx.rest.Logger.Println("[error] [rex]", err)
 		}
 	}
+}
+
+func (ctx *Context) HTML(html string) {
+	ctx.SetHeader("Content-Type", "text/html; charset=utf-8")
+	ctx.W.Write([]byte(html))
+}
+
+func (ctx *Context) Render(template Template, data interface{}) {
+	ctx.SetHeader("Content-Type", "text/html; charset=utf-8")
+	template.Execute(ctx.W, data)
+}
+
+func (ctx *Context) RenderHTML(html string, data interface{}) {
+	t, err := template.New("").Parse(html)
+	if err != nil {
+		ctx.Error(err)
+		return
+	}
+	ctx.Render(t, data)
 }
 
 func (ctx *Context) File(filename string) {

@@ -11,9 +11,10 @@ import (
 
 	"github.com/ije/gox/utils"
 	"github.com/ije/rex/acl"
+	"github.com/ije/rex/session"
 )
 
-func Header(key string, value string) RESTHandle {
+func Header(key string, value string) Handle {
 	return func(ctx *Context) {
 		if key != "" {
 			ctx.SetHeader(key, value)
@@ -22,7 +23,7 @@ func Header(key string, value string) RESTHandle {
 	}
 }
 
-func HTTPS() RESTHandle {
+func HTTPS() Handle {
 	return func(ctx *Context) {
 		if ctx.R.TLS == nil {
 			code := 301
@@ -36,7 +37,7 @@ func HTTPS() RESTHandle {
 	}
 }
 
-func CORS(opts CORSOptions) RESTHandle {
+func CORS(opts CORSOptions) Handle {
 	return func(ctx *Context) {
 		isPreflight := ctx.R.Method == "OPTIONS"
 		if len(opts.AllowOrigin) > 0 {
@@ -71,7 +72,7 @@ func CORS(opts CORSOptions) RESTHandle {
 	}
 }
 
-func Privileges(privileges ...string) RESTHandle {
+func Privileges(privileges ...string) Handle {
 	return func(ctx *Context) {
 		for _, p := range privileges {
 			if p != "" {
@@ -82,37 +83,17 @@ func Privileges(privileges ...string) RESTHandle {
 	}
 }
 
-// ACLAuth returns a ACL Authorization middleware.
-func ACLAuth(getUserFunc func(ctx *Context) (acl.User, error)) RESTHandle {
-	return func(ctx *Context) {
-		if getUserFunc != nil {
-			var err error
-			ctx.aclUser, err = getUserFunc(&Context{
-				W:              ctx.W,
-				R:              ctx.R,
-				URL:            ctx.URL,
-				State:          ctx.State,
-				handles:        []RESTHandle{},
-				handleIndex:    -1,
-				privileges:     ctx.privileges,
-				sessionManager: ctx.sessionManager,
-				rest:           ctx.rest,
-			})
-			if err != nil {
-				ctx.Error(err)
-				return
-			}
-		}
-		ctx.Next()
-	}
+// BasicAuth returns a Basic HTTP Authorization middleware.
+func BasicAuth(check func(name string, password string) (ok bool, err error)) Handle {
+	return BasicAuthWithRealm("", check)
 }
 
-// BasicAuth returns a Basic HTTP Authorization middleware.
-func BasicAuth(realm string, check func(name string, password string) (ok bool, err error)) RESTHandle {
+// BasicAuthWithRealm returns a Basic HTTP Authorization middleware with realm.
+func BasicAuthWithRealm(realm string, check func(name string, password string) (ok bool, err error)) Handle {
 	return func(ctx *Context) {
 		if auth := ctx.R.Header.Get("Authorization"); len(auth) > 0 {
-			if authType, authSecret := utils.SplitByFirstByte(auth, ' '); len(authSecret) > 0 && authType == "Basic" {
-				authInfo, e := base64.StdEncoding.DecodeString(authSecret)
+			if authType, authData := utils.SplitByFirstByte(auth, ' '); len(authData) > 0 && authType == "Basic" {
+				authInfo, e := base64.StdEncoding.DecodeString(authData)
 				if e != nil {
 					return
 				}
@@ -122,7 +103,9 @@ func BasicAuth(realm string, check func(name string, password string) (ok bool, 
 				if err != nil {
 					ctx.Error(err)
 					return
-				} else if ok {
+				}
+
+				if ok {
 					ctx.basicUser = acl.BasicUser{
 						Name:     name,
 						Password: password,
@@ -141,31 +124,48 @@ func BasicAuth(realm string, check func(name string, password string) (ok bool, 
 	}
 }
 
-func Session(manager SessionManager) RESTHandle {
+// ACLAuth returns a ACL Authorization middleware.
+func ACLAuth(getUserFunc func(ctx *Context) (acl.User, error)) Handle {
 	return func(ctx *Context) {
-		pool := manager.Pool
-		sidStore := manager.SIDStore
-		if pool == nil && sidStore == nil {
-			ctx.Next()
-			return
-		}
-
-		if pool == nil {
-			pool = defaultSessionManager.Pool
-		} else if sidStore == nil {
-			sidStore = defaultSessionManager.SIDStore
-		}
-		ctx.sessionManager = &SessionManager{
-			SIDStore: sidStore,
-			Pool:     pool,
+		if getUserFunc != nil {
+			var err error
+			ctx.aclUser, err = getUserFunc(&Context{
+				W:              ctx.W,
+				R:              ctx.R,
+				URL:            ctx.URL,
+				State:          ctx.State,
+				handles:        []Handle{},
+				handleIndex:    -1,
+				privileges:     ctx.privileges,
+				sessionManager: ctx.sessionManager,
+				rest:           ctx.rest,
+			})
+			if err != nil {
+				ctx.Error(err)
+				return
+			}
 		}
 		ctx.Next()
 	}
 }
 
-func Static(root string, fallbackPaths ...string) RESTHandle {
+// SessionManager returns a SessionManager middleware.
+func SessionManager(sidStore SIDStore, pool session.Pool) Handle {
 	return func(ctx *Context) {
-		fp := path.Join(root, utils.CleanPath(ctx.URL.Path))
+		if pool != nil {
+			ctx.sessionManager.pool = pool
+		}
+		if sidStore != nil {
+			ctx.sessionManager.sidStore = sidStore
+		}
+		ctx.Next()
+	}
+}
+
+// Static returns a Static middleware.
+func Static(root string, fallbackPaths ...string) Handle {
+	return func(ctx *Context) {
+		fp := path.Join(root, utils.CleanPath(ctx.URL.RoutePath))
 		fallbackIndex := 0
 	Re:
 		fi, err := os.Stat(fp)
