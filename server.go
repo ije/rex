@@ -5,8 +5,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"path"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -24,8 +22,8 @@ func Serve(config Config) {
 		config.Logger = log.New(os.Stderr, "", log.LstdFlags)
 	}
 
-	sort.Sort(gRESTs)
 	for _, rest := range gRESTs {
+		config.Logger.Println(rest.prefix)
 		rest.SendError = config.Debug
 		if rest.AccessLogger == nil {
 			rest.AccessLogger = config.AccessLogger
@@ -75,12 +73,17 @@ func Serve(config Config) {
 		serv.Shutdown(nil)
 	}()
 
-	if https := config.HTTPS; https.Port > 0 && https.Port != config.Port && !config.Debug {
+	if https := config.HTTPS; (https.CertFile != "" && https.KeyFile != "") || (https.AutoTLS.Enable && (https.AutoTLS.CacheDir != "" || https.AutoTLS.Cache != nil)) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+
+			port := https.Port
+			if port == 0 {
+				port = 443
+			}
 			serv := &http.Server{
-				Addr:           fmt.Sprintf((":%d"), https.Port),
+				Addr:           fmt.Sprintf((":%d"), port),
 				Handler:        mux,
 				ReadTimeout:    time.Duration(config.ReadTimeout) * time.Second,
 				WriteTimeout:   time.Duration(config.WriteTimeout) * time.Second,
@@ -95,20 +98,22 @@ func Serve(config Config) {
 				} else if https.AutoTLS.CacheDir != "" {
 					fi, err := os.Stat(https.AutoTLS.CacheDir)
 					if err == nil && !fi.IsDir() {
-						config.Logger.Printf("[fatal] can not init tls: bad cert cache dir '%s'", https.AutoTLS.CacheDir)
+						config.Logger.Printf("[error] AutoTLS: invalid cache dir '%s'", https.AutoTLS.CacheDir)
 						return
 					}
+					if err != nil && os.IsNotExist(err) {
+						err = os.MkdirAll(https.AutoTLS.CacheDir, 0755)
+						if err != nil {
+							config.Logger.Printf("[error] AutoTLS: can't create the cache dir '%s'", https.AutoTLS.CacheDir)
+							return
+						}
+					}
 					m.Cache = autocert.DirCache(https.AutoTLS.CacheDir)
-				} else {
-					m.Cache = autocert.DirCache(path.Join(os.TempDir(), ".rex-cert-cache"))
 				}
 				if len(https.AutoTLS.Hosts) > 0 {
 					m.HostPolicy = autocert.HostWhitelist(https.AutoTLS.Hosts...)
 				}
 				serv.TLSConfig = m.TLSConfig()
-			} else if https.CertFile == "" || https.KeyFile == "" {
-				config.Logger.Println("[fatal] can not init tls: bad cert files")
-				return
 			}
 			err := serv.ListenAndServeTLS(https.CertFile, https.KeyFile)
 			if err != nil {

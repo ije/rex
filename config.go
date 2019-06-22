@@ -29,11 +29,6 @@ type AutoTLSConfig struct {
 	Cache    autocert.Cache `json:"-"`
 }
 
-type Logger interface {
-	Println(v ...interface{})
-	Printf(format string, v ...interface{})
-}
-
 type CORSOptions struct {
 	AllowOrigin      string
 	AllowMethods     []string
@@ -43,8 +38,7 @@ type CORSOptions struct {
 	MaxAge           int // in seconds
 }
 
-type restSlice []*REST
-
-func (p restSlice) Len() int           { return len(p) }
-func (p restSlice) Less(i, j int) bool { return len(p[i].prefix) > len(p[j].prefix) }
-func (p restSlice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
+type Logger interface {
+	Println(v ...interface{})
+	Printf(format string, v ...interface{})
+}

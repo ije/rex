@@ -36,29 +36,46 @@ type REST struct {
 	router          *router.Router
 }
 
-var gRESTs restSlice
+var gRESTs []*REST
 
 // New returns a new REST
-func New(prefix ...string) *REST {
+func New(prefixs ...string) *REST {
 	var s []string
-	for _, p := range prefix {
+	for _, p := range prefixs {
 		p = strings.Trim(strings.TrimSpace(p), "/")
 		if p != "" {
 			s = append(s, p)
 		}
 	}
-	ps := strings.Join(s, "/")
+	prefix := strings.Join(s, "/")
 
 	for _, rest := range gRESTs {
-		if rest.prefix == ps {
+		if rest.prefix == prefix {
 			return rest
 		}
 	}
 
 	rest := &REST{
-		prefix: ps,
+		prefix: prefix,
 	}
-	gRESTs = append(gRESTs, rest)
+
+	if len(gRESTs) == 0 {
+		gRESTs = []*REST{rest}
+	} else {
+		insertIndex := 0
+		for i, r := range gRESTs {
+			if len(prefix) > len(r.prefix) {
+				insertIndex = i
+				break
+			}
+		}
+		nRESTs := make([]*REST, len(gRESTs)+1)
+		copy(nRESTs, gRESTs[:insertIndex])
+		copy(nRESTs[insertIndex+1:], gRESTs[insertIndex:])
+		nRESTs[insertIndex] = rest
+		gRESTs = nRESTs
+	}
+
 	return rest
 }
 
