@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/ije/gox/utils"
-	"github.com/ije/rex/acl"
 	"github.com/ije/rex/session"
 )
 
@@ -72,11 +71,11 @@ func CORS(opts CORSOptions) Handle {
 	}
 }
 
-func Privileges(privileges ...string) Handle {
+func Allow(permissions ...string) Handle {
 	return func(ctx *Context) {
-		for _, p := range privileges {
+		for _, p := range permissions {
 			if p != "" {
-				ctx.privileges[p] = struct{}{}
+				ctx.permissions[p] = struct{}{}
 			}
 		}
 		ctx.Next()
@@ -84,12 +83,12 @@ func Privileges(privileges ...string) Handle {
 }
 
 // BasicAuth returns a Basic HTTP Authorization middleware.
-func BasicAuth(check func(name string, password string) (ok bool, err error)) Handle {
-	return BasicAuthWithRealm("", check)
+func BasicAuth(authFunc func(name string, password string) (ok bool, err error)) Handle {
+	return BasicAuthWithRealm("", authFunc)
 }
 
 // BasicAuthWithRealm returns a Basic HTTP Authorization middleware with realm.
-func BasicAuthWithRealm(realm string, check func(name string, password string) (ok bool, err error)) Handle {
+func BasicAuthWithRealm(realm string, authFunc func(name string, password string) (ok bool, err error)) Handle {
 	return func(ctx *Context) {
 		if auth := ctx.R.Header.Get("Authorization"); len(auth) > 0 {
 			if authType, authData := utils.SplitByFirstByte(auth, ' '); len(authData) > 0 && authType == "Basic" {
@@ -99,14 +98,14 @@ func BasicAuthWithRealm(realm string, check func(name string, password string) (
 				}
 
 				name, password := utils.SplitByFirstByte(string(authInfo), ':')
-				ok, err := check(name, password)
+				ok, err := authFunc(name, password)
 				if err != nil {
 					ctx.Error(err)
 					return
 				}
 
 				if ok {
-					ctx.basicUser = acl.BasicUser{
+					ctx.basicUser = BasicUser{
 						Name:     name,
 						Password: password,
 					}
@@ -125,18 +124,18 @@ func BasicAuthWithRealm(realm string, check func(name string, password string) (
 }
 
 // ACLAuth returns a ACL Authorization middleware.
-func ACLAuth(getUserFunc func(ctx *Context) (acl.User, error)) Handle {
+func ACLAuth(authFunc func(ctx *Context) (ACLUser, error)) Handle {
 	return func(ctx *Context) {
-		if getUserFunc != nil {
+		if authFunc != nil {
 			var err error
-			ctx.aclUser, err = getUserFunc(&Context{
+			ctx.aclUser, err = authFunc(&Context{
 				W:              ctx.W,
 				R:              ctx.R,
 				URL:            ctx.URL,
 				State:          ctx.State,
 				handles:        []Handle{},
 				handleIndex:    -1,
-				privileges:     ctx.privileges,
+				permissions:    ctx.permissions,
 				sessionManager: ctx.sessionManager,
 				rest:           ctx.rest,
 			})

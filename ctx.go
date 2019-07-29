@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/ije/gox/utils"
-	"github.com/ije/rex/acl"
 )
 
 type Context struct {
@@ -25,9 +24,9 @@ type Context struct {
 	State          *State
 	handles        []Handle
 	handleIndex    int
-	privileges     map[string]struct{}
-	aclUser        acl.User
-	basicUser      acl.BasicUser
+	permissions    map[string]struct{}
+	aclUser        ACLUser
+	basicUser      BasicUser
 	session        *ContextSession
 	sessionManager *sessionManager
 	rest           *REST
@@ -43,11 +42,11 @@ func (ctx *Context) Next() {
 		return
 	}
 
-	if len(ctx.privileges) > 0 {
+	if len(ctx.permissions) > 0 {
 		var isGranted bool
 		if ctx.aclUser != nil {
-			for _, pid := range ctx.aclUser.Privileges() {
-				_, isGranted = ctx.privileges[pid]
+			for _, id := range ctx.aclUser.Permissions() {
+				_, isGranted = ctx.permissions[id]
 				if isGranted {
 					break
 				}
@@ -72,26 +71,12 @@ func (ctx *Context) Next() {
 	ctx.State = state
 }
 
-func (ctx *Context) BasicUser() acl.BasicUser {
-	return ctx.basicUser
-}
-
-func (ctx *Context) MustBasicUser() acl.BasicUser {
-	if ctx.aclUser == nil {
-		panic(&contextPanicError{"the basic user of context is nil"})
-	}
-	return ctx.basicUser
-}
-
-func (ctx *Context) ACLUser() acl.User {
+func (ctx *Context) ACLUser() ACLUser {
 	return ctx.aclUser
 }
 
-func (ctx *Context) MustACLUser() acl.User {
-	if ctx.aclUser == nil {
-		panic(&contextPanicError{"the acl user of context is nil"})
-	}
-	return ctx.aclUser
+func (ctx *Context) BasicUser() BasicUser {
+	return ctx.basicUser
 }
 
 func (ctx *Context) Session() *ContextSession {
