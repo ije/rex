@@ -4,7 +4,6 @@ import (
 	"html/template"
 
 	"github.com/ije/rex"
-	"github.com/ije/rex/acl"
 )
 
 const indexHTML = `
@@ -35,13 +34,13 @@ const indexHTML = `
 {{end}}
 `
 
-type User struct {
-	id         string
-	privileges []string
+type user struct {
+	id          string
+	permissions []string
 }
 
-func (u *User) Privileges() []string {
-	return u.privileges
+func (u *user) Permissions() []string {
+	return u.permissions
 }
 
 func main() {
@@ -49,31 +48,31 @@ func main() {
 	tpl := template.Must(template.New("").Parse(indexHTML))
 	todos := map[string][]string{}
 
-	rest.Use(rex.ACLAuth(func(ctx *rex.Context) (acl.User, error) {
+	rest.Use(rex.ACLAuth(func(ctx *rex.Context) (rex.ACLUser, error) {
 		if ctx.Session().Has("USER") {
-			return &User{
-				id:         ctx.Session().Get("USER").(string),
-				privileges: []string{"add"},
+			return &user{
+				id:          ctx.Session().Get("USER").(string),
+				permissions: []string{"add"},
 			}, nil
 		}
 		return nil, nil
 	}))
 
 	rest.Get("/", func(ctx *rex.Context) {
-		if user := ctx.ACLUser(); user != nil {
+		if u := ctx.ACLUser(); u != nil {
 			ctx.Render(tpl, map[string]interface{}{
-				"user":  user.(*User).id,
-				"todos": todos[user.(*User).id],
+				"user":  u.(*user).id,
+				"todos": todos[u.(*user).id],
 			})
 		} else {
 			ctx.Render(tpl, nil)
 		}
 	})
 
-	rest.Post("/add-todo", rex.Privileges("add"), func(ctx *rex.Context) {
+	rest.Post("/add-todo", rex.Allow("add"), func(ctx *rex.Context) {
 		todo := ctx.FormValue("todo").String()
 		if todo != "" {
-			user := ctx.ACLUser().(*User).id
+			user := ctx.ACLUser().(*user).id
 			todos[user] = append(todos[user], todo)
 		}
 		ctx.Redirect(301, "/")

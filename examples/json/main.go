@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/ije/rex"
@@ -49,7 +50,7 @@ func main() {
 	})
 
 	rest.Get("/json4", func(ctx *rex.Context) {
-		ctx.JSONError(rex.ServerError("boom!"))
+		ctx.JSONError(errors.New("boom!"))
 	})
 
 	rex.Serve(rex.Config{
