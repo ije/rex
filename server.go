@@ -23,7 +23,6 @@ func Serve(config Config) {
 	}
 
 	for _, rest := range gRESTs {
-		config.Logger.Println(rest.prefix)
 		rest.SendError = config.Debug
 		if rest.AccessLogger == nil {
 			rest.AccessLogger = config.AccessLogger
@@ -55,10 +54,11 @@ func Serve(config Config) {
 	})
 
 	var wg sync.WaitGroup
-	wg.Add(1)
 
+	wg.Add(1)
 	go func() {
 		defer wg.Done()
+
 		serv := &http.Server{
 			Addr:           fmt.Sprintf((":%d"), config.Port),
 			Handler:        mux,
@@ -74,15 +74,16 @@ func Serve(config Config) {
 	}()
 
 	if https := config.HTTPS; (https.CertFile != "" && https.KeyFile != "") || (https.AutoTLS.Enable && (https.AutoTLS.CacheDir != "" || https.AutoTLS.Cache != nil)) {
+		port := https.Port
+		if port == 0 {
+			port = 443
+		}
+
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 
-			port := https.Port
-			if port == 0 {
-				port = 443
-			}
-			serv := &http.Server{
+			servs := &http.Server{
 				Addr:           fmt.Sprintf((":%d"), port),
 				Handler:        mux,
 				ReadTimeout:    time.Duration(config.ReadTimeout) * time.Second,
@@ -113,18 +114,18 @@ func Serve(config Config) {
 				if len(https.AutoTLS.Hosts) > 0 {
 					m.HostPolicy = autocert.HostWhitelist(https.AutoTLS.Hosts...)
 				}
-				serv.TLSConfig = m.TLSConfig()
+				servs.TLSConfig = m.TLSConfig()
 			}
-			err := serv.ListenAndServeTLS(https.CertFile, https.KeyFile)
+			err := servs.ListenAndServeTLS(https.CertFile, https.KeyFile)
 			if err != nil {
 				config.Logger.Println("[error] rex server(https) shutdown:", err)
 			}
-			serv.Shutdown(nil)
+			servs.Shutdown(nil)
 		}()
 	}
 
 	if config.Debug {
-		config.Logger.Println("[debug] rex server startd.")
+		config.Logger.Println("[debug] rex server started.")
 	}
 
 	wg.Wait()

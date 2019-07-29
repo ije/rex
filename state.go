@@ -39,6 +39,7 @@ func (s *State) Delete(key string) {
 	delete(s.state, key)
 }
 
+// NewState returns a new state
 func NewState() *State {
 	return &State{
 		state: map[string]interface{}{},

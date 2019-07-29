@@ -12,23 +12,23 @@ import (
 	"github.com/ije/rex/router"
 )
 
-// Handle defines the handle of route or middleware of REST
+// Handle defines the handle of route(middleware) of REST
 type Handle func(ctx *Context)
 
-// REST is a http.Handler which contains the router, middlewares and configuration settings
+// REST is a http Handler which contains the router, middlewares and configuration settings
 type REST struct {
 	// Prefix to add base path at beginning of each route path
-	// For example if the Prefix equals "v2", the route path "/path" will be "/v2/path"
+	// For example if the Prefix equals "v2", the given route path "/path" will be "/v2/path"
 	prefix string
 
-	// Logger to log accesses
+	// Logger to log requests
 	AccessLogger Logger
 
 	// Logger to log errors
 	Logger Logger
 
-	// If enabled, errors will be sent to the client.
-	// should be disable in production
+	// If enabled, errors will be sent to the client/browser,
+	// this should be disable in production.
 	SendError bool
 
 	middlewares     []Handle
@@ -58,10 +58,12 @@ func New(prefixs ...string) *REST {
 	rest := &REST{
 		prefix: prefix,
 	}
+	rest.initRouter()
 
 	if len(gRESTs) == 0 {
 		gRESTs = []*REST{rest}
 	} else {
+		// sort global RESTs by the prefix length
 		insertIndex := 0
 		for i, r := range gRESTs {
 			if len(prefix) > len(r.prefix) {
@@ -147,6 +149,7 @@ func (rest *REST) Handle(method string, path string, handles ...Handle) {
 	})
 }
 
+// NotFound handles the requests that
 func (rest *REST) NotFound(handles ...Handle) {
 	rest.notFoundHandles = append(rest.notFoundHandles, handles...)
 }
@@ -164,7 +167,7 @@ func (rest *REST) serve(w http.ResponseWriter, r *http.Request, params router.Pa
 		State:          NewState(),
 		handles:        append(rest.middlewares, handles...),
 		handleIndex:    -1,
-		privileges:     map[string]struct{}{},
+		permissions:    map[string]struct{}{},
 		sessionManager: defaultSessionManager,
 		rest:           rest,
 	}
@@ -241,7 +244,7 @@ func (rest *REST) initRouter() {
 	rest.router = router
 }
 
-// ServeHTTP implements the http.Handler interface.
+// ServeHTTP implements the http Handler interface.
 func (rest *REST) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if rest.router != nil {
 		rest.router.ServeHTTP(w, r)

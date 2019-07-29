@@ -13,16 +13,11 @@ type InvalidError struct {
 	Message string
 }
 
+// Invalid returns a new InvalidError
 func Invalid(code int, message string) *InvalidError {
 	return &InvalidError{code, message}
 }
 
 func (err *InvalidError) Error() string {
 	return err.Message
-}
-
-type ServerError string
-
-func (err ServerError) Error() string {
-	return string(err)
 }

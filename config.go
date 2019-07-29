@@ -4,6 +4,7 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
+// Config contains the options to run REX server.
 type Config struct {
 	Port           uint16      `json:"port"`
 	HTTPS          HTTPSConfig `json:"https"`
@@ -15,6 +16,7 @@ type Config struct {
 	AccessLogger   Logger      `json:"-"`
 }
 
+// HTTPSConfig contains the options to support https.
 type HTTPSConfig struct {
 	Port     uint16        `json:"port"`
 	CertFile string        `json:"certFile"`
@@ -22,6 +24,7 @@ type HTTPSConfig struct {
 	AutoTLS  AutoTLSConfig `json:"autotls"`
 }
 
+// AutoTLSConfig contains the options to support autocert by Let's Encrypto SSL.
 type AutoTLSConfig struct {
 	Enable   bool           `json:"enable"`
 	Hosts    []string       `json:"hosts"`
@@ -29,6 +32,7 @@ type AutoTLSConfig struct {
 	Cache    autocert.Cache `json:"-"`
 }
 
+// CORSOptions contains the options to CORS.
 type CORSOptions struct {
 	AllowOrigin      string
 	AllowMethods     []string
@@ -38,6 +42,7 @@ type CORSOptions struct {
 	MaxAge           int // in seconds
 }
 
+// Logger is a Logger contains Println and Printf methods
 type Logger interface {
 	Println(v ...interface{})
 	Printf(format string, v ...interface{})
