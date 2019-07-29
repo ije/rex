@@ -17,6 +17,8 @@ type Handle func(ctx *Context)
 
 // REST is a http Handler which contains the router, middlewares and configuration settings
 type REST struct {
+	domain string
+
 	// Prefix to add base path at beginning of each route path
 	// For example if the Prefix equals "v2", the given route path "/path" will be "/v2/path"
 	prefix string
@@ -36,54 +38,48 @@ type REST struct {
 	router          *router.Router
 }
 
-var gRESTs []*REST
-
 // New returns a new REST
-func New(prefixs ...string) *REST {
+func New(prefix ...string) *REST {
 	var s []string
-	for _, p := range prefixs {
+	for _, p := range prefix {
 		p = strings.Trim(strings.TrimSpace(p), "/")
 		if p != "" {
 			s = append(s, p)
 		}
 	}
-	prefix := strings.Join(s, "/")
 
-	for _, rest := range gRESTs {
-		if rest.prefix == prefix {
-			return rest
-		}
-	}
-
-	rest := &REST{
-		prefix: prefix,
-	}
+	rest := gREST("*", strings.Join(s, "/"))
 	rest.initRouter()
+	return rest
+}
 
-	if len(gRESTs) == 0 {
-		gRESTs = []*REST{rest}
-	} else {
-		// sort global RESTs by the prefix length
-		insertIndex := 0
-		for i, r := range gRESTs {
-			if len(prefix) > len(r.prefix) {
-				insertIndex = i
-				break
-			}
-		}
-		nRESTs := make([]*REST, len(gRESTs)+1)
-		copy(nRESTs, gRESTs[:insertIndex])
-		copy(nRESTs[insertIndex+1:], gRESTs[insertIndex:])
-		nRESTs[insertIndex] = rest
-		gRESTs = nRESTs
+// Domain returns a new REST with domain
+func Domain(domain string) *REST {
+	if domain == "" {
+		domain = "*"
 	}
 
+	rest := gREST(domain, "")
+	rest.initRouter()
 	return rest
 }
 
 // New returns a nested REST
 func (rest *REST) New(prefix ...string) *REST {
-	return New(append([]string{rest.prefix}, prefix...)...)
+	var s []string
+	if rest.prefix != "" {
+		s = append(s, rest.prefix)
+	}
+	for _, p := range prefix {
+		p = strings.Trim(strings.TrimSpace(p), "/")
+		if p != "" {
+			s = append(s, p)
+		}
+	}
+
+	restN := gREST(rest.domain, strings.Join(s, "/"))
+	restN.initRouter()
+	return restN
 }
 
 // Use injects middlewares to REST
@@ -178,15 +174,15 @@ func (rest *REST) serve(w http.ResponseWriter, r *http.Request, params router.Pa
 		w, ok := ctx.W.(*responseWriter)
 		if ok {
 			rest.AccessLogger.Printf(
-				`%s %s %s %s %s %d "%s" "%s" %d %d %dms`,
+				`%s %s %s %s %s %d %s "%s" %d %d %dms`,
 				r.RemoteAddr,
 				r.Host,
 				r.Proto,
 				r.Method,
 				r.RequestURI,
 				r.ContentLength,
-				strings.ReplaceAll(r.Referer(), `"`, "'"),
-				strings.ReplaceAll(r.UserAgent(), `"`, "'"),
+				r.Referer(),
+				strings.ReplaceAll(r.UserAgent(), `"`, ""),
 				w.status,
 				w.writed,
 				time.Since(startTime)/time.Millisecond,

@@ -9,8 +9,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ije/gox/utils"
 	"golang.org/x/crypto/acme/autocert"
 )
+
+var gRESTs = map[string][]*REST{}
 
 // Serve serves the rex server
 func Serve(config Config) {
@@ -22,13 +25,21 @@ func Serve(config Config) {
 		config.Logger = log.New(os.Stderr, "", log.LstdFlags)
 	}
 
-	for _, rest := range gRESTs {
-		rest.SendError = config.Debug
-		if rest.AccessLogger == nil {
-			rest.AccessLogger = config.AccessLogger
+	for _, prefixs := range gRESTs {
+		for _, rest := range prefixs {
+			if rest.AccessLogger == nil {
+				rest.AccessLogger = config.AccessLogger
+			}
+			if rest.Logger == nil {
+				rest.Logger = config.Logger
+			}
+			rest.SendError = config.Debug
 		}
-		if rest.Logger == nil {
-			rest.Logger = config.Logger
+	}
+
+	for domain, prefixs := range gRESTs {
+		for _, rest := range prefixs {
+			fmt.Println(domain, rest.prefix)
 		}
 	}
 
@@ -37,14 +48,24 @@ func Serve(config Config) {
 		wh.Set("Connection", "keep-alive")
 		wh.Set("Server", "rex-serv")
 
-		if len(gRESTs) > 0 {
-			for _, rest := range gRESTs {
+		domain, _ := utils.SplitByLastByte(r.Host, ':')
+		prefixs, ok := gRESTs[domain]
+		if !ok {
+			prefixs, ok = gRESTs["*"]
+		}
+		if !ok {
+			http.NotFound(w, r)
+			return
+		}
+
+		if len(prefixs) > 0 {
+			for _, rest := range prefixs {
 				if rest.prefix != "" && strings.HasPrefix(r.URL.Path, "/"+rest.prefix) {
 					rest.ServeHTTP(w, r)
 					return
 				}
 			}
-			if rest := gRESTs[len(gRESTs)-1]; rest.prefix == "" {
+			if rest := prefixs[len(prefixs)-1]; rest.prefix == "" {
 				rest.ServeHTTP(w, r)
 				return
 			}
@@ -129,4 +150,39 @@ func Serve(config Config) {
 	}
 
 	wg.Wait()
+}
+
+func gREST(domain string, prefix string) *REST {
+	prefixs, ok := gRESTs[domain]
+	if ok {
+		for _, rest := range prefixs {
+			if rest.prefix == prefix {
+				return rest
+			}
+		}
+	}
+
+	rest := &REST{
+		domain: domain,
+		prefix: prefix,
+	}
+	if len(prefixs) == 0 {
+		prefixs = []*REST{rest}
+	} else {
+		insertIndex := 0
+		for i, r := range prefixs {
+			if len(prefix) > len(r.prefix) {
+				insertIndex = i
+				break
+			}
+		}
+		tmp := make([]*REST, len(prefixs)+1)
+		copy(tmp, prefixs[:insertIndex])
+		copy(tmp[insertIndex+1:], prefixs[insertIndex:])
+		tmp[insertIndex] = rest
+		prefixs = tmp
+	}
+	gRESTs[domain] = prefixs
+
+	return rest
 }
