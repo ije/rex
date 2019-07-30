@@ -32,10 +32,6 @@ type Context struct {
 	rest           *REST
 }
 
-type Template interface {
-	Execute(wr io.Writer, data interface{}) error
-}
-
 func (ctx *Context) Next() {
 	ctx.handleIndex++
 	if ctx.handleIndex >= len(ctx.handles) {
@@ -231,7 +227,7 @@ func (ctx *Context) RemoteIP() string {
 	return strings.TrimSpace(ip)
 }
 
-func (ctx *Context) Redirect(status int, url string) {
+func (ctx *Context) Redirect(url string, status int) {
 	http.Redirect(ctx.W, ctx.R, url, status)
 }
 
@@ -279,7 +275,7 @@ func (ctx *Context) Error(err error) {
 		ctx.End(500)
 	}
 	if ctx.rest.Logger != nil {
-		ctx.rest.Logger.Println("[error] [rex]", err)
+		ctx.rest.Logger.Println("[error]", err)
 	}
 }
 
@@ -328,7 +324,7 @@ func (ctx *Context) JSONError(err error) {
 			},
 		})
 		if ctx.rest.Logger != nil {
-			ctx.rest.Logger.Println("[error] [rex]", err)
+			ctx.rest.Logger.Println("[error]", err)
 		}
 	}
 }

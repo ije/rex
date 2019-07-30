@@ -8,6 +8,7 @@ func (err *contextPanicError) Error() string {
 	return err.msg
 }
 
+// InvalidError is an error with code
 type InvalidError struct {
 	Code    int
 	Message string
@@ -18,6 +19,7 @@ func Invalid(code int, message string) *InvalidError {
 	return &InvalidError{code, message}
 }
 
+// Error implements the error type
 func (err *InvalidError) Error() string {
 	return err.Message
 }

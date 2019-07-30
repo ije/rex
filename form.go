@@ -19,5 +19,5 @@ func (value FormValue) Int64() (int64, error) {
 }
 
 func (value FormValue) Bool() bool {
-	return value == "true" || value == "1"
+	return value == "true" || value == "1" || value == "ok" || value == "yes"
 }
