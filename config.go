@@ -1,35 +1,37 @@
 package rex
 
 import (
+	"io"
+
 	"golang.org/x/crypto/acme/autocert"
 )
 
 // Config contains the options to run REX server.
 type Config struct {
-	Port           uint16      `json:"port"`
-	HTTPS          HTTPSConfig `json:"https"`
-	ReadTimeout    uint32      `json:"readTimeout"`
-	WriteTimeout   uint32      `json:"writeTimeout"`
-	MaxHeaderBytes uint32      `json:"maxHeaderBytes"`
-	Debug          bool        `json:"debug"`
-	Logger         Logger      `json:"-"`
-	AccessLogger   Logger      `json:"-"`
+	Port           uint16    `json:"port"`
+	TLS            TLSConfig `json:"tls"`
+	ReadTimeout    uint32    `json:"readTimeout"`
+	WriteTimeout   uint32    `json:"writeTimeout"`
+	MaxHeaderBytes uint32    `json:"maxHeaderBytes"`
+	Logger         Logger    `json:"-"`
+	AccessLogger   Logger    `json:"-"`
 }
 
-// HTTPSConfig contains the options to support https.
-type HTTPSConfig struct {
-	Port     uint16        `json:"port"`
-	CertFile string        `json:"certFile"`
-	KeyFile  string        `json:"keyFile"`
-	AutoTLS  AutoTLSConfig `json:"autotls"`
+// TLSConfig contains the options to support https.
+type TLSConfig struct {
+	Port         uint16        `json:"port"`
+	CertFile     string        `json:"certFile"`
+	KeyFile      string        `json:"keyFile"`
+	AutoTLS      AutoTLSConfig `json:"autotls"`
+	AutoRedirect bool          `json:"autoRedirect"`
 }
 
 // AutoTLSConfig contains the options to support autocert by Let's Encrypto SSL.
 type AutoTLSConfig struct {
-	Enable   bool           `json:"enable"`
-	Hosts    []string       `json:"hosts"`
-	CacheDir string         `json:"cacheDir"`
-	Cache    autocert.Cache `json:"-"`
+	AcceptTOS bool           `json:"acceptTOS"`
+	Hosts     []string       `json:"hosts"`
+	CacheDir  string         `json:"cacheDir"`
+	Cache     autocert.Cache `json:"-"`
 }
 
 // CORSOptions contains the options to CORS.
@@ -46,4 +48,9 @@ type CORSOptions struct {
 type Logger interface {
 	Println(v ...interface{})
 	Printf(format string, v ...interface{})
+}
+
+// Template is a interface contains Execute method
+type Template interface {
+	Execute(wr io.Writer, data interface{}) error
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/ije/rex/session"
 )
 
+// Header is REX middleware to set http header
 func Header(key string, value string) Handle {
 	return func(ctx *Context) {
 		if key != "" {
@@ -22,20 +23,7 @@ func Header(key string, value string) Handle {
 	}
 }
 
-func HTTPS() Handle {
-	return func(ctx *Context) {
-		if ctx.R.TLS == nil {
-			code := 301
-			if ctx.R.Method != "GET" {
-				code = 307
-			}
-			ctx.Redirect(code, fmt.Sprintf("https://%s/%s", ctx.R.Host, ctx.R.RequestURI))
-			return
-		}
-		ctx.Next()
-	}
-}
-
+// CORS returns a CORS middleware.
 func CORS(opts CORSOptions) Handle {
 	return func(ctx *Context) {
 		isPreflight := ctx.R.Method == "OPTIONS"
@@ -71,7 +59,8 @@ func CORS(opts CORSOptions) Handle {
 	}
 }
 
-func Allow(permissions ...string) Handle {
+// ACL returns a ACL middleware.
+func ACL(permissions ...string) Handle {
 	return func(ctx *Context) {
 		for _, p := range permissions {
 			if p != "" {
@@ -161,11 +150,19 @@ func SessionManager(sidStore SIDStore, pool session.Pool) Handle {
 	}
 }
 
-// Static returns a Static middleware.
-func Static(root string, fallbackPaths ...string) Handle {
+// Static returns a file static serve middleware.
+func Static(root string, fallbackPath ...string) Handle {
 	return func(ctx *Context) {
-		fp := path.Join(root, utils.CleanPath(ctx.URL.RoutePath))
-		fallbackIndex := 0
+		var fallback bool
+		var filepath string
+		if val := ctx.URL.Param("path"); val != "" {
+			filepath = val
+		} else if val := ctx.URL.Param("filepath"); val != "" {
+			filepath = val
+		} else {
+			filepath = ctx.URL.RoutePath
+		}
+		fp := path.Join(root, utils.CleanPath(filepath))
 	Re:
 		fi, err := os.Stat(fp)
 		if err != nil {
@@ -174,11 +171,9 @@ func Static(root string, fallbackPaths ...string) Handle {
 				return
 			}
 
-			if fl := len(fallbackPaths); fl > 0 && fallbackIndex < fl {
-				if fallbackPaths[fallbackIndex] != "" {
-					fp = path.Join(root, utils.CleanPath(fallbackPaths[fallbackIndex]))
-				}
-				fallbackIndex++
+			if fl := len(fallbackPath); fl > 0 && !fallback {
+				fp = path.Join(root, utils.CleanPath(fallbackPath[0]))
+				fallback = true
 				goto Re
 			}
 

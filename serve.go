@@ -17,29 +17,18 @@ var gRESTs = map[string][]*REST{}
 
 // Serve serves the rex server
 func Serve(config Config) {
-	if config.Port == 0 {
-		config.Port = 80
-	}
-
 	if config.Logger == nil {
 		config.Logger = log.New(os.Stderr, "", log.LstdFlags)
 	}
 
 	for _, prefixs := range gRESTs {
 		for _, rest := range prefixs {
-			if rest.AccessLogger == nil {
+			if rest.AccessLogger == nil && config.AccessLogger != nil {
 				rest.AccessLogger = config.AccessLogger
 			}
 			if rest.Logger == nil {
 				rest.Logger = config.Logger
 			}
-			rest.SendError = config.Debug
-		}
-	}
-
-	for domain, prefixs := range gRESTs {
-		for _, rest := range prefixs {
-			fmt.Println(domain, rest.prefix)
 		}
 	}
 
@@ -48,8 +37,20 @@ func Serve(config Config) {
 		wh.Set("Connection", "keep-alive")
 		wh.Set("Server", "rex-serv")
 
-		domain, _ := utils.SplitByLastByte(r.Host, ':')
-		prefixs, ok := gRESTs[domain]
+		if config.TLS.AutoRedirect && r.TLS == nil {
+			code := 301
+			if r.Method != "GET" {
+				code = 307
+			}
+			http.Redirect(w, r, fmt.Sprintf("https://%s/%s", r.Host, r.RequestURI), code)
+			return
+		}
+
+		host, _ := utils.SplitByLastByte(r.Host, ':')
+		prefixs, ok := gRESTs[host]
+		if !ok && strings.HasPrefix(host, "www.") {
+			prefixs, ok = gRESTs[strings.TrimPrefix(host, "www.")]
+		}
 		if !ok {
 			prefixs, ok = gRESTs["*"]
 		}
@@ -76,25 +77,27 @@ func Serve(config Config) {
 
 	var wg sync.WaitGroup
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	if config.Port > 0 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
 
-		serv := &http.Server{
-			Addr:           fmt.Sprintf((":%d"), config.Port),
-			Handler:        mux,
-			ReadTimeout:    time.Duration(config.ReadTimeout) * time.Second,
-			WriteTimeout:   time.Duration(config.WriteTimeout) * time.Second,
-			MaxHeaderBytes: int(config.MaxHeaderBytes),
-		}
-		err := serv.ListenAndServe()
-		if err != nil {
-			config.Logger.Println("[error] rex server shutdown:", err)
-		}
-		serv.Shutdown(nil)
-	}()
+			serv := &http.Server{
+				Addr:           fmt.Sprintf((":%d"), config.Port),
+				Handler:        mux,
+				ReadTimeout:    time.Duration(config.ReadTimeout) * time.Second,
+				WriteTimeout:   time.Duration(config.WriteTimeout) * time.Second,
+				MaxHeaderBytes: int(config.MaxHeaderBytes),
+			}
+			err := serv.ListenAndServe()
+			if err != nil {
+				config.Logger.Println("[error] rex server shutdown:", err)
+			}
+			serv.Shutdown(nil)
+		}()
+	}
 
-	if https := config.HTTPS; (https.CertFile != "" && https.KeyFile != "") || (https.AutoTLS.Enable && (https.AutoTLS.CacheDir != "" || https.AutoTLS.Cache != nil)) {
+	if https := config.TLS; (https.CertFile != "" && https.KeyFile != "") || https.AutoTLS.AcceptTOS {
 		port := https.Port
 		if port == 0 {
 			port = 443
@@ -111,7 +114,7 @@ func Serve(config Config) {
 				WriteTimeout:   time.Duration(config.WriteTimeout) * time.Second,
 				MaxHeaderBytes: int(config.MaxHeaderBytes),
 			}
-			if https.AutoTLS.Enable {
+			if https.AutoTLS.AcceptTOS {
 				m := &autocert.Manager{
 					Prompt: autocert.AcceptTOS,
 				}
@@ -145,15 +148,43 @@ func Serve(config Config) {
 		}()
 	}
 
-	if config.Debug {
-		config.Logger.Println("[debug] rex server started.")
-	}
-
+	config.Logger.Println("rex server started.")
 	wg.Wait()
 }
 
-func gREST(domain string, prefix string) *REST {
-	prefixs, ok := gRESTs[domain]
+// Start starts an HTTP server.
+func Start(port uint16) {
+	Serve(Config{
+		Port: port,
+	})
+}
+
+// StartTLS starts an HTTPS server.
+func StartTLS(port uint16, certFile string, keyFile string) {
+	Serve(Config{
+		TLS: TLSConfig{
+			Port:     port,
+			CertFile: certFile,
+			KeyFile:  keyFile,
+		},
+	})
+}
+
+// StartAutoTLS starts an HTTPS server using autocert with Let's Encrypto SSL
+func StartAutoTLS(port uint16, hosts ...string) {
+	Serve(Config{
+		TLS: TLSConfig{
+			Port: port,
+			AutoTLS: AutoTLSConfig{
+				AcceptTOS: true,
+				Hosts:     hosts,
+			},
+		},
+	})
+}
+
+func gREST(host string, prefix string) *REST {
+	prefixs, ok := gRESTs[host]
 	if ok {
 		for _, rest := range prefixs {
 			if rest.prefix == prefix {
@@ -163,7 +194,7 @@ func gREST(domain string, prefix string) *REST {
 	}
 
 	rest := &REST{
-		domain: domain,
+		host:   host,
 		prefix: prefix,
 	}
 	if len(prefixs) == 0 {
@@ -182,7 +213,7 @@ func gREST(domain string, prefix string) *REST {
 		tmp[insertIndex] = rest
 		prefixs = tmp
 	}
-	gRESTs[domain] = prefixs
+	gRESTs[host] = prefixs
 
 	return rest
 }

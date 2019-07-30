@@ -12,12 +12,12 @@ import (
 	"github.com/ije/rex/router"
 )
 
-// Handle defines the handle of route(middleware) of REST
+// Handle defines a function to handle route requests.
 type Handle func(ctx *Context)
 
 // REST is a http Handler which contains the router, middlewares and configuration settings
 type REST struct {
-	domain string
+	host string
 
 	// Prefix to add base path at beginning of each route path
 	// For example if the Prefix equals "v2", the given route path "/path" will be "/v2/path"
@@ -39,56 +39,57 @@ type REST struct {
 }
 
 // New returns a new REST
-func New(prefix ...string) *REST {
-	var s []string
-	for _, p := range prefix {
-		p = strings.Trim(strings.TrimSpace(p), "/")
-		if p != "" {
-			s = append(s, p)
-		}
-	}
+func New(args ...string) *REST {
+	var host string
+	var prefix string
 
-	rest := gREST("*", strings.Join(s, "/"))
+	if len(args) == 1 {
+		prefix = args[0]
+	} else if len(args) > 1 {
+		host = args[0]
+		prefix = args[1]
+	}
+	if host == "" {
+		host = "*"
+	}
+	prefix = strings.TrimSpace(strings.Trim(strings.TrimSpace(prefix), "/"))
+	rest := gREST(host, prefix)
 	rest.initRouter()
 	return rest
 }
 
-// Domain returns a new REST with domain
-func Domain(domain string) *REST {
-	if domain == "" {
-		domain = "*"
-	}
-
-	rest := gREST(domain, "")
-	rest.initRouter()
-	return rest
-}
-
-// New returns a nested REST
-func (rest *REST) New(prefix ...string) *REST {
+// NewGroup returns a nested REST
+func (rest *REST) NewGroup(prefix string) *REST {
 	var s []string
 	if rest.prefix != "" {
 		s = append(s, rest.prefix)
 	}
-	for _, p := range prefix {
-		p = strings.Trim(strings.TrimSpace(p), "/")
-		if p != "" {
-			s = append(s, p)
-		}
+	prefix = strings.TrimSpace(strings.Trim(strings.TrimSpace(prefix), "/"))
+	if prefix != "" {
+		s = append(s, prefix)
 	}
-
-	restN := gREST(rest.domain, strings.Join(s, "/"))
+	restN := gREST(rest.host, strings.Join(s, "/"))
 	restN.initRouter()
 	return restN
 }
 
-// Use injects middlewares to REST
+// Group creates a nested REST
+func (rest *REST) Group(path string, callback func(*REST)) {
+	callback(rest.NewGroup(path))
+}
+
+// Use appends middleware to the REST middleware stack.
 func (rest *REST) Use(middlewares ...Handle) {
 	for _, handle := range middlewares {
 		if handle != nil {
 			rest.middlewares = append(rest.middlewares, handle)
 		}
 	}
+}
+
+// NotFound handles the requests that are not routed
+func (rest *REST) NotFound(handles ...Handle) {
+	rest.notFoundHandles = append(rest.notFoundHandles, handles...)
 }
 
 // Options is a shortcut for router.Handle("OPTIONS", path, handles)
@@ -143,11 +144,6 @@ func (rest *REST) Handle(method string, path string, handles ...Handle) {
 	rest.router.Handle(method, path, func(w http.ResponseWriter, r *http.Request, params router.Params) {
 		rest.serve(w, r, params, handles...)
 	})
-}
-
-// NotFound handles the requests that
-func (rest *REST) NotFound(handles ...Handle) {
-	rest.notFoundHandles = append(rest.notFoundHandles, handles...)
 }
 
 func (rest *REST) serve(w http.ResponseWriter, r *http.Request, params router.Params, handles ...Handle) {
