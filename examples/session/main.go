@@ -18,34 +18,30 @@ const indexHTML = `
 `
 
 func main() {
-	rest := rex.New()
-	rest.Use(rex.SessionManager(nil, session.NewMemorySessionPool(15*time.Second)))
+	rex.Use(rex.SessionManager(nil, session.NewMemorySessionPool(15*time.Second)))
 
-	rest.Get("/", func(ctx *rex.Context) {
+	rex.Get("/", func(ctx *rex.Context) {
 		ctx.RenderHTML(indexHTML, map[string]interface{}{
 			"user": ctx.Session().Get("user"),
 		})
 	})
 
-	rest.Post("/login", func(ctx *rex.Context) {
+	rex.Post("/login", func(ctx *rex.Context) {
 		user := ctx.FormValue("user").String()
 		if user != "" {
 			ctx.Session().Set("user", user)
 		}
-		ctx.Redirect(301, "/")
+		ctx.Redirect("/", 301)
 	})
 
-	rest.Get(
+	rex.Get(
 		"/logout",
 		rex.Header("Cache-Control", "no-cache, no-store, must-revalidate"),
 		func(ctx *rex.Context) {
 			ctx.Session().Delete("user")
-			ctx.Redirect(301, "/")
+			ctx.Redirect("/", 301)
 		},
 	)
 
-	rex.Serve(rex.Config{
-		Port:  8080,
-		Debug: true,
-	})
+	rex.Start(8080)
 }

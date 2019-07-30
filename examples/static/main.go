@@ -5,13 +5,9 @@ import (
 )
 
 func main() {
-	rest := rex.New()
-	rest.Use(rex.Header("Server", "nginx"))
+	rex.Use(rex.Header("Server", "nginx"))
 
-	rest.Get("/*path", rex.Static("./root", "e404.html"))
+	rex.Get("/*path", rex.Static("./www", "e404.html"))
 
-	rex.Serve(rex.Config{
-		Port:  8080,
-		Debug: true,
-	})
+	rex.Start(8080)
 }

@@ -44,11 +44,10 @@ func (u *user) Permissions() []string {
 }
 
 func main() {
-	rest := rex.New()
 	tpl := template.Must(template.New("").Parse(indexHTML))
 	todos := map[string][]string{}
 
-	rest.Use(rex.ACLAuth(func(ctx *rex.Context) (rex.ACLUser, error) {
+	rex.Use(rex.ACLAuth(func(ctx *rex.Context) (rex.ACLUser, error) {
 		if ctx.Session().Has("USER") {
 			return &user{
 				id:          ctx.Session().Get("USER").(string),
@@ -58,7 +57,7 @@ func main() {
 		return nil, nil
 	}))
 
-	rest.Get("/", func(ctx *rex.Context) {
+	rex.Get("/", func(ctx *rex.Context) {
 		if u := ctx.ACLUser(); u != nil {
 			ctx.Render(tpl, map[string]interface{}{
 				"user":  u.(*user).id,
@@ -69,34 +68,31 @@ func main() {
 		}
 	})
 
-	rest.Post("/add-todo", rex.Allow("add"), func(ctx *rex.Context) {
+	rex.Post("/add-todo", rex.ACL("add"), func(ctx *rex.Context) {
 		todo := ctx.FormValue("todo").String()
 		if todo != "" {
 			user := ctx.ACLUser().(*user).id
 			todos[user] = append(todos[user], todo)
 		}
-		ctx.Redirect(301, "/")
+		ctx.Redirect("/", 301)
 	})
 
-	rest.Post("/login", func(ctx *rex.Context) {
+	rex.Post("/login", func(ctx *rex.Context) {
 		user := ctx.FormValue("user").String()
 		if user != "" {
 			ctx.Session().Set("USER", user)
 		}
-		ctx.Redirect(301, "/")
+		ctx.Redirect("/", 301)
 	})
 
-	rest.Get(
+	rex.Get(
 		"/logout",
 		rex.Header("Cache-Control", "no-cache, no-store, must-revalidate"),
 		func(ctx *rex.Context) {
 			ctx.Session().Delete("USER")
-			ctx.Redirect(301, "/")
+			ctx.Redirect("/", 301)
 		},
 	)
 
-	rex.Serve(rex.Config{
-		Port:  8080,
-		Debug: true,
-	})
+	rex.Start(8080)
 }

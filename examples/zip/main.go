@@ -12,19 +12,15 @@ const indexHTML = `
 `
 
 func main() {
-	rest := rex.New()
-	rest.Use(rex.Header("Server", "nginx"))
+	rex.Use(rex.Header("Server", "nginx"))
 
-	rest.Get("/", func(ctx *rex.Context) {
+	rex.Get("/", func(ctx *rex.Context) {
 		ctx.HTML(indexHTML)
 	})
 
-	rest.Get("/nil.zip", func(ctx *rex.Context) { ctx.Zip("../static/root/nil") })
-	rest.Get("/main.js.zip", func(ctx *rex.Context) { ctx.Zip("../static/root/main.js") })
-	rest.Get("/root.zip", func(ctx *rex.Context) { ctx.Zip("../static/root") })
+	rex.Get("/nil.zip", func(ctx *rex.Context) { ctx.Zip("../static/root/nil") })
+	rex.Get("/main.js.zip", func(ctx *rex.Context) { ctx.Zip("../static/root/main.js") })
+	rex.Get("/root.zip", func(ctx *rex.Context) { ctx.Zip("../static/root") })
 
-	rex.Serve(rex.Config{
-		Port:  8080,
-		Debug: true,
-	})
+	rex.Start(8080)
 }

@@ -10,18 +10,15 @@ const indexHTML = `
 `
 
 func main() {
-	rest := rex.New()
+	rex.Use(rex.Header("Server", "nginx"))
 
-	rest.Use(rex.Header("Server", "nginx"))
+	rex.NotFound(func(ctx *rex.Context) {
+		ctx.Ok("Boom!")
+	})
 
-	rest.NotFound(rex.Static("../static/root", "e404.html"))
-
-	rest.Get("/", func(ctx *rex.Context) {
+	rex.Get("/", func(ctx *rex.Context) {
 		ctx.HTML(indexHTML)
 	})
 
-	rex.Serve(rex.Config{
-		Port:  8080,
-		Debug: true,
-	})
+	rex.Start(8080)
 }

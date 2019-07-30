@@ -10,18 +10,13 @@ const indexHTML = `
 `
 
 func main() {
-	rest := rex.New()
-
-	rest.Get("/", func(ctx *rex.Context) {
+	rex.Get("/", func(ctx *rex.Context) {
 		ctx.HTML(indexHTML)
 	})
 
-	rest.Get("/hello/:name", func(ctx *rex.Context) {
+	rex.Get("/hello/:name", func(ctx *rex.Context) {
 		ctx.Ok("Hello, " + ctx.URL.Param("name") + "!")
 	})
 
-	rex.Serve(rex.Config{
-		Port:  8080,
-		Debug: true,
-	})
+	rex.Start(8080)
 }
