@@ -27,33 +27,29 @@ const (
 
 func main() {
 	rest := rex.New()
-	restV2 := rex.New("v2")
-	restV3 := rex.New("v3")
-
 	rest.Get("/", func(ctx *rex.Context) {
 		ctx.HTML(indexHTML)
 	})
-
 	rest.Group("/user", func(r *rex.REST) {
 		r.Get("/:id", func(ctx *rex.Context) {
 			ctx.Ok("Hello, I'm " + strings.Title(ctx.URL.Param("id")) + "!")
 		})
 	})
 
+	restV2 := rex.New().Prefix("v2")
 	restV2.Get("/", func(ctx *rex.Context) {
 		ctx.HTML(indexHTML2)
 	})
-
 	restV2.Group("/user", func(r *rex.REST) {
 		r.Get("/:id", func(ctx *rex.Context) {
 			ctx.Ok("[v2] Hello, I'm " + strings.Title(ctx.URL.Param("id")) + "!")
 		})
 	})
 
+	restV3 := rex.New().Prefix("v3")
 	restV3.Get("/", func(ctx *rex.Context) {
 		ctx.HTML(indexHTML3)
 	})
-
 	restV3.Group("/user", func(r *rex.REST) {
 		r.Get("/:id", func(ctx *rex.Context) {
 			ctx.Ok("[v3] Hello, I'm " + strings.Title(ctx.URL.Param("id")) + "!")
