@@ -197,6 +197,7 @@ func gREST(host string, prefix string) *REST {
 		host:   host,
 		prefix: prefix,
 	}
+	rest.initRouter()
 	if len(prefixs) == 0 {
 		prefixs = []*REST{rest}
 	} else {

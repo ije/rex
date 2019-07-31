@@ -39,43 +39,45 @@ type REST struct {
 }
 
 // New returns a new REST
-func New(args ...string) *REST {
-	var host string
-	var prefix string
+func New() *REST {
+	return gREST("*", "")
+}
 
-	if len(args) == 1 {
-		prefix = args[0]
-	} else if len(args) > 1 {
-		host = args[0]
-		prefix = args[1]
-	}
+// Host returns a nested REST with host
+func (rest *REST) Host(host string) *REST {
 	if host == "" {
 		host = "*"
 	}
-	prefix = strings.TrimSpace(strings.Trim(strings.TrimSpace(prefix), "/"))
-	rest := gREST(host, prefix)
-	rest.initRouter()
-	return rest
+	if host == rest.host {
+		return rest
+	}
+
+	return gREST(host, rest.prefix)
 }
 
-// NewGroup returns a nested REST
-func (rest *REST) NewGroup(prefix string) *REST {
+// Prefix returns a nested REST with prefix
+func (rest *REST) Prefix(prefix string) *REST {
+	prefix = strings.TrimSpace(strings.Trim(strings.TrimSpace(prefix), "/"))
+	if prefix == "" {
+		return rest
+	}
+
+	return gREST(rest.host, prefix)
+}
+
+// Group creates a nested REST
+func (rest *REST) Group(prefix string, callback func(*REST)) {
+	prefix = strings.TrimSpace(strings.Trim(strings.TrimSpace(prefix), "/"))
+	if prefix == "" {
+		callback(rest)
+	}
+
 	var s []string
 	if rest.prefix != "" {
 		s = append(s, rest.prefix)
 	}
-	prefix = strings.TrimSpace(strings.Trim(strings.TrimSpace(prefix), "/"))
-	if prefix != "" {
-		s = append(s, prefix)
-	}
-	restN := gREST(rest.host, strings.Join(s, "/"))
-	restN.initRouter()
-	return restN
-}
-
-// Group creates a nested REST
-func (rest *REST) Group(path string, callback func(*REST)) {
-	callback(rest.NewGroup(path))
+	s = append(s, prefix)
+	callback(gREST(rest.host, strings.Join(s, "/")))
 }
 
 // Use appends middleware to the REST middleware stack.

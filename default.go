@@ -1,6 +1,6 @@
 package rex
 
-var defaultREST = New("*", "")
+var defaultREST = New()
 
 // Use appends middleware to the REST middleware stack.
 func Use(middlewares ...Handle) {
