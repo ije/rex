@@ -10,11 +10,8 @@ import (
 
 func TestRouter(t *testing.T) {
 	router := New()
-
-	router.Validates(map[string]Validate{
-		"number": valid.IsNumber,
-		"email":  valid.IsEmail,
-	})
+	router.SetValidateFn("number", valid.IsNumber)
+	router.SetValidateFn("email", valid.IsEmail)
 
 	routed := 0
 	expectRouted := 0
@@ -108,6 +105,12 @@ func TestRouter(t *testing.T) {
 	}
 }
 
+func request(router *Router, method string, path string) {
+	w := new(vResponseWriter)
+	req, _ := http.NewRequest(method, path, nil)
+	router.ServeHTTP(w, req)
+}
+
 type vResponseWriter struct{}
 
 func (m *vResponseWriter) Header() (h http.Header) {
@@ -123,9 +126,3 @@ func (m *vResponseWriter) WriteString(s string) (n int, err error) {
 }
 
 func (m *vResponseWriter) WriteHeader(int) {}
-
-func request(router *Router, method string, path string) {
-	w := new(vResponseWriter)
-	req, _ := http.NewRequest(method, path, nil)
-	router.ServeHTTP(w, req)
-}

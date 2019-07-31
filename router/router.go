@@ -10,7 +10,7 @@ import (
 // Router is a http.Handler which can be used to dispatch requests to different handler functions.
 type Router struct {
 	trees         map[string]*node
-	validates     Validates
+	validates     map[string]ValidateFn
 	notFound      func(http.ResponseWriter, *http.Request)
 	optionsHandle func(http.ResponseWriter, *http.Request)
 	panicHandle   func(http.ResponseWriter, *http.Request, interface{})
@@ -20,16 +20,16 @@ type Router struct {
 func New() *Router {
 	return &Router{
 		trees:     map[string]*node{},
-		validates: Validates{},
+		validates: map[string]ValidateFn{},
 	}
 }
 
-// Validates sets param validates.
-func (router *Router) Validates(validates Validates) {
-	if validates == nil {
-		validates = Validates{}
+// SetValidateFn sets param validate function.
+func (router *Router) SetValidateFn(name string, fn ValidateFn) {
+	if router.validates == nil {
+		router.validates = map[string]ValidateFn{}
 	}
-	router.validates = validates
+	router.validates[name] = fn
 }
 
 // NotFound sets a NotFound handle.
@@ -102,7 +102,7 @@ func (router *Router) mapPath(n *node, fullPath string, pathSegs []string, handl
 
 	if isCatchAll {
 		if segs > 1 {
-			panic("bad route path: '" + fs + "' must be at the end of path '" + fullPath + "'")
+			panic("bad route pattern: '" + fs + "' must be at the end of path '" + fullPath + "'")
 		}
 		if n.catchAllChild != nil {
 			panic("conflicting wildcard route: '" + fullPath + "'")
@@ -131,12 +131,12 @@ func (router *Router) mapPath(n *node, fullPath string, pathSegs []string, handl
 	}
 	if isParam {
 		if fn == "" {
-			panic("bad route path: missing param names of path '" + fullPath + "'")
+			panic("bad route pattern: missing param names of path '" + fullPath + "'")
 		}
 		if validate != "" && len(router.validates) > 0 {
 			_, ok := router.validates[validate]
 			if !ok {
-				panic("bad route path: bad validate '" + validate + "' of path '" + fullPath + "'")
+				panic("bad route pattern: bad validate '" + validate + "' of path '" + fullPath + "'")
 			}
 		}
 
@@ -172,7 +172,7 @@ func (router *Router) mapPath(n *node, fullPath string, pathSegs []string, handl
 			}
 		}
 		if len(names) == 0 {
-			panic("bad route path: '" + fullPath + "'")
+			panic("bad route pattern: '" + fullPath + "'")
 		}
 	} else {
 		names[fs] = struct{}{}

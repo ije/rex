@@ -44,11 +44,8 @@ func (ps Params) ByName(name string) string {
 	return ""
 }
 
-// Validates is a validate map to validate router params.
-type Validates map[string]Validate
-
 // Handle is a function that can be registered to a route to handle HTTP requests.
 type Handle func(w http.ResponseWriter, r *http.Request, params Params)
 
-// Validate is a function to validate route params
-type Validate func(s string) (ok bool)
+// ValidateFn is a function to validate route params
+type ValidateFn func(s string) (ok bool)
