@@ -20,16 +20,6 @@ func Use(middlewares ...Handle) {
 	defaultREST.Use(middlewares...)
 }
 
-// UseSessionSIDStore sets a SessionSIDStore middleware.
-func UseSessionSIDStore(sidStore session.SIDStore) {
-	defaultREST.UseSessionSIDStore(sidStore)
-}
-
-// UseSessionPool sets a SessionPool middleware.
-func UseSessionPool(pool session.Pool) {
-	defaultREST.UseSessionPool(pool)
-}
-
 // NotFound handles the requests that are not routed
 func NotFound(handles ...Handle) {
 	defaultREST.NotFound(handles...)

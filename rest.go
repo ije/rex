@@ -10,7 +10,6 @@ import (
 
 	"github.com/ije/gox/utils"
 	"github.com/ije/rex/router"
-	"github.com/ije/rex/session"
 )
 
 // Handle defines a function to handle route requests.
@@ -92,26 +91,6 @@ func (rest *REST) Use(middlewares ...Handle) {
 			rest.middlewares = append(rest.middlewares, handle)
 		}
 	}
-}
-
-// UseSessionSIDStore sets a SessionSIDStore middleware.
-func (rest *REST) UseSessionSIDStore(sidStore session.SIDStore) {
-	rest.Use(func(ctx *Context) {
-		if sidStore != nil {
-			ctx.sidStore = sidStore
-		}
-		ctx.Next()
-	})
-}
-
-// UseSessionPool sets a SessionPool middleware.
-func (rest *REST) UseSessionPool(pool session.Pool) {
-	rest.Use(func(ctx *Context) {
-		if pool != nil {
-			ctx.sessionPool = pool
-		}
-		ctx.Next()
-	})
 }
 
 // NotFound handles the requests that are not routed
