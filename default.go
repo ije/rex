@@ -1,10 +1,33 @@
 package rex
 
+import (
+	"time"
+
+	"github.com/ije/rex/session"
+)
+
 var defaultREST = New()
+var defaultSessionPool = session.NewMemorySessionPool(time.Hour / 2)
+var defaultSIDStore = &session.CookieSIDStore{}
+
+// Group creates a nested REST
+func Group(prefix string, callback func(*REST)) {
+	defaultREST.Group(prefix, callback)
+}
 
 // Use appends middleware to the REST middleware stack.
 func Use(middlewares ...Handle) {
 	defaultREST.Use(middlewares...)
+}
+
+// UseSessionSIDStore sets a SessionSIDStore middleware.
+func UseSessionSIDStore(sidStore session.SIDStore) {
+	defaultREST.UseSessionSIDStore(sidStore)
+}
+
+// UseSessionPool sets a SessionPool middleware.
+func UseSessionPool(pool session.Pool) {
+	defaultREST.UseSessionPool(pool)
 }
 
 // NotFound handles the requests that are not routed

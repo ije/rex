@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/ije/gox/utils"
-	"github.com/ije/rex/session"
 )
 
 // Header is REX middleware to set http header
@@ -113,19 +112,6 @@ func BasicAuthWithRealm(realm string, authFunc func(name string, password string
 		}
 		ctx.SetHeader("WWW-Authenticate", fmt.Sprintf(`Basic realm="%s"`, realm))
 		ctx.W.WriteHeader(401)
-	}
-}
-
-// SessionManager returns a SessionManager middleware.
-func SessionManager(sidStore SIDStore, pool session.Pool) Handle {
-	return func(ctx *Context) {
-		if pool != nil {
-			ctx.sessionManager.pool = pool
-		}
-		if sidStore != nil {
-			ctx.sessionManager.sidStore = sidStore
-		}
-		ctx.Next()
 	}
 }
 

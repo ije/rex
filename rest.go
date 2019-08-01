@@ -10,6 +10,7 @@ import (
 
 	"github.com/ije/gox/utils"
 	"github.com/ije/rex/router"
+	"github.com/ije/rex/session"
 )
 
 // Handle defines a function to handle route requests.
@@ -67,6 +68,10 @@ func (rest *REST) Prefix(prefix string) *REST {
 
 // Group creates a nested REST
 func (rest *REST) Group(prefix string, callback func(*REST)) {
+	if callback == nil {
+		return
+	}
+
 	prefix = strings.TrimSpace(strings.Trim(strings.TrimSpace(prefix), "/"))
 	if prefix == "" {
 		callback(rest)
@@ -87,6 +92,26 @@ func (rest *REST) Use(middlewares ...Handle) {
 			rest.middlewares = append(rest.middlewares, handle)
 		}
 	}
+}
+
+// UseSessionSIDStore sets a SessionSIDStore middleware.
+func (rest *REST) UseSessionSIDStore(sidStore session.SIDStore) {
+	rest.Use(func(ctx *Context) {
+		if sidStore != nil {
+			ctx.sidStore = sidStore
+		}
+		ctx.Next()
+	})
+}
+
+// UseSessionPool sets a SessionPool middleware.
+func (rest *REST) UseSessionPool(pool session.Pool) {
+	rest.Use(func(ctx *Context) {
+		if pool != nil {
+			ctx.sessionPool = pool
+		}
+		ctx.Next()
+	})
 }
 
 // NotFound handles the requests that are not routed
@@ -155,13 +180,14 @@ func (rest *REST) serve(w http.ResponseWriter, r *http.Request, params router.Pa
 		routePath = "/" + strings.TrimPrefix(strings.TrimPrefix(r.URL.Path, "/"+rest.prefix), "/")
 	}
 	ctx := &Context{
-		W:              &responseWriter{status: 200, rawWriter: w},
-		R:              r,
-		URL:            &URL{params, routePath, r.URL},
-		handles:        append(rest.middlewares, handles...),
-		handleIndex:    -1,
-		sessionManager: defaultSessionManager,
-		rest:           rest,
+		W:           &responseWriter{status: 200, rawWriter: w},
+		R:           r,
+		URL:         &URL{params, routePath, r.URL},
+		handles:     append(rest.middlewares, handles...),
+		handleIndex: -1,
+		sidStore:    defaultSIDStore,
+		sessionPool: defaultSessionPool,
+		rest:        rest,
 	}
 
 	ctx.Next()

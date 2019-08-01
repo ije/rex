@@ -16,21 +16,23 @@ import (
 	"time"
 
 	"github.com/ije/gox/utils"
+	"github.com/ije/rex/session"
 )
 
 type Context struct {
-	W              http.ResponseWriter
-	R              *http.Request
-	URL            *URL
-	handles        []Handle
-	handleIndex    int
-	permissions    map[string]struct{}
-	aclUser        ACLUser
-	basicUser      BasicUser
-	session        *ContextSession
-	sessionManager *sessionManager
-	valueStore     sync.Map
-	rest           *REST
+	W           http.ResponseWriter
+	R           *http.Request
+	URL         *URL
+	handles     []Handle
+	handleIndex int
+	permissions map[string]struct{}
+	aclUser     ACLUser
+	basicUser   BasicUser
+	valueStore  sync.Map
+	sidStore    session.SIDStore
+	sessionPool session.Pool
+	session     *ContextSession
+	rest        *REST
 }
 
 func (ctx *Context) Next() {
@@ -89,13 +91,13 @@ func (ctx *Context) SetACLUser(user ACLUser) {
 }
 
 func (ctx *Context) Session() *ContextSession {
-	if ctx.sessionManager.pool == nil {
+	if ctx.sessionPool == nil {
 		panic(&contextPanicError{"session pool is nil"})
 	}
 
 	if ctx.session == nil {
-		sid := ctx.sessionManager.sidStore.Get(ctx)
-		sess, err := ctx.sessionManager.pool.GetSession(sid)
+		sid := ctx.sidStore.Get(ctx.R)
+		sess, err := ctx.sessionPool.GetSession(sid)
 		if err != nil {
 			panic(&contextPanicError{err.Error()})
 		}
@@ -104,7 +106,7 @@ func (ctx *Context) Session() *ContextSession {
 
 		// restore sid
 		if sess.SID() != sid {
-			ctx.sessionManager.sidStore.Put(ctx, sess.SID())
+			ctx.sidStore.Put(ctx.W, sess.SID())
 		}
 	}
 
@@ -470,5 +472,50 @@ func (ctx *Context) Zip(path string) {
 
 		ctx.SetHeader("Content-Type", "application/zip")
 		io.Copy(gzw, file)
+	}
+}
+
+type ContextSession struct {
+	sess session.Session
+}
+
+func (s *ContextSession) SID() string {
+	return s.sess.SID()
+}
+
+func (s *ContextSession) Has(key string) bool {
+	ok, err := s.sess.Has(key)
+	if err != nil {
+		panic(&contextPanicError{err.Error()})
+	}
+	return ok
+}
+
+func (s *ContextSession) Get(key string) interface{} {
+	value, err := s.sess.Get(key)
+	if err != nil {
+		panic(&contextPanicError{err.Error()})
+	}
+	return value
+}
+
+func (s *ContextSession) Set(key string, value interface{}) {
+	err := s.sess.Set(key, value)
+	if err != nil {
+		panic(&contextPanicError{err.Error()})
+	}
+}
+
+func (s *ContextSession) Delete(key string) {
+	err := s.sess.Delete(key)
+	if err != nil {
+		panic(&contextPanicError{err.Error()})
+	}
+}
+
+func (s *ContextSession) Flush() {
+	err := s.sess.Flush()
+	if err != nil {
+		panic(&contextPanicError{err.Error()})
 	}
 }
