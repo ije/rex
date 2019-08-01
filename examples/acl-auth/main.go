@@ -47,15 +47,15 @@ func main() {
 	tpl := template.Must(template.New("").Parse(indexHTML))
 	todos := map[string][]string{}
 
-	rex.Use(rex.ACLAuth(func(ctx *rex.Context) (rex.ACLUser, error) {
+	rex.Use(func(ctx *rex.Context) {
 		if ctx.Session().Has("USER") {
-			return &user{
+			ctx.SetACLUser(&user{
 				id:          ctx.Session().Get("USER").(string),
 				permissions: []string{"add"},
-			}, nil
+			})
 		}
-		return nil, nil
-	}))
+		ctx.Next()
+	})
 
 	rex.Get("/", func(ctx *rex.Context) {
 		if u := ctx.ACLUser(); u != nil {
