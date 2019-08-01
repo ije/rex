@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ije/gox/utils"
@@ -21,7 +22,6 @@ type Context struct {
 	W              http.ResponseWriter
 	R              *http.Request
 	URL            *URL
-	State          *State
 	handles        []Handle
 	handleIndex    int
 	permissions    map[string]struct{}
@@ -29,6 +29,7 @@ type Context struct {
 	basicUser      BasicUser
 	session        *ContextSession
 	sessionManager *sessionManager
+	valueStore     sync.Map
 	rest           *REST
 }
 
@@ -54,25 +55,37 @@ func (ctx *Context) Next() {
 		}
 	}
 
-	// cache the 'read-only' fields in context firstly
-	w, r, url, state := ctx.W, ctx.R, ctx.URL, ctx.State
-
 	handle := ctx.handles[ctx.handleIndex]
+
+	// cache the 'read-only' fields in context firstly
+	w, r, url := ctx.W, ctx.R, ctx.URL
+
 	handle(ctx)
 
-	// reset(to prevent user change) the 'read-only' fields in context
+	// restore(to prevent user change) the 'read-only' fields in context
 	ctx.W = w
 	ctx.R = r
 	ctx.URL = url
-	ctx.State = state
+}
+
+func (ctx *Context) Value(key string) (value interface{}, ok bool) {
+	return ctx.valueStore.Load(key)
+}
+
+func (ctx *Context) StoreValue(key string, value interface{}) {
+	ctx.valueStore.Store(key, value)
+}
+
+func (ctx *Context) BasicUser() BasicUser {
+	return ctx.basicUser
 }
 
 func (ctx *Context) ACLUser() ACLUser {
 	return ctx.aclUser
 }
 
-func (ctx *Context) BasicUser() BasicUser {
-	return ctx.basicUser
+func (ctx *Context) SetACLUser(user ACLUser) {
+	ctx.aclUser = user
 }
 
 func (ctx *Context) Session() *ContextSession {
@@ -116,11 +129,9 @@ func (ctx *Context) RemoveCookie(cookie *http.Cookie) {
 	}
 }
 
-func (ctx *Context) RemoveCookieByName(name string, path string, domain string) {
+func (ctx *Context) RemoveCookieByName(name string) {
 	ctx.SetCookie(&http.Cookie{
 		Name:    name,
-		Path:    path,
-		Domain:  domain,
 		Value:   "-",
 		Expires: time.Unix(0, 0),
 	})

@@ -158,10 +158,8 @@ func (rest *REST) serve(w http.ResponseWriter, r *http.Request, params router.Pa
 		W:              &responseWriter{status: 200, rawWriter: w},
 		R:              r,
 		URL:            &URL{params, routePath, r.URL},
-		State:          NewState(),
 		handles:        append(rest.middlewares, handles...),
 		handleIndex:    -1,
-		permissions:    map[string]struct{}{},
 		sessionManager: defaultSessionManager,
 		rest:           rest,
 	}

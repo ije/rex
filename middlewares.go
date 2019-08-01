@@ -63,7 +63,11 @@ func CORS(opts CORSOptions) Handle {
 func ACL(permissions ...string) Handle {
 	return func(ctx *Context) {
 		for _, p := range permissions {
+			p = strings.TrimSpace(p)
 			if p != "" {
+				if ctx.permissions == nil {
+					ctx.permissions = map[string]struct{}{}
+				}
 				ctx.permissions[p] = struct{}{}
 			}
 		}
@@ -109,31 +113,6 @@ func BasicAuthWithRealm(realm string, authFunc func(name string, password string
 		}
 		ctx.SetHeader("WWW-Authenticate", fmt.Sprintf(`Basic realm="%s"`, realm))
 		ctx.W.WriteHeader(401)
-	}
-}
-
-// ACLAuth returns a ACL Authorization middleware.
-func ACLAuth(authFunc func(ctx *Context) (ACLUser, error)) Handle {
-	return func(ctx *Context) {
-		if authFunc != nil {
-			var err error
-			ctx.aclUser, err = authFunc(&Context{
-				W:              ctx.W,
-				R:              ctx.R,
-				URL:            ctx.URL,
-				State:          ctx.State,
-				handles:        []Handle{},
-				handleIndex:    -1,
-				permissions:    ctx.permissions,
-				sessionManager: ctx.sessionManager,
-				rest:           ctx.rest,
-			})
-			if err != nil {
-				ctx.Error(err)
-				return
-			}
-		}
-		ctx.Next()
 	}
 }
 
