@@ -10,6 +10,7 @@ import (
 const indexHTML = `
 <h1>Welcome to use REX!</h1>{{if .user}}
 <p>Hello, {{.user}}</p>
+<p>You will logout after 15 seconds automatically...</p>
 <p><a href="/logout">Logout</a></p>{{else}}
 <form method="post" action="/login">
 	<label>Login as:</label>
@@ -18,7 +19,7 @@ const indexHTML = `
 `
 
 func main() {
-	rex.Use(rex.SessionManager(nil, session.NewMemorySessionPool(15*time.Second)))
+	rex.UseSessionPool(session.NewMemorySessionPool(15 * time.Second))
 
 	rex.Get("/", func(ctx *rex.Context) {
 		ctx.RenderHTML(indexHTML, map[string]interface{}{
