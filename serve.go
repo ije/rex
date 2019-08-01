@@ -93,7 +93,6 @@ func Serve(config Config) {
 			if err != nil {
 				config.Logger.Println("[error] rex server shutdown:", err)
 			}
-			serv.Shutdown(nil)
 		}()
 	}
 
@@ -144,11 +143,10 @@ func Serve(config Config) {
 			if err != nil {
 				config.Logger.Println("[error] rex server(https) shutdown:", err)
 			}
-			servs.Shutdown(nil)
 		}()
 	}
 
-	config.Logger.Println("rex server started.")
+	config.Logger.Println("[info] rex server started.")
 	wg.Wait()
 }
 
@@ -178,6 +176,7 @@ func StartAutoTLS(port uint16, hosts ...string) {
 			AutoTLS: AutoTLSConfig{
 				AcceptTOS: true,
 				Hosts:     hosts,
+				CacheDir:  "./.rex-cert-cache",
 			},
 		},
 	})
