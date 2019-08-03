@@ -12,6 +12,7 @@ const (
 <p><a href="/user/bob">User Bob</a></p>
 <p><a href="/v2">V2 API</a></p>
 <p><a href="/v3">V3 API</a></p> 
+<p><a href="/default">*default</a></p> 
 `
 	indexHTML2 = `
 <h1>V2 API</h1>
@@ -26,7 +27,13 @@ const (
 )
 
 func main() {
+	rex.Use(rex.Header("X-Version", "default"), rex.Header("Foo", "bar"))
+	rex.Get("/default", func(ctx *rex.Context) {
+		ctx.Ok("default")
+	})
+
 	rest := rex.New()
+	rest.Use(rex.Header("X-Version", "v1"), rex.Header("Title", "Welcome to use REX!"))
 	rest.Get("/", func(ctx *rex.Context) {
 		ctx.HTML(indexHTML)
 	})
@@ -37,6 +44,7 @@ func main() {
 	})
 
 	restV2 := rex.New().Prefix("v2")
+	restV2.Use(rex.Header("X-Version", "v2"))
 	restV2.Get("/", func(ctx *rex.Context) {
 		ctx.HTML(indexHTML2)
 	})
@@ -47,6 +55,7 @@ func main() {
 	})
 
 	restV3 := rex.New().Prefix("v3")
+	restV3.Use(rex.Header("X-Version", "v3"))
 	restV3.Get("/", func(ctx *rex.Context) {
 		ctx.HTML(indexHTML3)
 	})
