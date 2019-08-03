@@ -21,8 +21,8 @@ func Use(middlewares ...Handle) {
 }
 
 // NotFound handles the requests that are not routed
-func NotFound(handles ...Handle) {
-	defaultREST.NotFound(handles...)
+func NotFound(handle Handle) {
+	defaultREST.NotFound(handle)
 }
 
 // Options is a shortcut for router.Handle("OPTIONS", path, handles)

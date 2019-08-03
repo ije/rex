@@ -5,15 +5,11 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strings"
 	"sync"
 	"time"
 
-	"github.com/ije/gox/utils"
 	"golang.org/x/crypto/acme/autocert"
 )
-
-var gRESTs = map[string][]*REST{}
 
 // Serve serves the rex server
 func Serve(config Config) {
@@ -21,59 +17,56 @@ func Serve(config Config) {
 		config.Logger = log.New(os.Stderr, "", log.LstdFlags)
 	}
 
-	for _, prefixs := range gRESTs {
-		for _, rest := range prefixs {
-			if rest.AccessLogger == nil && config.AccessLogger != nil {
-				rest.AccessLogger = config.AccessLogger
+	_gRESTs := map[string][][]*REST{}
+	for host, prefixs := range gRESTs {
+		var _prefixs [][]*REST
+		for _, rests := range prefixs {
+			var _rests []*REST
+			for _, rest := range rests {
+				if rest.router != nil {
+					if rest.AccessLogger == nil && config.AccessLogger != nil {
+						rest.AccessLogger = config.AccessLogger
+					}
+					if rest.Logger == nil {
+						rest.Logger = config.Logger
+					}
+					_rests = append(_rests, rest)
+				}
 			}
-			if rest.Logger == nil {
-				rest.Logger = config.Logger
+			if len(_rests) > 0 {
+				_prefixs = append(_prefixs, _rests)
 			}
+		}
+		if len(_prefixs) > 0 {
+			_gRESTs[host] = _prefixs
 		}
 	}
 
-	mux := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		wh := w.Header()
-		wh.Set("Connection", "keep-alive")
-		wh.Set("Server", "rex-serv")
-
-		if config.TLS.AutoRedirect && r.TLS == nil {
-			code := 301
-			if r.Method != "GET" {
-				code = 307
-			}
-			http.Redirect(w, r, fmt.Sprintf("https://%s/%s", r.Host, r.RequestURI), code)
-			return
-		}
-
-		host, _ := utils.SplitByLastByte(r.Host, ':')
-		prefixs, ok := gRESTs[host]
-		if !ok && strings.HasPrefix(host, "www.") {
-			prefixs, ok = gRESTs[strings.TrimPrefix(host, "www.")]
-		}
-		if !ok {
-			prefixs, ok = gRESTs["*"]
-		}
-		if !ok {
-			http.NotFound(w, r)
-			return
-		}
-
-		if len(prefixs) > 0 {
-			for _, rest := range prefixs {
-				if rest.prefix != "" && strings.HasPrefix(r.URL.Path, "/"+rest.prefix) {
-					rest.ServeHTTP(w, r)
-					return
+	for _, prefixs := range _gRESTs {
+		for _, rests := range prefixs {
+			if len(rests) > 1 {
+				for index, rest := range rests {
+					func(index int, rest *REST, rests []*REST) {
+						rest.router.NotFound(func(w http.ResponseWriter, r *http.Request) {
+							if index+1 <= len(rests)-1 {
+								rests[index+1].ServeHTTP(w, r)
+								return
+							}
+							if f := rests[0]; f.notFoundHandle != nil {
+								f.serve(w, r, nil, f.notFoundHandle)
+							} else if rest.notFoundHandle != nil {
+								rest.serve(w, r, nil, rest.notFoundHandle)
+							} else {
+								rest.serve(w, r, nil, func(ctx *Context) {
+									ctx.End(404)
+								})
+							}
+						})
+					}(index, rest, rests)
 				}
 			}
-			if rest := prefixs[len(prefixs)-1]; rest.prefix == "" {
-				rest.ServeHTTP(w, r)
-				return
-			}
 		}
-
-		http.NotFound(w, r)
-	})
+	}
 
 	var wg sync.WaitGroup
 
@@ -84,7 +77,7 @@ func Serve(config Config) {
 
 			serv := &http.Server{
 				Addr:           fmt.Sprintf((":%d"), config.Port),
-				Handler:        mux,
+				Handler:        &mux{rests: _gRESTs, config: config},
 				ReadTimeout:    time.Duration(config.ReadTimeout) * time.Second,
 				WriteTimeout:   time.Duration(config.WriteTimeout) * time.Second,
 				MaxHeaderBytes: int(config.MaxHeaderBytes),
@@ -108,7 +101,7 @@ func Serve(config Config) {
 
 			servs := &http.Server{
 				Addr:           fmt.Sprintf((":%d"), port),
-				Handler:        mux,
+				Handler:        &mux{rests: _gRESTs, config: config},
 				ReadTimeout:    time.Duration(config.ReadTimeout) * time.Second,
 				WriteTimeout:   time.Duration(config.WriteTimeout) * time.Second,
 				MaxHeaderBytes: int(config.MaxHeaderBytes),
@@ -180,40 +173,4 @@ func StartAutoTLS(port uint16, hosts ...string) {
 			},
 		},
 	})
-}
-
-func gREST(host string, prefix string) *REST {
-	prefixs, ok := gRESTs[host]
-	if ok {
-		for _, rest := range prefixs {
-			if rest.prefix == prefix {
-				return rest
-			}
-		}
-	}
-
-	rest := &REST{
-		host:   host,
-		prefix: prefix,
-	}
-	rest.initRouter()
-	if len(prefixs) == 0 {
-		prefixs = []*REST{rest}
-	} else {
-		insertIndex := 0
-		for i, r := range prefixs {
-			if len(prefix) > len(r.prefix) {
-				insertIndex = i
-				break
-			}
-		}
-		tmp := make([]*REST, len(prefixs)+1)
-		copy(tmp, prefixs[:insertIndex])
-		copy(tmp[insertIndex+1:], prefixs[insertIndex:])
-		tmp[insertIndex] = rest
-		prefixs = tmp
-	}
-	gRESTs[host] = prefixs
-
-	return rest
 }

@@ -33,14 +33,18 @@ type REST struct {
 	// this should be disable in production.
 	SendError bool
 
-	middlewares     []Handle
-	notFoundHandles []Handle
-	router          *router.Router
+	notFoundHandle Handle
+	middlewares    []Handle
+	router         *router.Router
 }
 
 // New returns a new REST
 func New() *REST {
-	return gREST("*", "")
+	rest := &REST{
+		host: "*",
+	}
+	global(rest)
+	return rest
 }
 
 // Host returns a nested REST with host
@@ -52,17 +56,21 @@ func (rest *REST) Host(host string) *REST {
 		return rest
 	}
 
-	return gREST(host, rest.prefix)
+	rest.host = host
+	global(rest)
+	return rest
 }
 
 // Prefix returns a nested REST with prefix
 func (rest *REST) Prefix(prefix string) *REST {
 	prefix = strings.TrimSpace(strings.Trim(strings.TrimSpace(prefix), "/"))
-	if prefix == "" {
+	if prefix == rest.prefix {
 		return rest
 	}
 
-	return gREST(rest.host, prefix)
+	rest.prefix = prefix
+	global(rest)
+	return rest
 }
 
 // Group creates a nested REST
@@ -74,6 +82,7 @@ func (rest *REST) Group(prefix string, callback func(*REST)) {
 	prefix = strings.TrimSpace(strings.Trim(strings.TrimSpace(prefix), "/"))
 	if prefix == "" {
 		callback(rest)
+		return
 	}
 
 	var s []string
@@ -81,7 +90,21 @@ func (rest *REST) Group(prefix string, callback func(*REST)) {
 		s = append(s, rest.prefix)
 	}
 	s = append(s, prefix)
-	callback(gREST(rest.host, strings.Join(s, "/")))
+	middlewaresN := make([]Handle, len(rest.middlewares))
+	for i, h := range rest.middlewares {
+		middlewaresN[i] = h
+	}
+	restN := &REST{
+		host:           rest.host,
+		prefix:         strings.Join(s, "/"),
+		AccessLogger:   rest.AccessLogger,
+		Logger:         rest.Logger,
+		SendError:      rest.SendError,
+		middlewares:    middlewaresN,
+		notFoundHandle: rest.notFoundHandle,
+	}
+	global(restN)
+	callback(restN)
 }
 
 // Use appends middleware to the REST middleware stack.
@@ -94,8 +117,8 @@ func (rest *REST) Use(middlewares ...Handle) {
 }
 
 // NotFound handles the requests that are not routed
-func (rest *REST) NotFound(handles ...Handle) {
-	rest.notFoundHandles = append(rest.notFoundHandles, handles...)
+func (rest *REST) NotFound(handle Handle) {
+	rest.notFoundHandle = handle
 }
 
 // Options is a shortcut for router.Handle("OPTIONS", path, handles)
@@ -195,8 +218,8 @@ func (rest *REST) serve(w http.ResponseWriter, r *http.Request, params router.Pa
 func (rest *REST) initRouter() {
 	router := router.New()
 	router.NotFound(func(w http.ResponseWriter, r *http.Request) {
-		if len(rest.notFoundHandles) > 0 {
-			rest.serve(w, r, nil, rest.notFoundHandles...)
+		if rest.notFoundHandle != nil {
+			rest.serve(w, r, nil, rest.notFoundHandle)
 		} else {
 			rest.serve(w, r, nil, func(ctx *Context) {
 				ctx.End(404)
