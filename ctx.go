@@ -218,10 +218,6 @@ func (ctx *Context) FormValue(key string, defaultValue ...string) FormValue {
 	return FormValue("")
 }
 
-func (ctx *Context) FormString(key string, defaultValue ...string) string {
-	return ctx.FormValue(key, defaultValue...).String()
-}
-
 func (ctx *Context) FormFile(key string) (multipart.File, *multipart.FileHeader, error) {
 	return ctx.R.FormFile(key)
 }
@@ -317,12 +313,12 @@ func (ctx *Context) JSON(v interface{}) {
 }
 
 func (ctx *Context) JSONError(err error) {
-	ie, ok := err.(*InvalidError)
+	inv, ok := err.(*InvalidError)
 	if ok {
-		ctx.json(ie.Code, map[string]interface{}{
+		ctx.json(inv.Code, map[string]interface{}{
 			"error": map[string]interface{}{
-				"code":    ie.Code,
-				"message": ie.Message,
+				"code":    inv.Code,
+				"message": inv.Message,
 			},
 		})
 	} else {
