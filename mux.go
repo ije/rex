@@ -9,8 +9,8 @@ import (
 )
 
 type mux struct {
-	rests  map[string][][]*REST
-	config Config
+	rests        map[string][][]*REST
+	autoRedirect bool
 }
 
 func (m *mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -18,7 +18,7 @@ func (m *mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	wh.Set("Connection", "keep-alive")
 	wh.Set("Server", "rex-serv")
 
-	if m.config.TLS.AutoRedirect && r.TLS == nil {
+	if m.autoRedirect && r.TLS == nil {
 		code := 301
 		if r.Method != "GET" {
 			code = 307
@@ -105,4 +105,53 @@ func global(rest *REST) {
 		prefixs = tmp
 	}
 	gRESTs[rest.host] = prefixs
+}
+
+func linkRESTs() map[string][][]*REST {
+	_gRESTs := map[string][][]*REST{}
+	for host, prefixs := range gRESTs {
+		var _prefixs [][]*REST
+		for _, rests := range prefixs {
+			var _rests []*REST
+			for _, rest := range rests {
+				if rest.router != nil {
+					_rests = append(_rests, rest)
+				}
+			}
+			if len(_rests) > 0 {
+				_prefixs = append(_prefixs, _rests)
+			}
+		}
+		if len(_prefixs) > 0 {
+			_gRESTs[host] = _prefixs
+		}
+	}
+
+	for _, prefixs := range _gRESTs {
+		for _, rests := range prefixs {
+			if len(rests) > 1 {
+				for index, rest := range rests {
+					func(index int, rest *REST, rests []*REST) {
+						rest.router.NotFound(func(w http.ResponseWriter, r *http.Request) {
+							if index+1 <= len(rests)-1 {
+								rests[index+1].ServeHTTP(w, r)
+								return
+							}
+							if f := rests[0]; f.notFoundHandle != nil {
+								f.serve(w, r, nil, f.notFoundHandle)
+							} else if rest.notFoundHandle != nil {
+								rest.serve(w, r, nil, rest.notFoundHandle)
+							} else {
+								rest.serve(w, r, nil, func(ctx *Context) {
+									ctx.End(404)
+								})
+							}
+						})
+					}(index, rest, rests)
+				}
+			}
+		}
+	}
+
+	return _gRESTs
 }
