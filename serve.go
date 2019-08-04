@@ -17,52 +17,15 @@ func Serve(config Config) {
 		config.Logger = log.New(os.Stderr, "", log.LstdFlags)
 	}
 
-	_gRESTs := map[string][][]*REST{}
-	for host, prefixs := range gRESTs {
-		var _prefixs [][]*REST
-		for _, rests := range prefixs {
-			var _rests []*REST
-			for _, rest := range rests {
-				if rest.router != nil {
-					if rest.AccessLogger == nil && config.AccessLogger != nil {
-						rest.AccessLogger = config.AccessLogger
-					}
-					if rest.Logger == nil {
-						rest.Logger = config.Logger
-					}
-					_rests = append(_rests, rest)
-				}
-			}
-			if len(_rests) > 0 {
-				_prefixs = append(_prefixs, _rests)
-			}
-		}
-		if len(_prefixs) > 0 {
-			_gRESTs[host] = _prefixs
-		}
-	}
-
+	_gRESTs := linkRESTs()
 	for _, prefixs := range _gRESTs {
 		for _, rests := range prefixs {
-			if len(rests) > 1 {
-				for index, rest := range rests {
-					func(index int, rest *REST, rests []*REST) {
-						rest.router.NotFound(func(w http.ResponseWriter, r *http.Request) {
-							if index+1 <= len(rests)-1 {
-								rests[index+1].ServeHTTP(w, r)
-								return
-							}
-							if f := rests[0]; f.notFoundHandle != nil {
-								f.serve(w, r, nil, f.notFoundHandle)
-							} else if rest.notFoundHandle != nil {
-								rest.serve(w, r, nil, rest.notFoundHandle)
-							} else {
-								rest.serve(w, r, nil, func(ctx *Context) {
-									ctx.End(404)
-								})
-							}
-						})
-					}(index, rest, rests)
+			for _, rest := range rests {
+				if rest.AccessLogger == nil && config.AccessLogger != nil {
+					rest.AccessLogger = config.AccessLogger
+				}
+				if rest.Logger == nil {
+					rest.Logger = config.Logger
 				}
 			}
 		}
@@ -77,7 +40,7 @@ func Serve(config Config) {
 
 			serv := &http.Server{
 				Addr:           fmt.Sprintf((":%d"), config.Port),
-				Handler:        &mux{rests: _gRESTs, config: config},
+				Handler:        &mux{_gRESTs, config.TLS.AutoRedirect},
 				ReadTimeout:    time.Duration(config.ReadTimeout) * time.Second,
 				WriteTimeout:   time.Duration(config.WriteTimeout) * time.Second,
 				MaxHeaderBytes: int(config.MaxHeaderBytes),
@@ -101,7 +64,7 @@ func Serve(config Config) {
 
 			servs := &http.Server{
 				Addr:           fmt.Sprintf((":%d"), port),
-				Handler:        &mux{rests: _gRESTs, config: config},
+				Handler:        &mux{_gRESTs, config.TLS.AutoRedirect},
 				ReadTimeout:    time.Duration(config.ReadTimeout) * time.Second,
 				WriteTimeout:   time.Duration(config.WriteTimeout) * time.Second,
 				MaxHeaderBytes: int(config.MaxHeaderBytes),

@@ -121,39 +121,44 @@ func (rest *REST) NotFound(handle Handle) {
 	rest.notFoundHandle = handle
 }
 
-// Options is a shortcut for router.Handle("OPTIONS", path, handles)
+// Options is a shortcut for rest.Handle("OPTIONS", path, handles)
 func (rest *REST) Options(path string, handles ...Handle) {
 	rest.Handle("OPTIONS", path, handles...)
 }
 
-// Head is a shortcut for router.Handle("HEAD", path, handles)
+// Head is a shortcut for rest.Handle("HEAD", path, handles)
 func (rest *REST) Head(path string, handles ...Handle) {
 	rest.Handle("HEAD", path, handles...)
 }
 
-// Get is a shortcut for router.Handle("GET", path, handles)
+// Get is a shortcut for rest.Handle("GET", path, handles)
 func (rest *REST) Get(path string, handles ...Handle) {
 	rest.Handle("GET", path, handles...)
 }
 
-// Post is a shortcut for router.Handle("POST", path, handles)
+// Post is a shortcut for rest.Handle("POST", path, handles)
 func (rest *REST) Post(path string, handles ...Handle) {
 	rest.Handle("POST", path, handles...)
 }
 
-// Put is a shortcut for router.Handle("PUT", path, handles)
+// Put is a shortcut for rest.Handle("PUT", path, handles)
 func (rest *REST) Put(path string, handles ...Handle) {
 	rest.Handle("PUT", path, handles...)
 }
 
-// Patch is a shortcut for router.Handle("PATCH", path, handles)
+// Patch is a shortcut for rest.Handle("PATCH", path, handles)
 func (rest *REST) Patch(path string, handles ...Handle) {
 	rest.Handle("PATCH", path, handles...)
 }
 
-// Delete is a shortcut for router.Handle("DELETE", path, handles)
+// Delete is a shortcut for rest.Handle("DELETE", path, handles)
 func (rest *REST) Delete(path string, handles ...Handle) {
 	rest.Handle("DELETE", path, handles...)
+}
+
+// Trace is a shortcut for rest.Handle("TRACE", path, handles)
+func (rest *REST) Trace(path string, handles ...Handle) {
+	rest.Handle("TRACE", path, handles...)
 }
 
 // Handle registers a new request handle with the given method and path.
