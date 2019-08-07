@@ -24,15 +24,15 @@ func TestRouter(t *testing.T) {
 		}
 	})
 
-	router.Handle("GET", "/users/:name", func(w http.ResponseWriter, r *http.Request, params Params) {
+	router.Handle("GET", "/posts/:slug", func(w http.ResponseWriter, r *http.Request, params Params) {
 		routed++
-		want := Params{{"name", "gopher"}}
+		want := Params{{"slug", "hello-world"}}
 		if !reflect.DeepEqual(params, want) {
 			t.Fatalf("invalid params: want %v, got %v", want, params)
 		}
 	})
 
-	router.Handle("GET", "/user/{id:number}", func(w http.ResponseWriter, r *http.Request, params Params) {
+	router.Handle("GET", "/post/{id:number}", func(w http.ResponseWriter, r *http.Request, params Params) {
 		routed++
 		want := Params{{"id", "123"}}
 		if !reflect.DeepEqual(params, want) {
@@ -40,9 +40,17 @@ func TestRouter(t *testing.T) {
 		}
 	})
 
-	router.Handle("GET", "/:version/user", func(w http.ResponseWriter, r *http.Request, params Params) {
+	router.Handle("GET", "/:version/posts", func(w http.ResponseWriter, r *http.Request, params Params) {
 		routed++
-		want := Params{{"version", "v1"}}
+		want := Params{{"version", "ver2"}, {"ver", "ver2"}}
+		if !reflect.DeepEqual(params, want) {
+			t.Fatalf("invalid params: want %v, got %v", want, params)
+		}
+	})
+
+	router.Handle("GET", "/:ver/users", func(w http.ResponseWriter, r *http.Request, params Params) {
+		routed++
+		want := Params{{"version", "v2"}, {"ver", "v2"}}
 		if !reflect.DeepEqual(params, want) {
 			t.Fatalf("invalid params: want %v, got %v", want, params)
 		}
@@ -56,6 +64,14 @@ func TestRouter(t *testing.T) {
 		}
 	})
 
+	router.Handle("POST", "/(works|work)/:id", func(w http.ResponseWriter, r *http.Request, params Params) {
+		routed++
+		want := Params{{"id", "rex"}}
+		if !reflect.DeepEqual(params, want) {
+			t.Fatalf("invalid params: want %v, got %v", want, params)
+		}
+	})
+
 	router.Handle("POST", "/subs/ {email: email} ", func(w http.ResponseWriter, r *http.Request, params Params) {
 		routed++
 		want := Params{{"email", "go@gmail.com"}}
@@ -64,41 +80,36 @@ func TestRouter(t *testing.T) {
 		}
 	})
 
-	router.Handle("POST", "/(repos|repo)/:id", func(w http.ResponseWriter, r *http.Request, params Params) {
-		routed++
-		want := Params{{"id", "rex"}}
-		if !reflect.DeepEqual(params, want) {
-			t.Fatalf("invalid params: want %v, got %v", want, params)
-		}
-	})
-
 	request(router, "GET", "/") // ✓
 	expectRouted++
 
-	request(router, "GET", "/users/gopher") // ✓
+	request(router, "GET", "/posts/hello-world") // ✓
 	expectRouted++
 
-	request(router, "GET", "/user/123") // ✓
+	request(router, "GET", "/post/123") // ✓
 	expectRouted++
 
-	request(router, "GET", "/user/123+") // x
+	request(router, "GET", "/post/123+") // x
 
-	request(router, "GET", "/v1/user") // ✓
+	request(router, "GET", "/ver2/posts") // ✓
+	expectRouted++
+
+	request(router, "GET", "/v2/users") // ✓
 	expectRouted++
 
 	request(router, "GET", "/assets/scripts/main.dist.js") // ✓
+	expectRouted++
+
+	request(router, "POST", "/work/rex") // ✓
+	expectRouted++
+
+	request(router, "POST", "/works/rex") // ✓
 	expectRouted++
 
 	request(router, "POST", "/subs/go@gmail.com") // ✓
 	expectRouted++
 
 	request(router, "POST", "/subs/gmail.com") // x
-
-	request(router, "POST", "/repo/rex") // ✓
-	expectRouted++
-
-	request(router, "POST", "/repos/rex") // ✓
-	expectRouted++
 
 	if routed != expectRouted {
 		t.Fatalf("routed %d but expect %d", routed, expectRouted)

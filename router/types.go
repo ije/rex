@@ -6,6 +6,7 @@ import (
 
 type node struct {
 	name           string
+	alias          [][2]string
 	staticChildren []*node
 	paramChild     *node
 	catchAllChild  *node

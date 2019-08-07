@@ -61,7 +61,7 @@ func (router *Router) Handle(method string, path string, handle Handle) {
 		if root.handle == nil {
 			root.handle = handle
 		} else {
-			panic("conflicting root route: '/'")
+			panic("conflicting route: '/'")
 		}
 		return
 	}
@@ -105,7 +105,7 @@ func (router *Router) mapPath(n *node, fullPath string, pathSegs []string, handl
 			panic("bad route pattern: '" + fs + "' must be at the end of path '" + fullPath + "'")
 		}
 		if n.catchAllChild != nil {
-			panic("conflicting wildcard route: '" + fullPath + "'")
+			panic("conflicting route: '" + fullPath + "'")
 		}
 		fn = fs[1:]
 		if fn == "" {
@@ -141,9 +141,7 @@ func (router *Router) mapPath(n *node, fullPath string, pathSegs []string, handl
 		}
 
 		if n.paramChild != nil {
-			if n.paramChild.name != fn || n.paramChild.validate != validate {
-				panic("duplicate wildcard route: '" + fullPath + "'")
-			}
+			n.paramChild.alias = append(n.paramChild.alias, [2]string{fn, validate})
 		} else {
 			n.paramChild = &node{
 				name: fn,
@@ -153,7 +151,7 @@ func (router *Router) mapPath(n *node, fullPath string, pathSegs []string, handl
 
 		if segs == 1 {
 			if n.paramChild.handle != nil {
-				panic("duplicate wildcard route: '" + fullPath + "'")
+				panic("conflicting route: '" + fullPath + "'")
 			}
 			n.paramChild.handle = handle
 		} else {
@@ -189,7 +187,7 @@ func (router *Router) mapPath(n *node, fullPath string, pathSegs []string, handl
 
 		if segs == 1 {
 			if sn.handle != nil {
-				panic("conflicting static route: '" + fullPath + "'")
+				panic("conflicting route: '" + fullPath + "'")
 			} else {
 				sn.handle = handle
 			}
@@ -282,13 +280,41 @@ func (router *Router) getHandle(root *node, path string) (Handle, Params) {
 			if !ok {
 				ok = parentNode.paramChild != nil
 				if ok && parentNode.paramChild.validate != "" {
-					ok = router.validates[parentNode.paramChild.validate](seg)
+					var fn ValidateFn
+					fn, ok = router.validates[parentNode.paramChild.validate]
+					if ok {
+						ok = fn(seg)
+					}
+					if !ok && len(parentNode.paramChild.alias) > 0 {
+						for _, alia := range parentNode.paramChild.alias {
+							if alia[1] == "" {
+								ok = true
+								break
+							} else {
+								fn, shi := router.validates[alia[1]]
+								if shi && fn(seg) {
+									ok = true
+									break
+								}
+							}
+						}
+					}
 				}
 				if ok {
 					childNode = parentNode.paramChild
-				}
-				if ok {
 					addParam(childNode.name, seg)
+					if len(childNode.alias) > 0 {
+						for _, alia := range childNode.alias {
+							if alia[1] == "" {
+								addParam(alia[0], seg)
+							} else {
+								fn, ok := router.validates[alia[1]]
+								if ok && fn(seg) {
+									addParam(alia[0], seg)
+								}
+							}
+						}
+					}
 				}
 			}
 
