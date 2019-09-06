@@ -1,7 +1,6 @@
 package rex
 
 import (
-	"archive/zip"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -10,7 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -187,7 +186,7 @@ func formatValue(value interface{}) (str string) {
 		str = fmt.Sprintf("%f", v)
 	case string:
 		str = v
-	case map[string]interface{}:
+	case []interface{}, map[string]interface{}:
 		p, err := json.Marshal(v)
 		if err == nil {
 			str = string(p)
@@ -207,15 +206,20 @@ func (ctx *Context) FormValues(key string) (a []string) {
 	return
 }
 
-func (ctx *Context) FormValue(key string, defaultValue ...string) FormValue {
+func (ctx *Context) FormValue(key string) string {
 	values := ctx.FormValues(key)
 	if len(values) > 0 {
-		return FormValue(values[0])
+		return values[0]
 	}
-	if len(defaultValue) > 0 {
-		return FormValue(defaultValue[0])
-	}
-	return FormValue("")
+	return ""
+}
+
+func (ctx *Context) FormIntValue(key string) (int64, error) {
+	return strconv.ParseInt(ctx.FormValue(key), 10, 64)
+}
+
+func (ctx *Context) FormFloatValue(key string) (float64, error) {
+	return strconv.ParseFloat(ctx.FormValue(key), 64)
 }
 
 func (ctx *Context) FormFile(key string) (multipart.File, *multipart.FileHeader, error) {
@@ -278,7 +282,7 @@ func (ctx *Context) Ok(text string) {
 }
 
 func (ctx *Context) Error(err error) {
-	if ctx.rest.SendError {
+	if ctx.rest.debug {
 		ctx.End(500, err.Error())
 	} else {
 		ctx.End(500)
@@ -323,7 +327,7 @@ func (ctx *Context) JSONError(err error) {
 		})
 	} else {
 		message := "internal server error"
-		if ctx.rest.SendError {
+		if ctx.rest.debug {
 			message = err.Error()
 		}
 		ctx.json(500, map[string]interface{}{
@@ -343,11 +347,6 @@ func (ctx *Context) HTML(html string) {
 	ctx.W.Write([]byte(html))
 }
 
-func (ctx *Context) Render(template Template, data interface{}) {
-	ctx.SetHeader("Content-Type", "text/html; charset=utf-8")
-	template.Execute(ctx.W, data)
-}
-
 func (ctx *Context) RenderHTML(html string, data interface{}) {
 	t, err := template.New("").Parse(html)
 	if err != nil {
@@ -355,6 +354,11 @@ func (ctx *Context) RenderHTML(html string, data interface{}) {
 		return
 	}
 	ctx.Render(t, data)
+}
+
+func (ctx *Context) Render(template Template, data interface{}) {
+	ctx.SetHeader("Content-Type", "text/html; charset=utf-8")
+	template.Execute(ctx.W, data)
 }
 
 func (ctx *Context) File(filename string) {
@@ -382,93 +386,9 @@ func (ctx *Context) File(filename string) {
 	http.ServeFile(ctx.W, ctx.R, filename)
 }
 
-func (ctx *Context) Zip(path string) {
-	fi, err := os.Stat(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			ctx.End(404)
-		} else {
-			ctx.Error(err)
-		}
-		return
-	}
-
-	if fi.IsDir() {
-		dir, err := filepath.Abs(path)
-		if err != nil {
-			ctx.Error(err)
-			return
-		}
-
-		archive := zip.NewWriter(ctx.W)
-		defer archive.Close()
-
-		ctx.SetHeader("Content-Type", "application/zip")
-		filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				return err
-			}
-
-			header, err := zip.FileInfoHeader(info)
-			if err != nil {
-				return err
-			}
-
-			header.Name = strings.TrimPrefix(strings.TrimPrefix(path, dir), "/")
-			if header.Name == "" {
-				return nil
-			}
-
-			if info.IsDir() {
-				header.Name += "/"
-			} else {
-				header.Method = zip.Deflate
-			}
-
-			gzw, err := archive.CreateHeader(header)
-			if err != nil {
-				return err
-			}
-
-			if info.IsDir() {
-				return nil
-			}
-
-			file, err := os.Open(path)
-			if err != nil {
-				return err
-			}
-			defer file.Close()
-
-			_, err = io.Copy(gzw, file)
-			return err
-		})
-	} else {
-		header, err := zip.FileInfoHeader(fi)
-		if err != nil {
-			ctx.Error(err)
-			return
-		}
-
-		file, err := os.Open(path)
-		if err != nil {
-			ctx.Error(err)
-			return
-		}
-		defer file.Close()
-
-		archive := zip.NewWriter(ctx.W)
-		defer archive.Close()
-
-		gzw, err := archive.CreateHeader(header)
-		if err != nil {
-			ctx.Error(err)
-			return
-		}
-
-		ctx.SetHeader("Content-Type", "application/zip")
-		io.Copy(gzw, file)
-	}
+func (ctx *Context) Content(contentType string, modtime time.Time, content io.ReadSeeker) {
+	ctx.SetHeader("Content-Type", contentType)
+	http.ServeContent(ctx.W, ctx.R, "", modtime, content)
 }
 
 type ContextSession struct {

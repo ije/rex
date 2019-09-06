@@ -23,15 +23,15 @@ type REST struct {
 	// For example if the Prefix equals "v2", the given route path "/path" will be "/v2/path"
 	prefix string
 
+	// If enabled, errors will be sent to the client/browser,
+	// this should be disable in production.
+	debug bool
+
 	// Logger to log requests
 	AccessLogger Logger
 
 	// Logger to log errors
 	Logger Logger
-
-	// If enabled, errors will be sent to the client/browser,
-	// this should be disable in production.
-	SendError bool
 
 	notFoundHandle Handle
 	middlewares    []Handle
@@ -73,6 +73,12 @@ func (rest *REST) Prefix(prefix string) *REST {
 	return rest
 }
 
+// Prefix returns a nested REST with prefix
+func (rest *REST) Debug(debug bool) *REST {
+	rest.debug = debug
+	return rest
+}
+
 // Group creates a nested REST
 func (rest *REST) Group(prefix string, callback func(*REST)) {
 	if callback == nil {
@@ -99,7 +105,7 @@ func (rest *REST) Group(prefix string, callback func(*REST)) {
 		prefix:         strings.Join(s, "/"),
 		AccessLogger:   rest.AccessLogger,
 		Logger:         rest.Logger,
-		SendError:      rest.SendError,
+		debug:          rest.debug,
 		middlewares:    middlewaresN,
 		notFoundHandle: rest.notFoundHandle,
 	}
@@ -238,7 +244,7 @@ func (rest *REST) initRouter() {
 	})
 	router.HandlePanic(func(w http.ResponseWriter, r *http.Request, v interface{}) {
 		if err, ok := v.(*contextPanicError); ok {
-			if rest.SendError {
+			if rest.debug {
 				http.Error(w, err.msg, 500)
 			} else {
 				http.Error(w, http.StatusText(500), 500)
@@ -257,7 +263,7 @@ func (rest *REST) initRouter() {
 			}
 			fmt.Fprint(buf, "\t", strings.TrimSpace(runtime.FuncForPC(pc).Name()), " ", file, ":", line, "\n")
 		}
-		if rest.SendError {
+		if rest.debug {
 			http.Error(w, fmt.Sprintf("[panic] %v\n%s", v, buf.String()), 500)
 		} else {
 			http.Error(w, http.StatusText(500), 500)

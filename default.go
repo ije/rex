@@ -10,6 +10,11 @@ var defaultREST = New()
 var defaultSessionPool = session.NewMemorySessionPool(time.Hour / 2)
 var defaultSIDStore = &session.CookieSIDStore{}
 
+// Debug sets the debug mode
+func Debug(debug bool) {
+	defaultREST.Debug(debug)
+}
+
 // Group creates a nested REST
 func Group(prefix string, callback func(*REST)) {
 	defaultREST.Group(prefix, callback)
