@@ -28,7 +28,7 @@ func main() {
 	})
 
 	rex.Post("/login", func(ctx *rex.Context) {
-		user := ctx.FormValue("user").String()
+		user := ctx.FormValue("user")
 		if user != "" {
 			ctx.Session().Set("user", user)
 		}

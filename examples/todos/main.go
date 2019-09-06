@@ -69,7 +69,7 @@ func main() {
 	})
 
 	rex.Post("/add-todo", rex.ACL("add"), func(ctx *rex.Context) {
-		todo := ctx.FormValue("todo").String()
+		todo := ctx.FormValue("todo")
 		if todo != "" {
 			user := ctx.ACLUser().(*user).id
 			todos[user] = append(todos[user], todo)
@@ -78,7 +78,7 @@ func main() {
 	})
 
 	rex.Post("/login", func(ctx *rex.Context) {
-		user := ctx.FormValue("user").String()
+		user := ctx.FormValue("user")
 		if user != "" {
 			ctx.Session().Set("USER", user)
 		}
