@@ -2,12 +2,10 @@ package rex
 
 import (
 	"encoding/json"
-	"fmt"
 	"html/template"
 	"io"
 	"mime/multipart"
 	"net/http"
-	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -150,76 +148,31 @@ func (ctx *Context) SetHeader(key string, value string) {
 	ctx.W.Header().Set(key, value)
 }
 
-func (ctx *Context) ParseMultipartForm(maxMemoryBytes int64) {
-	if strings.HasSuffix(ctx.R.Header.Get("Content-Type"), "/json") {
-		form := url.Values{}
-		var obj map[string]interface{}
-		if json.NewDecoder(ctx.R.Body).Decode(&obj) == nil {
-			for key, value := range obj {
-				switch v := value.(type) {
-				case []interface{}:
-					for _, val := range v {
-						form.Add(key, formatValue(val))
-					}
-				default:
-					form.Set(key, formatValue(v))
-				}
-			}
-		}
-		ctx.R.Form = form
-	} else {
-		ctx.R.ParseMultipartForm(maxMemoryBytes)
-	}
-}
-
-func formatValue(value interface{}) (str string) {
-	switch v := value.(type) {
-	case nil:
-		str = "null"
-	case bool:
-		if v {
-			str = "true"
-		} else {
-			str = "false"
-		}
-	case float64:
-		str = fmt.Sprintf("%f", v)
-	case string:
-		str = v
-	case []interface{}, map[string]interface{}:
-		p, err := json.Marshal(v)
-		if err == nil {
-			str = string(p)
-		}
-	}
-	return
-}
-
-func (ctx *Context) FormValues(key string) (a []string) {
-	if ctx.R.Form == nil {
-		ctx.R.ParseMultipartForm(32 << 20) // 32m in memory
-	}
-	a, ok := ctx.R.Form[key]
-	if !ok {
-		a, _ = ctx.R.Form[key+"[]"]
-	}
-	return
-}
-
+// FormValue returns the first value for the named component of the POST,
+// PATCH, or PUT request body, or returns the first value for the named component of the request url query
 func (ctx *Context) FormValue(key string) string {
-	values := ctx.FormValues(key)
-	if len(values) > 0 {
-		return values[0]
+	switch ctx.R.Method {
+	case "POST", "PUT", "PATCH":
+		return ctx.R.PostFormValue(key)
+	default:
+		return ctx.R.FormValue(key)
 	}
-	return ""
 }
 
 func (ctx *Context) FormIntValue(key string) (int64, error) {
-	return strconv.ParseInt(ctx.FormValue(key), 10, 64)
+	v := strings.TrimSpace(ctx.FormValue(key))
+	if v == "" {
+		return 0, nil
+	}
+	return strconv.ParseInt(v, 10, 64)
 }
 
 func (ctx *Context) FormFloatValue(key string) (float64, error) {
-	return strconv.ParseFloat(ctx.FormValue(key), 64)
+	v := strings.TrimSpace(ctx.FormValue(key))
+	if v == "" {
+		return 0.0, nil
+	}
+	return strconv.ParseFloat(v, 64)
 }
 
 func (ctx *Context) FormFile(key string) (multipart.File, *multipart.FileHeader, error) {
