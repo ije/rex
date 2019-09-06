@@ -73,7 +73,7 @@ func (rest *REST) Prefix(prefix string) *REST {
 	return rest
 }
 
-// Prefix returns a nested REST with prefix
+// Debug sets the debug mode
 func (rest *REST) Debug(debug bool) *REST {
 	rest.debug = debug
 	return rest

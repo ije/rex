@@ -141,9 +141,9 @@ func Static(root string, fallbackPath ...string) Handle {
 	return func(ctx *Context) {
 		var fallback bool
 		var filepath string
-		if val := ctx.URL.Param("path"); val != "" {
+		if val := ctx.URL.Param("filepath"); val != "" {
 			filepath = val
-		} else if val := ctx.URL.Param("filepath"); val != "" {
+		} else if val := ctx.URL.Param("path"); val != "" {
 			filepath = val
 		} else {
 			filepath = ctx.URL.RoutePath
