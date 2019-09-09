@@ -205,7 +205,7 @@ func (rest *REST) serve(w http.ResponseWriter, r *http.Request, params router.Pa
 
 	ctx.Next()
 
-	if rest.AccessLogger != nil {
+	if rest.AccessLogger != nil && r.Method != "OPTIONS" {
 		w, ok := ctx.W.(*responseWriter)
 		if ok {
 			rest.AccessLogger.Printf(
