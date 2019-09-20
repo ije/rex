@@ -45,7 +45,7 @@ func main() {
 	})
 
 	rex.Get("/json3", func(ctx *rex.Context) {
-		ctx.JSONError(rex.Invalid(404, "page not found"))
+		ctx.JSONError(rex.Invalid(404, "not found"))
 	})
 
 	rex.Get("/json4", func(ctx *rex.Context) {

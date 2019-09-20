@@ -9,28 +9,28 @@ import (
 const indexHTML = `
 <h1>Welcome to use REX!</h1>
 {{if .user}}
-	<p>Welcome back, <strong>{{.user}}</strong>!</p>
+<p>Welcome back, <strong>{{.user}}</strong>!</p>
 
-	<h2>Todos:</h2>
-	<ul>
-		{{range $todo := .todos}}
-		<li>{{$todo}}</li>
-		{{end}}
-	</ul>
-	<div>
+<h2>Todos:</h2>
+<ul>
+	{{range $todo := .todos}}
+	<li>{{$todo}}</li>
+	{{end}}
+</ul>
+<div>
 
-	<form method="post" action="/add-todo">
-		<label>Add todo:</label>
-		<input name="todo" type="text">
-	</form>
-	</div>
+<form method="post" action="/add-todo">
+	<label>Add todo:</label>
+	<input name="todo" type="text">
+</form>
+</div>
 
-	<p><a href="/logout">Logout</a></p>
+<p><a href="/logout">Logout</a></p>
 {{else}}
-	<form method="post" action="/login">
-		<label>Login as:</label>
-		<input name="user" type="text">
-	</form>
+<form method="post" action="/login">
+	<label>Login as:</label>
+	<input name="user" type="text">
+</form>
 {{end}}
 `
 
