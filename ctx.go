@@ -1,12 +1,14 @@
 package rex
 
 import (
+	"bytes"
 	"encoding/json"
 	"html/template"
 	"io"
 	"mime/multipart"
 	"net/http"
 	"os"
+	"path"
 	"strconv"
 	"strings"
 	"sync"
@@ -252,12 +254,8 @@ func (ctx *Context) json(status int, v interface{}) {
 		return
 	}
 
-	if len(data) > 1024 && strings.Contains(ctx.R.Header.Get("Accept-Encoding"), "gzip") {
-		if w, ok := ctx.W.(*responseWriter); ok {
-			gzw := newGzipWriter(w.rawWriter)
-			defer gzw.Close()
-			w.rawWriter = gzw
-		}
+	if len(data) > 1024 {
+		ctx.EnableGzip()
 	}
 
 	ctx.SetHeader("Content-Type", "application/json; charset=utf-8")
@@ -296,6 +294,9 @@ func (ctx *Context) JSONError(err error) {
 }
 
 func (ctx *Context) HTML(html string) {
+	if len(html) > 1024 {
+		ctx.EnableGzip()
+	}
 	ctx.SetHeader("Content-Type", "text/html; charset=utf-8")
 	ctx.W.Write([]byte(html))
 }
@@ -310,12 +311,22 @@ func (ctx *Context) RenderHTML(html string, data interface{}) {
 }
 
 func (ctx *Context) Render(template Template, data interface{}) {
+	buf := bytes.NewBuffer(nil)
+	err := template.Execute(buf, data)
+	if err != nil {
+		ctx.Error(err)
+		return
+	}
+
+	if buf.Len() > 1024 {
+		ctx.EnableGzip()
+	}
 	ctx.SetHeader("Content-Type", "text/html; charset=utf-8")
-	template.Execute(ctx.W, data)
+	io.Copy(ctx.W, buf)
 }
 
-func (ctx *Context) File(filename string) {
-	fi, err := os.Stat(filename)
+func (ctx *Context) File(name string) {
+	fi, err := os.Stat(name)
 	if err != nil {
 		if os.IsNotExist(err) {
 			ctx.End(404)
@@ -324,24 +335,43 @@ func (ctx *Context) File(filename string) {
 		}
 		return
 	}
-	if fi.Size() > 1024 && strings.Contains(ctx.R.Header.Get("Accept-Encoding"), "gzip") {
-		for _, ext := range []string{"html", "htm", "xml", "svg", "js", "jsx", "js.map", "ts", "tsx", "json", "css", "txt"} {
-			if strings.HasSuffix(strings.ToLower(filename), "."+ext) {
-				if w, ok := ctx.W.(*responseWriter); ok {
-					gzw := newGzipWriter(w.rawWriter)
-					defer gzw.Close()
-					w.rawWriter = gzw
-				}
-				break
+	if fi.Size() > 1024 {
+		switch strings.TrimLeft(path.Ext(name), ".") {
+		case "html", "htm", "xml", "svg", "js", "json", "css", "txt", "map":
+			ctx.EnableGzip()
+		}
+	}
+	http.ServeFile(ctx.W, ctx.R, name)
+}
+
+func (ctx *Context) Content(name string, modtime time.Time, content io.ReadSeeker) {
+	size, err := content.Seek(0, io.SeekEnd)
+	if err != nil {
+		ctx.Error(err)
+		return
+	}
+	_, err = content.Seek(0, io.SeekStart)
+	if err != nil {
+		ctx.Error(err)
+		return
+	}
+	if size > 1024 {
+		switch strings.TrimLeft(path.Ext(name), ".") {
+		case "html", "htm", "xml", "svg", "js", "json", "css", "txt", "map":
+			ctx.EnableGzip()
+		}
+	}
+	http.ServeContent(ctx.W, ctx.R, name, modtime, content)
+}
+
+func (ctx *Context) EnableGzip() {
+	if strings.Contains(ctx.R.Header.Get("Accept-Encoding"), "gzip") {
+		if w, ok := ctx.W.(*responseWriter); ok {
+			if _, ok = w.rawWriter.(*gzipResponseWriter); !ok {
+				w.rawWriter = newGzipWriter(w.rawWriter)
 			}
 		}
 	}
-	http.ServeFile(ctx.W, ctx.R, filename)
-}
-
-func (ctx *Context) Content(contentType string, modtime time.Time, content io.ReadSeeker) {
-	ctx.SetHeader("Content-Type", contentType)
-	http.ServeContent(ctx.W, ctx.R, "", modtime, content)
 }
 
 type ContextSession struct {

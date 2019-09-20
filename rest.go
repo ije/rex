@@ -24,7 +24,7 @@ type REST struct {
 	prefix string
 
 	// If enabled, errors will be sent to the client/browser,
-	// this should be disable in production.
+	// this should be disabled in production.
 	debug bool
 
 	// Logger to log requests
@@ -192,8 +192,9 @@ func (rest *REST) serve(w http.ResponseWriter, r *http.Request, params router.Pa
 	if rest.prefix != "" {
 		routePath = "/" + strings.TrimPrefix(strings.TrimPrefix(r.URL.Path, "/"+rest.prefix), "/")
 	}
+	wr := &responseWriter{status: 200, rawWriter: w}
 	ctx := &Context{
-		W:           &responseWriter{status: 200, rawWriter: w},
+		W:           wr,
 		R:           r,
 		URL:         &URL{params, routePath, r.URL},
 		handles:     append(rest.middlewares, handles...),
@@ -205,24 +206,25 @@ func (rest *REST) serve(w http.ResponseWriter, r *http.Request, params router.Pa
 
 	ctx.Next()
 
+	if gzw, ok := wr.rawWriter.(*gzipResponseWriter); ok {
+		gzw.Close()
+	}
+
 	if rest.AccessLogger != nil && r.Method != "OPTIONS" {
-		w, ok := ctx.W.(*responseWriter)
-		if ok {
-			rest.AccessLogger.Printf(
-				`%s %s %s %s %s %d %s "%s" %d %d %dms`,
-				r.RemoteAddr,
-				r.Host,
-				r.Proto,
-				r.Method,
-				r.RequestURI,
-				r.ContentLength,
-				r.Referer(),
-				strings.ReplaceAll(r.UserAgent(), `"`, ""),
-				w.status,
-				w.writed,
-				time.Since(startTime)/time.Millisecond,
-			)
-		}
+		rest.AccessLogger.Printf(
+			`%s %s %s %s %s %d %s "%s" %d %d %dms`,
+			r.RemoteAddr,
+			r.Host,
+			r.Proto,
+			r.Method,
+			r.RequestURI,
+			r.ContentLength,
+			r.Referer(),
+			strings.ReplaceAll(r.UserAgent(), `"`, ""),
+			wr.status,
+			wr.writed,
+			time.Since(startTime)/time.Millisecond,
+		)
 	}
 }
 

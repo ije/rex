@@ -6,9 +6,9 @@ import (
 	"github.com/ije/rex/session"
 )
 
-var defaultREST = New()
 var defaultSessionPool = session.NewMemorySessionPool(time.Hour / 2)
 var defaultSIDStore = &session.CookieSIDStore{}
+var defaultREST = New()
 
 // Debug sets the debug mode
 func Debug(debug bool) {
