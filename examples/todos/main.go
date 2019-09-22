@@ -2,6 +2,7 @@ package main
 
 import (
 	"html/template"
+	"strconv"
 
 	"github.com/ije/rex"
 )
@@ -13,15 +14,21 @@ const indexHTML = `
 
 <h2>Todos:</h2>
 <ul>
-	{{range $todo := .todos}}
-	<li>{{$todo}}</li>
+	{{range $index,$todo := .todos}}
+	<li>
+		{{$todo}} &nbsp;
+		<form style="display:inline-block;" method="post" action="/delete-todo">
+			<input name="index" type="hidden" value="{{$index}}">
+			<input value="X" type="submit">
+		</form>
+	</li>
 	{{end}}
 </ul>
 <div>
 
 <form method="post" action="/add-todo">
-	<label>Add todo:</label>
 	<input name="todo" type="text">
+	<input value="Add" type="submit">
 </form>
 </div>
 
@@ -51,7 +58,7 @@ func main() {
 		if ctx.Session().Has("USER") {
 			ctx.SetACLUser(&user{
 				id:          ctx.Session().Get("USER").(string),
-				permissions: []string{"add"},
+				permissions: []string{"add", "remove"},
 			})
 		}
 		ctx.Next()
@@ -73,6 +80,22 @@ func main() {
 		if todo != "" {
 			user := ctx.ACLUser().(*user).id
 			todos[user] = append(todos[user], todo)
+		}
+		ctx.Redirect("/", 301)
+	})
+
+	rex.Post("/delete-todo", rex.ACL("remove"), func(ctx *rex.Context) {
+		index, err := strconv.Atoi(ctx.FormValue("index"))
+		if err == nil {
+			user := ctx.ACLUser().(*user).id
+			_todos := todos[user]
+			var newTodos []string
+			for i, todo := range _todos {
+				if i != index {
+					newTodos = append(newTodos, todo)
+				}
+			}
+			todos[user] = newTodos
 		}
 		ctx.Redirect("/", 301)
 	})

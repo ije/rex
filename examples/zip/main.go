@@ -24,7 +24,6 @@ const indexHTML = `
 var errNotFound = errors.New("not found")
 
 func main() {
-	rex.Debug(true)
 	rex.Use(rex.Header("Server", "nginx"))
 
 	rex.Get("/", func(ctx *rex.Context) {
