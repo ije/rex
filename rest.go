@@ -12,25 +12,26 @@ import (
 	"github.com/ije/rex/router"
 )
 
-// Handle defines a function to handle route requests.
+// Handle defines a REST handle
 type Handle func(ctx *Context)
 
-// REST is a http Handler which contains the router, middlewares and configuration settings
+// REST is REST-based router
 type REST struct {
+	// host to match request hostname
 	host string
 
-	// Prefix to add base path at beginning of each route path
-	// For example if the Prefix equals "v2", the given route path "/path" will be "/v2/path"
+	// prefix to add base path at beginning of each route path
+	// for example if the Prefix equals "v2", the given route path "/path" will route "/v2/path"
 	prefix string
 
-	// If enabled, errors will be sent to the client/browser,
+	// if enable, errors will be sent to the client/browser,
 	// this should be disabled in production.
-	debug bool
+	sendError bool
 
-	// Logger to log requests
+	// logger to log requests
 	AccessLogger Logger
 
-	// Logger to log errors
+	// logger to log errors
 	Logger Logger
 
 	notFoundHandle Handle
@@ -73,22 +74,14 @@ func (rest *REST) Prefix(prefix string) *REST {
 	return rest
 }
 
-// Debug sets the debug mode
-func (rest *REST) Debug(debug bool) *REST {
-	rest.debug = debug
-	return rest
-}
-
 // Group creates a nested REST
-func (rest *REST) Group(prefix string, callback func(*REST)) {
-	if callback == nil {
-		return
-	}
-
+func (rest *REST) Group(prefix string, callback func(*REST)) *REST {
 	prefix = strings.TrimSpace(strings.Trim(strings.TrimSpace(prefix), "/"))
 	if prefix == "" {
-		callback(rest)
-		return
+		if callback != nil {
+			callback(rest)
+		}
+		return rest
 	}
 
 	var s []string
@@ -100,20 +93,23 @@ func (rest *REST) Group(prefix string, callback func(*REST)) {
 	for i, h := range rest.middlewares {
 		middlewaresN[i] = h
 	}
-	restN := &REST{
+	nRest := &REST{
 		host:           rest.host,
 		prefix:         strings.Join(s, "/"),
 		AccessLogger:   rest.AccessLogger,
 		Logger:         rest.Logger,
-		debug:          rest.debug,
+		sendError:      rest.sendError,
 		middlewares:    middlewaresN,
 		notFoundHandle: rest.notFoundHandle,
 	}
-	global(restN)
-	callback(restN)
+	global(nRest)
+	if callback != nil {
+		callback(nRest)
+	}
+	return nRest
 }
 
-// Use appends middleware to the REST middleware stack.
+// Use appends middlewares to current REST middleware stack.
 func (rest *REST) Use(middlewares ...Handle) {
 	for _, handle := range middlewares {
 		if handle != nil {
@@ -122,7 +118,7 @@ func (rest *REST) Use(middlewares ...Handle) {
 	}
 }
 
-// NotFound handles the requests that are not routed
+// NotFound handles the 404 requests
 func (rest *REST) NotFound(handle Handle) {
 	rest.notFoundHandle = handle
 }
@@ -167,7 +163,7 @@ func (rest *REST) Trace(path string, handles ...Handle) {
 	rest.Handle("TRACE", path, handles...)
 }
 
-// Handle registers a new request handle with the given method and path.
+// Handle handles requests that match the method and path
 func (rest *REST) Handle(method string, path string, handles ...Handle) {
 	if method == "" || path == "" || len(handles) == 0 {
 		return
@@ -246,7 +242,7 @@ func (rest *REST) initRouter() {
 	})
 	router.HandlePanic(func(w http.ResponseWriter, r *http.Request, v interface{}) {
 		if err, ok := v.(*contextPanicError); ok {
-			if rest.debug {
+			if rest.sendError {
 				http.Error(w, err.msg, 500)
 			} else {
 				http.Error(w, http.StatusText(500), 500)
@@ -265,7 +261,7 @@ func (rest *REST) initRouter() {
 			}
 			fmt.Fprint(buf, "\t", strings.TrimSpace(runtime.FuncForPC(pc).Name()), " ", file, ":", line, "\n")
 		}
-		if rest.debug {
+		if rest.sendError {
 			http.Error(w, fmt.Sprintf("[panic] %v\n%s", v, buf.String()), 500)
 		} else {
 			http.Error(w, http.StatusText(500), 500)
@@ -277,7 +273,7 @@ func (rest *REST) initRouter() {
 	rest.router = router
 }
 
-// ServeHTTP implements the http Handler interface.
+// ServeHTTP implements a http.Handler.
 func (rest *REST) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if rest.router != nil {
 		rest.router.ServeHTTP(w, r)

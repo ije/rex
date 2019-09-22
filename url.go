@@ -6,7 +6,7 @@ import (
 	"github.com/ije/rex/router"
 )
 
-// A URL is a *url.URL with httprouter.Params
+// A URL is a *url.URL with router.Params and RoutePath
 type URL struct {
 	Params    router.Params
 	RoutePath string

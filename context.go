@@ -232,19 +232,9 @@ func (ctx *Context) End(status int, a ...string) {
 	}
 }
 
+// Ok replies to the request the plain text with 200 status.
 func (ctx *Context) Ok(text string) {
 	ctx.End(200, text)
-}
-
-func (ctx *Context) Error(err error) {
-	if ctx.rest.debug {
-		ctx.End(500, err.Error())
-	} else {
-		ctx.End(500)
-	}
-	if ctx.rest.Logger != nil {
-		ctx.rest.Logger.Println("[error]", err)
-	}
 }
 
 func (ctx *Context) json(status int, v interface{}) {
@@ -263,10 +253,12 @@ func (ctx *Context) json(status int, v interface{}) {
 	ctx.W.Write(data)
 }
 
+// JSON replies to the request as a json.
 func (ctx *Context) JSON(v interface{}) {
 	ctx.json(200, v)
 }
 
+// JSONError replies to the request a json error.
 func (ctx *Context) JSONError(err error) {
 	inv, ok := err.(*InvalidError)
 	if ok {
@@ -278,7 +270,7 @@ func (ctx *Context) JSONError(err error) {
 		})
 	} else {
 		message := "internal server error"
-		if ctx.rest.debug {
+		if ctx.rest.sendError {
 			message = err.Error()
 		}
 		ctx.json(500, map[string]interface{}{
@@ -293,6 +285,20 @@ func (ctx *Context) JSONError(err error) {
 	}
 }
 
+// Error replies to the request a internal server error.
+// if debug is enable, replies the error message.
+func (ctx *Context) Error(err error) {
+	if ctx.rest.sendError {
+		ctx.End(500, err.Error())
+	} else {
+		ctx.End(500)
+	}
+	if ctx.rest.Logger != nil {
+		ctx.rest.Logger.Println("[error]", err)
+	}
+}
+
+// HTML replies to the request as a html.
 func (ctx *Context) HTML(html string) {
 	if len(html) > 1024 {
 		ctx.EnableGzip()
@@ -301,6 +307,8 @@ func (ctx *Context) HTML(html string) {
 	ctx.W.Write([]byte(html))
 }
 
+// Render applies a unparsed html template with the specified data object,
+// replies to the request.
 func (ctx *Context) RenderHTML(html string, data interface{}) {
 	t, err := template.New("").Parse(html)
 	if err != nil {
@@ -310,6 +318,8 @@ func (ctx *Context) RenderHTML(html string, data interface{}) {
 	ctx.Render(t, data)
 }
 
+// Render applies a parsed template with the specified data object,
+// replies to the request.
 func (ctx *Context) Render(template Template, data interface{}) {
 	buf := bytes.NewBuffer(nil)
 	err := template.Execute(buf, data)
@@ -325,6 +335,8 @@ func (ctx *Context) Render(template Template, data interface{}) {
 	io.Copy(ctx.W, buf)
 }
 
+// File replies to the request with the contents of the named
+// file or directory.
 func (ctx *Context) File(name string) {
 	fi, err := os.Stat(name)
 	if err != nil {
@@ -344,6 +356,11 @@ func (ctx *Context) File(name string) {
 	http.ServeFile(ctx.W, ctx.R, name)
 }
 
+// Content replies to the request using the content in the
+// provided ReadSeeker. The main benefit of ServeContent over io.Copy
+// is that it handles Range requests properly, sets the MIME type, and
+// handles If-Match, If-Unmodified-Since, If-None-Match, If-Modified-Since,
+// and If-Range requests.
 func (ctx *Context) Content(name string, modtime time.Time, content io.ReadSeeker) {
 	size, err := content.Seek(0, io.SeekEnd)
 	if err != nil {
@@ -364,6 +381,7 @@ func (ctx *Context) Content(name string, modtime time.Time, content io.ReadSeeke
 	http.ServeContent(ctx.W, ctx.R, name, modtime, content)
 }
 
+// EnableGzip enables gzip compress
 func (ctx *Context) EnableGzip() {
 	if strings.Contains(ctx.R.Header.Get("Accept-Encoding"), "gzip") {
 		if w, ok := ctx.W.(*responseWriter); ok {
@@ -371,50 +389,5 @@ func (ctx *Context) EnableGzip() {
 				w.rawWriter = newGzipWriter(w.rawWriter)
 			}
 		}
-	}
-}
-
-type ContextSession struct {
-	sess session.Session
-}
-
-func (s *ContextSession) SID() string {
-	return s.sess.SID()
-}
-
-func (s *ContextSession) Has(key string) bool {
-	ok, err := s.sess.Has(key)
-	if err != nil {
-		panic(&contextPanicError{err.Error()})
-	}
-	return ok
-}
-
-func (s *ContextSession) Get(key string) interface{} {
-	value, err := s.sess.Get(key)
-	if err != nil {
-		panic(&contextPanicError{err.Error()})
-	}
-	return value
-}
-
-func (s *ContextSession) Set(key string, value interface{}) {
-	err := s.sess.Set(key, value)
-	if err != nil {
-		panic(&contextPanicError{err.Error()})
-	}
-}
-
-func (s *ContextSession) Delete(key string) {
-	err := s.sess.Delete(key)
-	if err != nil {
-		panic(&contextPanicError{err.Error()})
-	}
-}
-
-func (s *ContextSession) Flush() {
-	err := s.sess.Flush()
-	if err != nil {
-		panic(&contextPanicError{err.Error()})
 	}
 }

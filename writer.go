@@ -21,7 +21,7 @@ func (w *responseWriter) Header() http.Header {
 	return w.rawWriter.Header()
 }
 
-// WriteHeader sends an HTTP response header with the provided status code.
+// WriteHeader sends a HTTP response header with the provided status code.
 func (w *responseWriter) WriteHeader(status int) {
 	w.status = status
 	if w.writed == 0 {
@@ -53,8 +53,9 @@ type gzipResponseWriter struct {
 }
 
 func newGzipWriter(w http.ResponseWriter) (gzw *gzipResponseWriter) {
-	w.Header().Set("Content-Encoding", "gzip")
-	w.Header().Set("Vary", "Accept-Encoding")
+	wh := w.Header()
+	wh.Set("Content-Encoding", "gzip")
+	wh.Set("Vary", "Accept-Encoding")
 	gzipWriter, _ := gzip.NewWriterLevel(w, gzip.BestSpeed)
 	gzw = &gzipResponseWriter{gzipWriter, w}
 	return

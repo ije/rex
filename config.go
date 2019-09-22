@@ -6,18 +6,19 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
-// Config contains the options to run REX server.
+// Config contains options to run the REX server.
 type Config struct {
 	Port           uint16    `json:"port"`
 	TLS            TLSConfig `json:"tls"`
 	ReadTimeout    uint32    `json:"readTimeout"`
 	WriteTimeout   uint32    `json:"writeTimeout"`
 	MaxHeaderBytes uint32    `json:"maxHeaderBytes"`
+	Debug          bool      `json:"debug"`
 	Logger         Logger    `json:"-"`
 	AccessLogger   Logger    `json:"-"`
 }
 
-// TLSConfig contains the options to support https.
+// TLSConfig contains options to support https.
 type TLSConfig struct {
 	Port         uint16        `json:"port"`
 	CertFile     string        `json:"certFile"`
@@ -26,7 +27,7 @@ type TLSConfig struct {
 	AutoRedirect bool          `json:"autoRedirect"`
 }
 
-// AutoTLSConfig contains the options to support autocert by Let's Encrypto SSL.
+// AutoTLSConfig contains options to support autocert by Let's Encrypto SSL.
 type AutoTLSConfig struct {
 	AcceptTOS bool           `json:"acceptTOS"`
 	Hosts     []string       `json:"hosts"`
@@ -34,7 +35,7 @@ type AutoTLSConfig struct {
 	Cache     autocert.Cache `json:"-"`
 }
 
-// CORSOptions contains the options to CORS.
+// CORSOptions contains options to CORS.
 type CORSOptions struct {
 	AllowOrigin      string
 	AllowMethods     []string
@@ -44,13 +45,13 @@ type CORSOptions struct {
 	MaxAge           int // in seconds
 }
 
-// Logger is a Logger contains Println and Printf methods
+// Logger is a logger contains Println and Printf methods.
 type Logger interface {
 	Println(v ...interface{})
 	Printf(format string, v ...interface{})
 }
 
-// Template is a interface contains Execute method
+// Template is a template contains an Execute method.
 type Template interface {
 	Execute(wr io.Writer, data interface{}) error
 }

@@ -11,7 +11,7 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
-// Serve serves the rex server
+// Serve serves a rex server.
 func Serve(config Config) {
 	if config.Logger == nil {
 		config.Logger = log.New(os.Stderr, "", log.LstdFlags)
@@ -27,6 +27,7 @@ func Serve(config Config) {
 				if rest.Logger == nil {
 					rest.Logger = config.Logger
 				}
+				rest.sendError = config.Debug
 			}
 		}
 	}
@@ -106,14 +107,14 @@ func Serve(config Config) {
 	wg.Wait()
 }
 
-// Start starts an HTTP server.
+// Start starts a REX server.
 func Start(port uint16) {
 	Serve(Config{
 		Port: port,
 	})
 }
 
-// StartTLS starts an HTTPS server.
+// StartTLS starts a REX server with TLS.
 func StartTLS(port uint16, certFile string, keyFile string) {
 	Serve(Config{
 		TLS: TLSConfig{
@@ -124,7 +125,7 @@ func StartTLS(port uint16, certFile string, keyFile string) {
 	})
 }
 
-// StartAutoTLS starts an HTTPS server using autocert with Let's Encrypto SSL
+// StartAutoTLS starts a REX server with autocert powered by Let's Encrypto SSL
 func StartAutoTLS(port uint16, hosts ...string) {
 	Serve(Config{
 		TLS: TLSConfig{

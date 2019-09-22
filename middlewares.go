@@ -116,7 +116,7 @@ func BasicAuthWithRealm(realm string, authFunc func(name string, password string
 	}
 }
 
-//  SessionSIDStore returns a SessionSIDStore middleware.
+// SessionSIDStore returns a SessionSIDStore middleware.
 func SessionSIDStore(sidStore session.SIDStore) Handle {
 	return func(ctx *Context) {
 		if sidStore != nil {
@@ -126,7 +126,7 @@ func SessionSIDStore(sidStore session.SIDStore) Handle {
 	}
 }
 
-//  SessionPool returns a SessionPool middleware.
+// SessionPool returns a SessionPool middleware.
 func SessionPool(pool session.Pool) Handle {
 	return func(ctx *Context) {
 		if pool != nil {

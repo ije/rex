@@ -5,7 +5,7 @@ type ACLUser interface {
 	Permissions() []string
 }
 
-// BasicUser represents a http Basic-Auth user that contains the username and password
+// BasicUser represents a http Basic-Auth user that contains the name & password
 type BasicUser struct {
 	Name     string
 	Password string
