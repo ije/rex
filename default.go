@@ -8,7 +8,7 @@ import (
 
 var defaultREST = New()
 var defaultSessionPool = session.NewMemorySessionPool(time.Hour / 2)
-var defaultSIDStore = &session.CookieSIDStore{}
+var defaultSIDManager = &session.CookieSIDManager{}
 
 // Group creates a nested REST
 func Group(prefix string, callback func(*REST)) {

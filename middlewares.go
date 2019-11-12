@@ -116,11 +116,11 @@ func BasicAuthWithRealm(realm string, authFunc func(name string, password string
 	}
 }
 
-// SessionSIDStore returns a SessionSIDStore middleware.
-func SessionSIDStore(sidStore session.SIDStore) Handle {
+// SessionSIDManager returns a SessionSIDManager middleware.
+func SessionSIDManager(sidManager session.SIDManager) Handle {
 	return func(ctx *Context) {
-		if sidStore != nil {
-			ctx.sidStore = sidStore
+		if sidManager != nil {
+			ctx.sidManager = sidManager
 		}
 		ctx.Next()
 	}

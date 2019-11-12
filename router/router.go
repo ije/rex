@@ -11,7 +11,7 @@ import (
 type Router struct {
 	trees         map[string]*node
 	validates     map[string]ValidateFn
-	notFound      func(http.ResponseWriter, *http.Request)
+	e404Handle    func(http.ResponseWriter, *http.Request)
 	optionsHandle func(http.ResponseWriter, *http.Request)
 	panicHandle   func(http.ResponseWriter, *http.Request, interface{})
 }
@@ -34,7 +34,7 @@ func (router *Router) SetValidateFn(name string, fn ValidateFn) {
 
 // NotFound sets a NotFound handle.
 func (router *Router) NotFound(handle http.HandlerFunc) {
-	router.notFound = handle
+	router.e404Handle = handle
 }
 
 // HandlePanic sets a panic handle.
@@ -217,8 +217,8 @@ func (router *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if handle != nil {
 		handle(w, r, params)
 	} else {
-		if router.notFound != nil {
-			router.notFound(w, r)
+		if router.e404Handle != nil {
+			router.e404Handle(w, r)
 		} else {
 			http.NotFound(w, r)
 		}

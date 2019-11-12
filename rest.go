@@ -193,9 +193,10 @@ func (rest *REST) serve(w http.ResponseWriter, r *http.Request, params router.Pa
 		W:           wr,
 		R:           r,
 		URL:         &URL{params, routePath, r.URL},
+		Values:      &ContextValues{},
 		handles:     append(rest.middlewares, handles...),
 		handleIndex: -1,
-		sidStore:    defaultSIDStore,
+		sidManager:  defaultSIDManager,
 		sessionPool: defaultSessionPool,
 		rest:        rest,
 	}

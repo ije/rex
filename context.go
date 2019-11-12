@@ -11,7 +11,6 @@ import (
 	"path"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/ije/gox/utils"
@@ -22,13 +21,13 @@ type Context struct {
 	W           http.ResponseWriter
 	R           *http.Request
 	URL         *URL
+	Values      *ContextValues
 	handles     []Handle
 	handleIndex int
 	permissions map[string]struct{}
 	aclUser     ACLUser
 	basicUser   BasicUser
-	valueStore  sync.Map
-	sidStore    session.SIDStore
+	sidManager  session.SIDManager
 	sessionPool session.Pool
 	session     *ContextSession
 	rest        *REST
@@ -59,7 +58,7 @@ func (ctx *Context) Next() {
 	handle := ctx.handles[ctx.handleIndex]
 
 	// cache the 'read-only' fields in context firstly
-	w, r, url := ctx.W, ctx.R, ctx.URL
+	w, r, url, values := ctx.W, ctx.R, ctx.URL, ctx.Values
 
 	handle(ctx)
 
@@ -67,14 +66,7 @@ func (ctx *Context) Next() {
 	ctx.W = w
 	ctx.R = r
 	ctx.URL = url
-}
-
-func (ctx *Context) Value(key string) (value interface{}, ok bool) {
-	return ctx.valueStore.Load(key)
-}
-
-func (ctx *Context) StoreValue(key string, value interface{}) {
-	ctx.valueStore.Store(key, value)
+	ctx.Values = values
 }
 
 func (ctx *Context) BasicUser() BasicUser {
@@ -95,7 +87,7 @@ func (ctx *Context) Session() *ContextSession {
 	}
 
 	if ctx.session == nil {
-		sid := ctx.sidStore.Get(ctx.R)
+		sid := ctx.sidManager.Get(ctx.R)
 		sess, err := ctx.sessionPool.GetSession(sid)
 		if err != nil {
 			panic(&contextPanicError{err.Error()})
@@ -105,7 +97,7 @@ func (ctx *Context) Session() *ContextSession {
 
 		// restore sid
 		if sess.SID() != sid {
-			ctx.sidStore.Put(ctx.W, sess.SID())
+			ctx.sidManager.Put(ctx.W, sess.SID())
 		}
 	}
 
@@ -138,14 +130,13 @@ func (ctx *Context) RemoveCookieByName(name string) {
 	})
 }
 
-func (ctx *Context) GetHeader(key string) string {
-	return ctx.R.Header.Get(key)
-}
-
+// AddHeader adds the key, value pair to the header of response writer.
 func (ctx *Context) AddHeader(key string, value string) {
 	ctx.W.Header().Add(key, value)
 }
 
+// SetHeader sets the header of response writer entries associated with key to the
+// single element value.
 func (ctx *Context) SetHeader(key string, value string) {
 	ctx.W.Header().Set(key, value)
 }
@@ -164,7 +155,7 @@ func (ctx *Context) FormValue(key string) string {
 func (ctx *Context) FormIntValue(key string) (int64, error) {
 	v := strings.TrimSpace(ctx.FormValue(key))
 	if v == "" {
-		return 0, nil
+		return 0, strconv.ErrSyntax
 	}
 	return strconv.ParseInt(v, 10, 64)
 }
@@ -172,7 +163,7 @@ func (ctx *Context) FormIntValue(key string) (int64, error) {
 func (ctx *Context) FormFloatValue(key string) (float64, error) {
 	v := strings.TrimSpace(ctx.FormValue(key))
 	if v == "" {
-		return 0.0, nil
+		return 0.0, strconv.ErrSyntax
 	}
 	return strconv.ParseFloat(v, 64)
 }
@@ -307,7 +298,7 @@ func (ctx *Context) HTML(html string) {
 	ctx.W.Write([]byte(html))
 }
 
-// Render applies a unparsed html template with the specified data object,
+// RenderHTML applies a unparsed html template with the specified data object,
 // replies to the request.
 func (ctx *Context) RenderHTML(html string, data interface{}) {
 	t, err := template.New("").Parse(html)
@@ -347,7 +338,7 @@ func (ctx *Context) File(name string) {
 		}
 		return
 	}
-	if fi.Size() > 1024 {
+	if !fi.IsDir() && fi.Size() > 1024 {
 		switch strings.TrimLeft(path.Ext(name), ".") {
 		case "html", "htm", "xml", "svg", "js", "json", "css", "txt", "map":
 			ctx.EnableGzip()

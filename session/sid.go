@@ -6,16 +6,16 @@ import (
 	"github.com/ije/gox/valid"
 )
 
-type SIDStore interface {
+type SIDManager interface {
 	Get(r *http.Request) string
 	Put(w http.ResponseWriter, sid string)
 }
 
-type CookieSIDStore struct {
+type CookieSIDManager struct {
 	CookieName string
 }
 
-func (s *CookieSIDStore) cookieName() string {
+func (s *CookieSIDManager) cookieName() string {
 	name := "x-session"
 	if valid.IsSlug(s.CookieName) {
 		name = s.CookieName
@@ -23,7 +23,7 @@ func (s *CookieSIDStore) cookieName() string {
 	return name
 }
 
-func (s *CookieSIDStore) Get(r *http.Request) string {
+func (s *CookieSIDManager) Get(r *http.Request) string {
 	cookie, err := r.Cookie(s.cookieName())
 	if err != nil {
 		return ""
@@ -31,7 +31,7 @@ func (s *CookieSIDStore) Get(r *http.Request) string {
 	return cookie.Value
 }
 
-func (s *CookieSIDStore) Put(w http.ResponseWriter, sid string) {
+func (s *CookieSIDManager) Put(w http.ResponseWriter, sid string) {
 	cookie := &http.Cookie{
 		Name:     s.cookieName(),
 		Value:    sid,
