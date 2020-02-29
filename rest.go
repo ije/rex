@@ -2,6 +2,7 @@ package rex
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"runtime"
@@ -243,12 +244,21 @@ func (rest *REST) initRouter() {
 	})
 	router.HandlePanic(func(w http.ResponseWriter, r *http.Request, v interface{}) {
 		if err, ok := v.(*contextPanicError); ok {
-			if rest.sendError || err.code == 400 {
-				http.Error(w, err.message, err.code)
-			} else {
+			if err.code == 400 {
+				w.Header().Set("Content-Type", "application/json; charset=utf-8")
+				w.WriteHeader(400)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"error": map[string]interface{}{
+						"code":    400,
+						"message": err.message,
+					},
+				})
+			} else if err.code == 500 && !rest.sendError {
 				http.Error(w, http.StatusText(500), 500)
+			} else {
+				http.Error(w, err.message, err.code)
 			}
-			if rest.Logger != nil {
+			if err.code == 500 && rest.Logger != nil {
 				rest.Logger.Println("[error]", err.message)
 			}
 			return

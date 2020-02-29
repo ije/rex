@@ -4,6 +4,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"strconv"
+	"strings"
 )
 
 // Form handles http form
@@ -30,8 +31,20 @@ func (form *Form) Default(key string, defaultValue string) string {
 	return value
 }
 
-func (form *Form) File(key string) (multipart.File, *multipart.FileHeader, error) {
-	return form.R.FormFile(key)
+func (form *Form) Int(key string) (int64, error) {
+	v := strings.TrimSpace(form.Value(key))
+	if v == "" {
+		return 0, strconv.ErrSyntax
+	}
+	return strconv.ParseInt(v, 10, 64)
+}
+
+func (form *Form) Float(key string) (float64, error) {
+	v := strings.TrimSpace(form.Value(key))
+	if v == "" {
+		return 0.0, strconv.ErrSyntax
+	}
+	return strconv.ParseFloat(v, 64)
 }
 
 func (form *Form) Require(key string) string {
@@ -43,7 +56,7 @@ func (form *Form) Require(key string) string {
 }
 
 func (form *Form) RequireInt(key string) int64 {
-	i, err := strconv.ParseInt(form.Require(key), 10, 64)
+	i, err := strconv.ParseInt(strings.TrimSpace(form.Require(key)), 10, 64)
 	if err != nil {
 		panic(&contextPanicError{400, "invalid form value '" + key + "'"})
 	}
@@ -51,9 +64,13 @@ func (form *Form) RequireInt(key string) int64 {
 }
 
 func (form *Form) RequireFloat(key string) float64 {
-	f, err := strconv.ParseFloat(form.Require(key), 64)
+	f, err := strconv.ParseFloat(strings.TrimSpace(form.Require(key)), 64)
 	if err != nil {
 		panic(&contextPanicError{400, "invalid form value '" + key + "'"})
 	}
 	return f
+}
+
+func (form *Form) File(key string) (multipart.File, *multipart.FileHeader, error) {
+	return form.R.FormFile(key)
 }
