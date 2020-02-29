@@ -2,7 +2,6 @@ package main
 
 import (
 	"html/template"
-	"strconv"
 
 	"github.com/ije/rex"
 )
@@ -76,32 +75,28 @@ func main() {
 	})
 
 	rex.Post("/add-todo", rex.ACL("add"), func(ctx *rex.Context) {
-		todo := ctx.FormValue("todo")
-		if todo != "" {
-			user := ctx.ACLUser().(*user).id
-			todos[user] = append(todos[user], todo)
-		}
+		todo := ctx.Form.Require("todo")
+		user := ctx.ACLUser().(*user).id
+		todos[user] = append(todos[user], todo)
 		ctx.Redirect("/", 301)
 	})
 
 	rex.Post("/delete-todo", rex.ACL("remove"), func(ctx *rex.Context) {
-		index, err := strconv.Atoi(ctx.FormValue("index"))
-		if err == nil {
-			user := ctx.ACLUser().(*user).id
-			_todos := todos[user]
-			var newTodos []string
-			for i, todo := range _todos {
-				if i != index {
-					newTodos = append(newTodos, todo)
-				}
+		index := ctx.Form.RequireInt("index")
+		user := ctx.ACLUser().(*user).id
+		_todos := todos[user]
+		var newTodos []string
+		for i, todo := range _todos {
+			if i != int(index) {
+				newTodos = append(newTodos, todo)
 			}
-			todos[user] = newTodos
 		}
+		todos[user] = newTodos
 		ctx.Redirect("/", 301)
 	})
 
 	rex.Post("/login", func(ctx *rex.Context) {
-		user := ctx.FormValue("user")
+		user := ctx.Form.Value("user")
 		if user != "" {
 			ctx.Session().Set("USER", user)
 		}
