@@ -10,14 +10,14 @@
 package main
 
 import (
-	"github.com/ije/rex"
+    "github.com/ije/rex"
 )
 
 func main() {
-	rex.Get("/hello/:name", func(ctx *rex.Context) {
-		ctx.Ok("Hello, " + ctx.URL.Param("name"))
-	})
-	
-	rex.Start(8080)
+    rex.Get("/hello/:name", func(ctx *rex.Context) {
+	    ctx.Ok("Hello, " + ctx.URL.Param("name"))
+    })
+
+    rex.Start(8080)
 }
 ```
