@@ -44,7 +44,7 @@ func New() *REST {
 	rest := &REST{
 		host: "*",
 	}
-	global(rest)
+	applyREST(rest)
 	return rest
 }
 
@@ -58,7 +58,7 @@ func (rest *REST) Host(host string) *REST {
 	}
 
 	rest.host = host
-	global(rest)
+	applyREST(rest)
 	return rest
 }
 
@@ -70,7 +70,7 @@ func (rest *REST) Prefix(prefix string) *REST {
 	}
 
 	rest.prefix = prefix
-	global(rest)
+	applyREST(rest)
 	return rest
 }
 
@@ -93,7 +93,7 @@ func (rest *REST) Group(prefix string, callback func(*REST)) *REST {
 	for i, h := range rest.middlewares {
 		middlewaresN[i] = h
 	}
-	nRest := &REST{
+	nextRest := &REST{
 		host:           rest.host,
 		prefix:         strings.Join(s, "/"),
 		AccessLogger:   rest.AccessLogger,
@@ -102,11 +102,11 @@ func (rest *REST) Group(prefix string, callback func(*REST)) *REST {
 		middlewares:    middlewaresN,
 		notFoundHandle: rest.notFoundHandle,
 	}
-	global(nRest)
+	applyREST(nextRest)
 	if callback != nil {
-		callback(nRest)
+		callback(nextRest)
 	}
-	return nRest
+	return nextRest
 }
 
 // Use appends middlewares to current REST middleware stack.
@@ -193,7 +193,7 @@ func (rest *REST) serve(w http.ResponseWriter, r *http.Request, params router.Pa
 		W:           wr,
 		R:           r,
 		URL:         &URL{params, routePath, r.URL},
-		Values:      &ContextValues{},
+		Form:        &Form{r},
 		handles:     append(rest.middlewares, handles...),
 		handleIndex: -1,
 		sidManager:  defaultSIDManager,
@@ -243,13 +243,13 @@ func (rest *REST) initRouter() {
 	})
 	router.HandlePanic(func(w http.ResponseWriter, r *http.Request, v interface{}) {
 		if err, ok := v.(*contextPanicError); ok {
-			if rest.sendError {
-				http.Error(w, err.msg, 500)
+			if rest.sendError || err.code == 400 {
+				http.Error(w, err.message, err.code)
 			} else {
 				http.Error(w, http.StatusText(500), 500)
 			}
 			if rest.Logger != nil {
-				rest.Logger.Println("[error]", err.msg)
+				rest.Logger.Println("[error]", err.message)
 			}
 			return
 		}

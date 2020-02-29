@@ -5,12 +5,11 @@ import (
 	"encoding/json"
 	"html/template"
 	"io"
-	"mime/multipart"
 	"net/http"
 	"os"
 	"path"
-	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ije/gox/utils"
@@ -21,15 +20,16 @@ type Context struct {
 	W           http.ResponseWriter
 	R           *http.Request
 	URL         *URL
-	Values      *ContextValues
+	Form        *Form
 	handles     []Handle
 	handleIndex int
+	values      sync.Map
 	permissions map[string]struct{}
 	aclUser     ACLUser
 	basicUser   BasicUser
 	sidManager  session.SIDManager
 	sessionPool session.Pool
-	session     *ContextSession
+	session     *Session
 	rest        *REST
 }
 
@@ -58,7 +58,7 @@ func (ctx *Context) Next() {
 	handle := ctx.handles[ctx.handleIndex]
 
 	// cache the 'read-only' fields in context firstly
-	w, r, url, values := ctx.W, ctx.R, ctx.URL, ctx.Values
+	w, r, url, form := ctx.W, ctx.R, ctx.URL, ctx.Form
 
 	handle(ctx)
 
@@ -66,7 +66,7 @@ func (ctx *Context) Next() {
 	ctx.W = w
 	ctx.R = r
 	ctx.URL = url
-	ctx.Values = values
+	ctx.Form = form
 }
 
 func (ctx *Context) BasicUser() BasicUser {
@@ -81,19 +81,30 @@ func (ctx *Context) SetACLUser(user ACLUser) {
 	ctx.aclUser = user
 }
 
-func (ctx *Context) Session() *ContextSession {
+// GetValue returns the value stored in the values for a key, or nil if no
+// value is present.
+func (ctx *Context) GetValue(key string) (interface{}, bool) {
+	return ctx.values.Load(key)
+}
+
+// StoreValue sets the value for a key.
+func (ctx *Context) StoreValue(key string, value interface{}) {
+	ctx.values.Store(key, value)
+}
+
+func (ctx *Context) Session() *Session {
 	if ctx.sessionPool == nil {
-		panic(&contextPanicError{"session pool is nil"})
+		panic(&contextPanicError{500, "session pool is nil"})
 	}
 
 	if ctx.session == nil {
 		sid := ctx.sidManager.Get(ctx.R)
 		sess, err := ctx.sessionPool.GetSession(sid)
 		if err != nil {
-			panic(&contextPanicError{err.Error()})
+			panic(&contextPanicError{500, err.Error()})
 		}
 
-		ctx.session = &ContextSession{sess}
+		ctx.session = &Session{sess}
 
 		// restore sid
 		if sess.SID() != sid {
@@ -139,37 +150,6 @@ func (ctx *Context) AddHeader(key string, value string) {
 // single element value.
 func (ctx *Context) SetHeader(key string, value string) {
 	ctx.W.Header().Set(key, value)
-}
-
-// FormValue returns the first value for the named component of the POST,
-// PATCH, or PUT request body, or returns the first value for the named component of the request url query
-func (ctx *Context) FormValue(key string) string {
-	switch ctx.R.Method {
-	case "POST", "PUT", "PATCH":
-		return ctx.R.PostFormValue(key)
-	default:
-		return ctx.R.FormValue(key)
-	}
-}
-
-func (ctx *Context) FormIntValue(key string) (int64, error) {
-	v := strings.TrimSpace(ctx.FormValue(key))
-	if v == "" {
-		return 0, strconv.ErrSyntax
-	}
-	return strconv.ParseInt(v, 10, 64)
-}
-
-func (ctx *Context) FormFloatValue(key string) (float64, error) {
-	v := strings.TrimSpace(ctx.FormValue(key))
-	if v == "" {
-		return 0.0, strconv.ErrSyntax
-	}
-	return strconv.ParseFloat(v, 64)
-}
-
-func (ctx *Context) FormFile(key string) (multipart.File, *multipart.FileHeader, error) {
-	return ctx.R.FormFile(key)
 }
 
 func (ctx *Context) RemoteIP() string {
@@ -228,22 +208,6 @@ func (ctx *Context) Ok(text string) {
 	ctx.End(200, text)
 }
 
-func (ctx *Context) json(status int, v interface{}) {
-	data, err := json.Marshal(v)
-	if err != nil {
-		ctx.Error(err)
-		return
-	}
-
-	if len(data) > 1024 {
-		ctx.EnableGzip()
-	}
-
-	ctx.SetHeader("Content-Type", "application/json; charset=utf-8")
-	ctx.W.WriteHeader(status)
-	ctx.W.Write(data)
-}
-
 // JSON replies to the request as a json.
 func (ctx *Context) JSON(v interface{}) {
 	ctx.json(200, v)
@@ -276,6 +240,22 @@ func (ctx *Context) JSONError(err error) {
 	}
 }
 
+func (ctx *Context) json(status int, v interface{}) {
+	data, err := json.Marshal(v)
+	if err != nil {
+		ctx.Error(err)
+		return
+	}
+
+	if len(data) > 1024 {
+		ctx.enableGzip()
+	}
+
+	ctx.SetHeader("Content-Type", "application/json; charset=utf-8")
+	ctx.W.WriteHeader(status)
+	ctx.W.Write(data)
+}
+
 // Error replies to the request a internal server error.
 // if debug is enable, replies the error message.
 func (ctx *Context) Error(err error) {
@@ -292,7 +272,7 @@ func (ctx *Context) Error(err error) {
 // HTML replies to the request as a html.
 func (ctx *Context) HTML(html string) {
 	if len(html) > 1024 {
-		ctx.EnableGzip()
+		ctx.enableGzip()
 	}
 	ctx.SetHeader("Content-Type", "text/html; charset=utf-8")
 	ctx.W.Write([]byte(html))
@@ -320,7 +300,7 @@ func (ctx *Context) Render(template Template, data interface{}) {
 	}
 
 	if buf.Len() > 1024 {
-		ctx.EnableGzip()
+		ctx.enableGzip()
 	}
 	ctx.SetHeader("Content-Type", "text/html; charset=utf-8")
 	io.Copy(ctx.W, buf)
@@ -341,7 +321,7 @@ func (ctx *Context) File(name string) {
 	if !fi.IsDir() && fi.Size() > 1024 {
 		switch strings.TrimLeft(path.Ext(name), ".") {
 		case "html", "htm", "xml", "svg", "js", "json", "css", "txt", "map":
-			ctx.EnableGzip()
+			ctx.enableGzip()
 		}
 	}
 	http.ServeFile(ctx.W, ctx.R, name)
@@ -366,14 +346,13 @@ func (ctx *Context) Content(name string, modtime time.Time, content io.ReadSeeke
 	if size > 1024 {
 		switch strings.TrimLeft(path.Ext(name), ".") {
 		case "html", "htm", "xml", "svg", "js", "json", "css", "txt", "map":
-			ctx.EnableGzip()
+			ctx.enableGzip()
 		}
 	}
 	http.ServeContent(ctx.W, ctx.R, name, modtime, content)
 }
 
-// EnableGzip enables gzip compress
-func (ctx *Context) EnableGzip() {
+func (ctx *Context) enableGzip() {
 	if strings.Contains(ctx.R.Header.Get("Accept-Encoding"), "gzip") {
 		if w, ok := ctx.W.(*responseWriter); ok {
 			if _, ok = w.rawWriter.(*gzipResponseWriter); !ok {

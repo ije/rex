@@ -17,9 +17,10 @@ func (err *InvalidError) Error() string {
 }
 
 type contextPanicError struct {
-	msg string
+	code    int
+	message string
 }
 
 func (err *contextPanicError) Error() string {
-	return err.msg
+	return err.message
 }
