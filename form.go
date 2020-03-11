@@ -7,6 +7,10 @@ import (
 	"strings"
 )
 
+const (
+	defaultMaxMemory = 32 << 20 // 32 MB
+)
+
 // Form handles http form
 type Form struct {
 	R *http.Request
@@ -17,10 +21,14 @@ type Form struct {
 func (form *Form) Value(key string) string {
 	switch form.R.Method {
 	case "POST", "PUT", "PATCH":
-		return form.R.PostFormValue(key)
-	default:
-		return form.R.FormValue(key)
+		if form.R.PostForm == nil {
+			form.R.ParseMultipartForm(defaultMaxMemory)
+		}
+		if vs := form.R.PostForm[key]; len(vs) > 0 {
+			return vs[0]
+		}
 	}
+	return form.R.FormValue(key)
 }
 
 func (form *Form) Default(key string, defaultValue string) string {
@@ -58,7 +66,7 @@ func (form *Form) Require(key string) string {
 func (form *Form) RequireInt(key string) int64 {
 	i, err := strconv.ParseInt(strings.TrimSpace(form.Require(key)), 10, 64)
 	if err != nil {
-		panic(&contextPanicError{400, "invalid form value '" + key + "'"})
+		panic(&contextPanicError{400, "require form value '" + key + "' as int"})
 	}
 	return i
 }
@@ -66,7 +74,7 @@ func (form *Form) RequireInt(key string) int64 {
 func (form *Form) RequireFloat(key string) float64 {
 	f, err := strconv.ParseFloat(strings.TrimSpace(form.Require(key)), 64)
 	if err != nil {
-		panic(&contextPanicError{400, "invalid form value '" + key + "'"})
+		panic(&contextPanicError{400, "require form value '" + key + "' as float"})
 	}
 	return f
 }

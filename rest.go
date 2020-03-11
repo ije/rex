@@ -140,7 +140,6 @@ func (rest *REST) serve(w http.ResponseWriter, r *http.Request, params router.Pa
 		handleIndex: -1,
 		sidManager:  defaultSIDManager,
 		sessionPool: defaultSessionPool,
-		rest:        rest,
 	}
 
 	ctx.Next()

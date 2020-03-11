@@ -30,7 +30,6 @@ type Context struct {
 	sidManager  session.SIDManager
 	sessionPool session.Pool
 	session     *Session
-	rest        *REST
 }
 
 func (ctx *Context) Next() {
