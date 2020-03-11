@@ -13,8 +13,8 @@ func TestRouter(t *testing.T) {
 	router.SetValidateFn("number", valid.IsNumber)
 	router.SetValidateFn("email", valid.IsEmail)
 
-	routed := 0
-	expectRouted := 0
+	var routed int
+	var expectRouted int
 
 	router.Handle("GET", "/", func(w http.ResponseWriter, r *http.Request, params Params) {
 		routed++
@@ -32,7 +32,7 @@ func TestRouter(t *testing.T) {
 		}
 	})
 
-	router.Handle("GET", "/post/{id:number}", func(w http.ResponseWriter, r *http.Request, params Params) {
+	router.Handle("GET", "/post/:id[number]", func(w http.ResponseWriter, r *http.Request, params Params) {
 		routed++
 		want := Params{{"id", "123"}}
 		if !reflect.DeepEqual(params, want) {
@@ -72,9 +72,9 @@ func TestRouter(t *testing.T) {
 		}
 	})
 
-	router.Handle("POST", "/subs/ {email: email} ", func(w http.ResponseWriter, r *http.Request, params Params) {
+	router.Handle("POST", "/subs/:email[email]", func(w http.ResponseWriter, r *http.Request, params Params) {
 		routed++
-		want := Params{{"email", "go@gmail.com"}}
+		want := Params{{"email", "rex@gmail.com"}}
 		if !reflect.DeepEqual(params, want) {
 			t.Fatalf("invalid params: want %v, got %v", want, params)
 		}
@@ -106,7 +106,7 @@ func TestRouter(t *testing.T) {
 	request(router, "POST", "/works/rex") // ✓
 	expectRouted++
 
-	request(router, "POST", "/subs/go@gmail.com") // ✓
+	request(router, "POST", "/subs/rex@gmail.com") // ✓
 	expectRouted++
 
 	request(router, "POST", "/subs/gmail.com") // x
@@ -117,23 +117,22 @@ func TestRouter(t *testing.T) {
 }
 
 func request(router *Router, method string, path string) {
-	w := new(vResponseWriter)
 	req, _ := http.NewRequest(method, path, nil)
-	router.ServeHTTP(w, req)
+	router.ServeHTTP(new(nullWriter), req)
 }
 
-type vResponseWriter struct{}
+type nullWriter struct{}
 
-func (m *vResponseWriter) Header() (h http.Header) {
+func (m *nullWriter) Header() (h http.Header) {
 	return http.Header{}
 }
 
-func (m *vResponseWriter) Write(p []byte) (n int, err error) {
+func (m *nullWriter) Write(p []byte) (n int, err error) {
 	return len(p), nil
 }
 
-func (m *vResponseWriter) WriteString(s string) (n int, err error) {
+func (m *nullWriter) WriteString(s string) (n int, err error) {
 	return len(s), nil
 }
 
-func (m *vResponseWriter) WriteHeader(int) {}
+func (m *nullWriter) WriteHeader(int) {}

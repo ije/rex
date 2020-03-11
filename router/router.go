@@ -9,11 +9,11 @@ import (
 
 // Router is a http.Handler which can be used to dispatch requests to different handler functions.
 type Router struct {
-	trees         map[string]*node
-	validates     map[string]ValidateFn
-	e404Handle    func(http.ResponseWriter, *http.Request)
-	optionsHandle func(http.ResponseWriter, *http.Request)
-	panicHandle   func(http.ResponseWriter, *http.Request, interface{})
+	trees          map[string]*node
+	validates      map[string]ValidateFn
+	notFoundHandle func(http.ResponseWriter, *http.Request)
+	optionsHandle  func(http.ResponseWriter, *http.Request)
+	panicHandle    func(http.ResponseWriter, *http.Request, interface{})
 }
 
 // New returns a new initialized Router.
@@ -34,7 +34,7 @@ func (router *Router) SetValidateFn(name string, fn ValidateFn) {
 
 // NotFound sets a NotFound handle.
 func (router *Router) NotFound(handle http.HandlerFunc) {
-	router.e404Handle = handle
+	router.notFoundHandle = handle
 }
 
 // HandlePanic sets a panic handle.
@@ -79,7 +79,6 @@ func (router *Router) getRootNode(method string) *node {
 	}
 	rootNode, ok := router.trees[method]
 	if !ok {
-
 		rootNode = &node{
 			name: "/",
 		}
@@ -95,6 +94,7 @@ func (router *Router) mapPath(n *node, fullPath string, pathSegs []string, handl
 	}
 
 	fn := ""
+	validate := ""
 	fs := strings.TrimSpace(pathSegs[0])
 	fl := len(fs)
 	isCatchAll := fl > 0 && strings.HasPrefix(fs, "*")
@@ -118,18 +118,13 @@ func (router *Router) mapPath(n *node, fullPath string, pathSegs []string, handl
 		return
 	}
 
-	validate := ""
-	if !isParam {
-		isParam = fl > 1 && strings.HasPrefix(fs, "{") && strings.HasSuffix(fs, "}")
-		if isParam {
-			s1, s2 := utils.SplitByFirstByte(fs[1:fl-1], ':')
-			fn = strings.TrimSpace(s1)
-			validate = strings.TrimSpace(s2)
-		}
-	} else {
-		fn = fs[1:]
-	}
 	if isParam {
+		fn = fs[1:]
+		if strings.HasSuffix(fn, "]") {
+			s1, s2 := utils.SplitByFirstByte(fn, '[')
+			fn = strings.TrimSpace(s1)
+			validate = strings.TrimSpace(s2[:len(s2)-1])
+		}
 		if fn == "" {
 			panic("bad route pattern: missing param names of path '" + fullPath + "'")
 		}
@@ -209,7 +204,11 @@ func (router *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			router.optionsHandle(w, r)
 			return
 		}
-		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+		if router.notFoundHandle != nil {
+			router.notFoundHandle(w, r)
+		} else {
+			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+		}
 		return
 	}
 
@@ -217,8 +216,8 @@ func (router *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if handle != nil {
 		handle(w, r, params)
 	} else {
-		if router.e404Handle != nil {
-			router.e404Handle(w, r)
+		if router.notFoundHandle != nil {
+			router.notFoundHandle(w, r)
 		} else {
 			http.NotFound(w, r)
 		}
