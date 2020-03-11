@@ -45,13 +45,13 @@ type CORSOptions struct {
 	MaxAge           int // in seconds
 }
 
+// Template is a template contains an Execute method.
+type Template interface {
+	Execute(wr io.Writer, data interface{}) error
+}
+
 // Logger is a logger contains Println and Printf methods.
 type Logger interface {
 	Println(v ...interface{})
 	Printf(format string, v ...interface{})
-}
-
-// Template is a template contains an Execute method.
-type Template interface {
-	Execute(wr io.Writer, data interface{}) error
 }

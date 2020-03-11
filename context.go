@@ -225,7 +225,7 @@ func (ctx *Context) JSONError(err error) {
 		})
 	} else {
 		message := "internal server error"
-		if ctx.rest.sendError {
+		if sendError {
 			message = err.Error()
 		}
 		ctx.json(500, map[string]interface{}{
@@ -234,9 +234,7 @@ func (ctx *Context) JSONError(err error) {
 				"message": message,
 			},
 		})
-		if ctx.rest.Logger != nil {
-			ctx.rest.Logger.Println("[error]", err)
-		}
+		logger.Println("[error]", err)
 	}
 }
 
@@ -259,14 +257,12 @@ func (ctx *Context) json(status int, v interface{}) {
 // Error replies to the request a internal server error.
 // if debug is enable, replies the error message.
 func (ctx *Context) Error(err error) {
-	if ctx.rest.sendError {
+	if sendError {
 		ctx.End(500, err.Error())
 	} else {
 		ctx.End(500)
 	}
-	if ctx.rest.Logger != nil {
-		ctx.rest.Logger.Println("[error]", err)
-	}
+	logger.Println("[error]", err)
 }
 
 // HTML replies to the request as a html.
