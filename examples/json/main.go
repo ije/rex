@@ -12,8 +12,8 @@ const indexHTML = `
 <h1>Welcome to use REX!</h1>
 <p><a href="/json1">JSON #1(small)</a></p>
 <p><a href="/json2">JSON #2(big)</a></p>
-<p><a href="/json3">JSON #3(404)</a></p>
-<p><a href="/json4">JSON #4(500)</a></p>
+<p><a href="/json3">JSON #3(500)</a></p>
+<p><a href="/json4">JSON #4(400)</a></p>
 `
 
 func main() {
@@ -34,7 +34,7 @@ func main() {
 			return
 		}
 
-		var ret map[string]string
+		var ret map[string]interface{}
 		err = json.NewDecoder(resp.Body).Decode(&ret)
 		if err != nil {
 			ctx.Error(err)
@@ -45,11 +45,11 @@ func main() {
 	})
 
 	rex.Get("/json3", func(ctx *rex.Context) {
-		ctx.JSONError(rex.Invalid(404, "not found"))
+		ctx.JSONError(errors.New("Boom"))
 	})
 
 	rex.Get("/json4", func(ctx *rex.Context) {
-		ctx.JSONError(errors.New("boom!"))
+		ctx.JSONError(rex.Invalid(404, "item not found"))
 	})
 
 	rex.Start(8080)

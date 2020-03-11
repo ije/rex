@@ -5,8 +5,6 @@ import (
 )
 
 func main() {
-	rex.Use(rex.Header("Server", "nginx"))
-
 	rex.Get("/*filepath", rex.Static("./www", "e404.html"))
 
 	rex.Start(8080)
