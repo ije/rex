@@ -1,7 +1,7 @@
 package rex
 
 import (
-	"rex/session"
+	"github.com/ije/rex/session"
 )
 
 // Session handles session

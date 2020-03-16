@@ -12,8 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"rex/session"
-
+	"github.com/ije/rex/session"
 	"github.com/ije/gox/utils"
 )
 

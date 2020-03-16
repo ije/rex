@@ -9,9 +9,8 @@ import (
 	"strconv"
 	"strings"
 
-	"rex/session"
-
 	"github.com/ije/gox/utils"
+	"github.com/ije/rex/session"
 )
 
 // Header is REX middleware to set http header

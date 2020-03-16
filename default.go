@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"rex/router"
-	"rex/session"
+	"github.com/ije/rex/router"
+	"github.com/ije/rex/session"
 )
 
 var defaultREST = New()
