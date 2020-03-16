@@ -12,8 +12,9 @@ import (
 	"sync"
 	"time"
 
+	"rex/session"
+
 	"github.com/ije/gox/utils"
-	"github.com/ije/rex/session"
 )
 
 type Context struct {

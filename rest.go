@@ -5,8 +5,9 @@ import (
 	"strings"
 	"time"
 
+	"rex/router"
+
 	"github.com/ije/gox/utils"
-	"github.com/ije/rex/router"
 )
 
 // Handle defines a REST handle

@@ -3,7 +3,7 @@ package rex
 import (
 	"net/url"
 
-	"github.com/ije/rex/router"
+	"rex/router"
 )
 
 // A URL is a *url.URL with router.Params and RoutePath
