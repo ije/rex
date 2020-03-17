@@ -17,7 +17,8 @@ type Form struct {
 }
 
 // Value returns the first value for the named component of the POST,
-// PATCH, or PUT request body, or returns the first value for the named component of the request url query
+// PATCH, or PUT request body, or returns the first value for
+// the named component of the request url query.
 func (form *Form) Value(key string) string {
 	switch form.R.Method {
 	case "POST", "PUT", "PATCH":
@@ -31,6 +32,7 @@ func (form *Form) Value(key string) string {
 	return form.R.FormValue(key)
 }
 
+// Default returns the defaultValue if the form value is empty
 func (form *Form) Default(key string, defaultValue string) string {
 	value := form.Value(key)
 	if value == "" {
@@ -39,6 +41,7 @@ func (form *Form) Default(key string, defaultValue string) string {
 	return value
 }
 
+// Int returns the form value as integer
 func (form *Form) Int(key string) (int64, error) {
 	v := strings.TrimSpace(form.Value(key))
 	if v == "" {
@@ -47,6 +50,7 @@ func (form *Form) Int(key string) (int64, error) {
 	return strconv.ParseInt(v, 10, 64)
 }
 
+// Float returns the form value as float
 func (form *Form) Float(key string) (float64, error) {
 	v := strings.TrimSpace(form.Value(key))
 	if v == "" {
@@ -58,7 +62,7 @@ func (form *Form) Float(key string) (float64, error) {
 func (form *Form) Require(key string) string {
 	value := form.Value(key)
 	if value == "" {
-		panic(&contextPanicError{400, "require form value '" + key + "'"})
+		panic(&contextPanicError{"require form value '" + key + "'", 400})
 	}
 	return value
 }
@@ -66,7 +70,7 @@ func (form *Form) Require(key string) string {
 func (form *Form) RequireInt(key string) int64 {
 	i, err := strconv.ParseInt(strings.TrimSpace(form.Require(key)), 10, 64)
 	if err != nil {
-		panic(&contextPanicError{400, "require form value '" + key + "' as int"})
+		panic(&contextPanicError{"require form value '" + key + "' as int", 400})
 	}
 	return i
 }
@@ -74,11 +78,12 @@ func (form *Form) RequireInt(key string) int64 {
 func (form *Form) RequireFloat(key string) float64 {
 	f, err := strconv.ParseFloat(strings.TrimSpace(form.Require(key)), 64)
 	if err != nil {
-		panic(&contextPanicError{400, "require form value '" + key + "' as float"})
+		panic(&contextPanicError{"require form value '" + key + "' as float", 400})
 	}
 	return f
 }
 
+// File returns the first file for the provided form key.
 func (form *Form) File(key string) (multipart.File, *multipart.FileHeader, error) {
 	return form.R.FormFile(key)
 }

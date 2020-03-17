@@ -34,9 +34,9 @@ func main() {
 		zipContent, err := compress("../static/www/nil")
 		if err != nil {
 			if err == errNotFound {
-				ctx.End(404)
+				ctx.Error("file not found", 404)
 			} else {
-				ctx.Error(err)
+				ctx.Error(err.Error(), 500)
 			}
 			return
 		}
@@ -48,9 +48,9 @@ func main() {
 		zipContent, err := compress("../static/www/main.js")
 		if err != nil {
 			if err == errNotFound {
-				ctx.End(404)
+				ctx.Error("file not found", 404)
 			} else {
-				ctx.Error(err)
+				ctx.Error(err.Error(), 500)
 			}
 			return
 		}
@@ -62,9 +62,9 @@ func main() {
 		zipContent, err := compress("../static/www")
 		if err != nil {
 			if err == errNotFound {
-				ctx.End(404)
+				ctx.Error("file not found", 404)
 			} else {
-				ctx.Error(err)
+				ctx.Error(err.Error(), 500)
 			}
 			return
 		}

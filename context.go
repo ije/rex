@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ije/rex/session"
 	"github.com/ije/gox/utils"
+	"github.com/ije/rex/session"
 )
 
 type Context struct {
@@ -27,9 +27,12 @@ type Context struct {
 	permissions map[string]struct{}
 	aclUser     ACLUser
 	basicUser   BasicUser
-	sidManager  session.SIDManager
+	sidStore    session.SIDStore
 	sessionPool session.Pool
 	session     *Session
+	sendError   bool
+	errorType   string
+	logger      Logger
 }
 
 func (ctx *Context) Next() {
@@ -93,21 +96,21 @@ func (ctx *Context) StoreValue(key string, value interface{}) {
 
 func (ctx *Context) Session() *Session {
 	if ctx.sessionPool == nil {
-		panic(&contextPanicError{500, "session pool is nil"})
+		panic(&contextPanicError{"session pool is nil", 500})
 	}
 
 	if ctx.session == nil {
-		sid := ctx.sidManager.Get(ctx.R)
+		sid := ctx.sidStore.Get(ctx.R)
 		sess, err := ctx.sessionPool.GetSession(sid)
 		if err != nil {
-			panic(&contextPanicError{500, err.Error()})
+			panic(&contextPanicError{err.Error(), 500})
 		}
 
 		ctx.session = &Session{sess}
 
 		// restore sid
 		if sess.SID() != sid {
-			ctx.sidManager.Put(ctx.W, sess.SID())
+			ctx.sidStore.Put(ctx.W, sess.SID())
 		}
 	}
 
@@ -189,6 +192,27 @@ func (ctx *Context) IfNotMatch(etag string, then func()) {
 	then()
 }
 
+func (ctx *Context) JSON(v interface{}, status int) {
+	data, err := json.Marshal(v)
+	if err != nil {
+		ctx.Error(err.Error(), status)
+		return
+	}
+
+	if len(data) > 1024 {
+		ctx.enableGzip()
+	}
+
+	ctx.SetHeader("Content-Type", "application/json; charset=utf-8")
+	ctx.W.WriteHeader(status)
+	ctx.W.Write(data)
+}
+
+// Ok replies to the request the plain text with 200 status.
+func (ctx *Context) Ok(text string) {
+	ctx.End(200, text)
+}
+
 func (ctx *Context) End(status int, a ...string) {
 	wh := ctx.W.Header()
 	if _, ok := wh["Content-Type"]; !ok {
@@ -202,66 +226,25 @@ func (ctx *Context) End(status int, a ...string) {
 	}
 }
 
-// Ok replies to the request the plain text with 200 status.
-func (ctx *Context) Ok(text string) {
-	ctx.End(200, text)
-}
-
-// JSON replies to the request as a json.
-func (ctx *Context) JSON(v interface{}) {
-	ctx.json(200, v)
-}
-
-// JSONError replies to the request a json error.
-func (ctx *Context) JSONError(err error) {
-	inv, ok := err.(*InvalidError)
-	if ok {
-		ctx.json(inv.Code, map[string]interface{}{
-			"error": map[string]interface{}{
-				"code":    inv.Code,
-				"message": inv.Message,
-			},
-		})
-	} else {
-		message := "internal server error"
-		if sendError {
-			message = err.Error()
-		}
-		ctx.json(500, map[string]interface{}{
-			"error": map[string]interface{}{
-				"code":    500,
-				"message": message,
-			},
-		})
-		logger.Println("[error]", err)
-	}
-}
-
-func (ctx *Context) json(status int, v interface{}) {
-	data, err := json.Marshal(v)
-	if err != nil {
-		ctx.Error(err)
-		return
-	}
-
-	if len(data) > 1024 {
-		ctx.enableGzip()
-	}
-
-	ctx.SetHeader("Content-Type", "application/json; charset=utf-8")
-	ctx.W.WriteHeader(status)
-	ctx.W.Write(data)
-}
-
 // Error replies to the request a internal server error.
 // if debug is enable, replies the error message.
-func (ctx *Context) Error(err error) {
-	if sendError {
-		ctx.End(500, err.Error())
-	} else {
-		ctx.End(500)
+func (ctx *Context) Error(message string, status int) {
+	if status >= 500 && !ctx.sendError {
+		message = http.StatusText(status)
 	}
-	logger.Println("[error]", err)
+	if ctx.errorType == "json" {
+		ctx.JSON(map[string]interface{}{
+			"error": map[string]interface{}{
+				"code":    status,
+				"message": message,
+			},
+		}, status)
+	} else {
+		ctx.End(status, message)
+	}
+	if ctx.logger != nil && status >= 500 {
+		ctx.logger.Println("[error]", message)
+	}
 }
 
 // HTML replies to the request as a html.
@@ -278,7 +261,7 @@ func (ctx *Context) HTML(html string) {
 func (ctx *Context) RenderHTML(html string, data interface{}) {
 	t, err := template.New("").Parse(html)
 	if err != nil {
-		ctx.Error(err)
+		ctx.Error(err.Error(), 500)
 		return
 	}
 	ctx.Render(t, data)
@@ -290,7 +273,7 @@ func (ctx *Context) Render(template Template, data interface{}) {
 	buf := bytes.NewBuffer(nil)
 	err := template.Execute(buf, data)
 	if err != nil {
-		ctx.Error(err)
+		ctx.Error(err.Error(), 500)
 		return
 	}
 
@@ -309,7 +292,7 @@ func (ctx *Context) File(name string) {
 		if os.IsNotExist(err) {
 			ctx.End(404)
 		} else {
-			ctx.Error(err)
+			ctx.Error(err.Error(), 500)
 		}
 		return
 	}
@@ -330,12 +313,12 @@ func (ctx *Context) File(name string) {
 func (ctx *Context) Content(name string, modtime time.Time, content io.ReadSeeker) {
 	size, err := content.Seek(0, io.SeekEnd)
 	if err != nil {
-		ctx.Error(err)
+		ctx.Error(err.Error(), 500)
 		return
 	}
 	_, err = content.Seek(0, io.SeekStart)
 	if err != nil {
-		ctx.Error(err)
+		ctx.Error(err.Error(), 500)
 		return
 	}
 	if size > 1024 {

@@ -93,7 +93,7 @@ func BasicAuthWithRealm(realm string, authFunc func(name string, password string
 				name, password := utils.SplitByFirstByte(string(authInfo), ':')
 				ok, err := authFunc(name, password)
 				if err != nil {
-					ctx.Error(err)
+					ctx.Error(err.Error(), 500)
 					return
 				}
 
@@ -116,11 +116,11 @@ func BasicAuthWithRealm(realm string, authFunc func(name string, password string
 	}
 }
 
-// SessionSIDManager returns a SessionSIDManager middleware.
-func SessionSIDManager(sidManager session.SIDManager) Handle {
+// SIDStore returns a SIDStore middleware.
+func SIDStore(sidStore session.SIDStore) Handle {
 	return func(ctx *Context) {
-		if sidManager != nil {
-			ctx.sidManager = sidManager
+		if sidStore != nil {
+			ctx.sidStore = sidStore
 		}
 		ctx.Next()
 	}
@@ -153,7 +153,7 @@ func Static(root string, fallbackPath ...string) Handle {
 		fi, err := os.Stat(fp)
 		if err != nil {
 			if os.IsExist(err) {
-				ctx.Error(err)
+				ctx.Error(err.Error(), 500)
 				return
 			}
 

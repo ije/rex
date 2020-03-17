@@ -2,9 +2,16 @@ package rex
 
 import (
 	"io"
+	"log"
+	"os"
 
 	"golang.org/x/crypto/acme/autocert"
 )
+
+var defaultConfig = &Config{
+	ErrorType: "text",
+	Logger:    log.New(os.Stderr, "", log.LstdFlags),
+}
 
 // Config contains options to run the REX server.
 type Config struct {
@@ -13,6 +20,7 @@ type Config struct {
 	ReadTimeout    uint32    `json:"readTimeout"`
 	WriteTimeout   uint32    `json:"writeTimeout"`
 	MaxHeaderBytes uint32    `json:"maxHeaderBytes"`
+	ErrorType      string    `json:"errorType"`
 	Debug          bool      `json:"debug"`
 	Logger         Logger    `json:"-"`
 	AccessLogger   Logger    `json:"-"`

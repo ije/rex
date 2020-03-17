@@ -18,7 +18,7 @@ func (s *Session) SID() string {
 func (s *Session) Has(key string) bool {
 	ok, err := s.Session.Has(key)
 	if err != nil {
-		panic(&contextPanicError{500, err.Error()})
+		panic(&contextPanicError{err.Error(), 500})
 	}
 	return ok
 }
@@ -27,7 +27,7 @@ func (s *Session) Has(key string) bool {
 func (s *Session) Get(key string) interface{} {
 	value, err := s.Session.Get(key)
 	if err != nil {
-		panic(&contextPanicError{500, err.Error()})
+		panic(&contextPanicError{err.Error(), 500})
 	}
 	return value
 }
@@ -36,7 +36,7 @@ func (s *Session) Get(key string) interface{} {
 func (s *Session) Set(key string, value interface{}) {
 	err := s.Session.Set(key, value)
 	if err != nil {
-		panic(&contextPanicError{500, err.Error()})
+		panic(&contextPanicError{err.Error(), 500})
 	}
 }
 
@@ -44,7 +44,7 @@ func (s *Session) Set(key string, value interface{}) {
 func (s *Session) Delete(key string) {
 	err := s.Session.Delete(key)
 	if err != nil {
-		panic(&contextPanicError{500, err.Error()})
+		panic(&contextPanicError{err.Error(), 500})
 	}
 }
 
@@ -52,6 +52,6 @@ func (s *Session) Delete(key string) {
 func (s *Session) Flush() {
 	err := s.Session.Flush()
 	if err != nil {
-		panic(&contextPanicError{500, err.Error()})
+		panic(&contextPanicError{err.Error(), 500})
 	}
 }

@@ -3,9 +3,7 @@ package rex
 import (
 	"bytes"
 	"fmt"
-	"log"
 	"net/http"
-	"os"
 	"runtime"
 	"strings"
 	"time"
@@ -17,10 +15,7 @@ import (
 var defaultREST = New()
 var defaultRouter = router.New()
 var defaultSessionPool = session.NewMemorySessionPool(time.Hour / 2)
-var defaultSIDManager = &session.CookieSIDManager{}
-var logger Logger = log.New(os.Stderr, "", log.LstdFlags)
-var accessLogger Logger = nil
-var sendError = false
+var defaultSIDStore = &session.CookieSIDStore{}
 
 func init() {
 	defaultRouter.HandleOptions(func(w http.ResponseWriter, r *http.Request) {
@@ -30,18 +25,9 @@ func init() {
 	})
 	defaultRouter.HandlePanic(func(w http.ResponseWriter, r *http.Request, v interface{}) {
 		if err, ok := v.(*contextPanicError); ok {
-			if err.code == 400 {
-				defaultREST.serve(w, r, nil, func(ctx *Context) {
-					ctx.JSONError(&InvalidError{400, err.message})
-				})
-			} else if err.code >= 500 && !sendError {
-				http.Error(w, http.StatusText(err.code), err.code)
-			} else {
-				http.Error(w, err.message, err.code)
-			}
-			if err.code >= 500 {
-				logger.Println("[error]", err.message)
-			}
+			defaultREST.serve(w, r, nil, func(ctx *Context) {
+				ctx.Error(err.message, err.code)
+			})
 			return
 		}
 
@@ -53,12 +39,10 @@ func init() {
 			}
 			fmt.Fprint(buf, "\t", strings.TrimSpace(runtime.FuncForPC(pc).Name()), " ", file, ":", line, "\n")
 		}
-		if sendError {
-			http.Error(w, fmt.Sprintf("[panic] %v\n%s", v, buf.String()), 500)
-		} else {
-			http.Error(w, http.StatusText(500), 500)
-		}
-		logger.Printf("[panic] %v\n%s", v, buf.String())
+
+		defaultREST.serve(w, r, nil, func(ctx *Context) {
+			ctx.Error(fmt.Sprintf("[panic] %v\n%s", v, buf.String()), 500)
+		})
 	})
 }
 

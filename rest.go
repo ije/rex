@@ -138,8 +138,11 @@ func (rest *REST) serve(w http.ResponseWriter, r *http.Request, params router.Pa
 		Form:        &Form{r},
 		handles:     append(rest.middlewares, handles...),
 		handleIndex: -1,
-		sidManager:  defaultSIDManager,
+		sidStore:    defaultSIDStore,
 		sessionPool: defaultSessionPool,
+		sendError:   defaultConfig.Debug,
+		errorType:   defaultConfig.ErrorType,
+		logger:      defaultConfig.Logger,
 	}
 
 	ctx.Next()
@@ -148,8 +151,8 @@ func (rest *REST) serve(w http.ResponseWriter, r *http.Request, params router.Pa
 		gzw.Close()
 	}
 
-	if accessLogger != nil && r.Method != "OPTIONS" {
-		accessLogger.Printf(
+	if defaultConfig.AccessLogger != nil && r.Method != "OPTIONS" {
+		defaultConfig.AccessLogger.Printf(
 			`%s %s %s %s %s %d %s "%s" %d %d %dms`,
 			r.RemoteAddr,
 			r.Host,

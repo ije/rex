@@ -2,6 +2,7 @@ package rex
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"sync"
@@ -12,12 +13,9 @@ import (
 
 // Serve serves a rex server.
 func Serve(config Config) {
-	sendError = config.Debug
-	if config.Logger != nil {
-		logger = config.Logger
-	}
-	if config.AccessLogger != nil {
-		accessLogger = config.AccessLogger
+	defaultConfig = &config
+	if defaultConfig.Logger == nil {
+		defaultConfig.Logger = log.New(os.Stderr, "", log.LstdFlags)
 	}
 
 	var wg sync.WaitGroup
@@ -36,7 +34,7 @@ func Serve(config Config) {
 			}
 			err := serv.ListenAndServe()
 			if err != nil {
-				logger.Println("[error] rex server shutdown:", err)
+				defaultConfig.Logger.Println("[error] rex server shutdown:", err)
 			}
 		}()
 	}
@@ -67,13 +65,13 @@ func Serve(config Config) {
 				} else if https.AutoTLS.CacheDir != "" {
 					fi, err := os.Stat(https.AutoTLS.CacheDir)
 					if err == nil && !fi.IsDir() {
-						logger.Printf("[error] AutoTLS: invalid cache dir '%s'", https.AutoTLS.CacheDir)
+						defaultConfig.Logger.Printf("[error] AutoTLS: invalid cache dir '%s'", https.AutoTLS.CacheDir)
 						return
 					}
 					if err != nil && os.IsNotExist(err) {
 						err = os.MkdirAll(https.AutoTLS.CacheDir, 0755)
 						if err != nil {
-							logger.Printf("[error] AutoTLS: can't create the cache dir '%s'", https.AutoTLS.CacheDir)
+							defaultConfig.Logger.Printf("[error] AutoTLS: can't create the cache dir '%s'", https.AutoTLS.CacheDir)
 							return
 						}
 					}
@@ -86,12 +84,12 @@ func Serve(config Config) {
 			}
 			err := servs.ListenAndServeTLS(https.CertFile, https.KeyFile)
 			if err != nil {
-				logger.Println("[error] rex server(https) shutdown:", err)
+				defaultConfig.Logger.Println("[error] rex server(https) shutdown:", err)
 			}
 		}()
 	}
 
-	logger.Println("[info] rex server started.")
+	defaultConfig.Logger.Println("[info] rex server started.")
 	wg.Wait()
 }
 
@@ -121,7 +119,7 @@ func StartAutoTLS(port uint16, hosts ...string) {
 			AutoTLS: AutoTLSConfig{
 				AcceptTOS: true,
 				Hosts:     hosts,
-				CacheDir:  "./.rex-cert-cache",
+				CacheDir:  "./.certs",
 			},
 		},
 	})
