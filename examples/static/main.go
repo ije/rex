@@ -5,7 +5,7 @@ import (
 )
 
 func main() {
-	rex.Get("/*filepath", rex.Static("./www", "e404.html"))
+	rex.Get("/*", rex.Static("./www", "e404.html"))
 
 	rex.Start(8080)
 }
