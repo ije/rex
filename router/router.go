@@ -107,12 +107,8 @@ func (router *Router) mapPath(n *node, fullPath string, pathSegs []string, handl
 		if n.catchAllChild != nil {
 			panic("conflicting route: '" + fullPath + "'")
 		}
-		fn = fs[1:]
-		if fn == "" {
-			fn = "path"
-		}
 		n.catchAllChild = &node{
-			name:   fn,
+			name:   "*",
 			handle: handle,
 		}
 		return
@@ -120,10 +116,10 @@ func (router *Router) mapPath(n *node, fullPath string, pathSegs []string, handl
 
 	if isParam {
 		fn = fs[1:]
-		if strings.HasSuffix(fn, "]") {
-			s1, s2 := utils.SplitByFirstByte(fn, '[')
+		s1, s2 := utils.SplitByFirstByte(fn, '|')
+		if s2 != "" {
 			fn = strings.TrimSpace(s1)
-			validate = strings.TrimSpace(s2[:len(s2)-1])
+			validate = strings.TrimSpace(s2)
 		}
 		if fn == "" {
 			panic("bad route pattern: missing param names of path '" + fullPath + "'")

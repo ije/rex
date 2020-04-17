@@ -32,7 +32,7 @@ func TestRouter(t *testing.T) {
 		}
 	})
 
-	router.Handle("GET", "/post/:id[number]", func(w http.ResponseWriter, r *http.Request, params Params) {
+	router.Handle("GET", "/post/:id|number", func(w http.ResponseWriter, r *http.Request, params Params) {
 		routed++
 		want := Params{{"id", "123"}}
 		if !reflect.DeepEqual(params, want) {
@@ -58,7 +58,7 @@ func TestRouter(t *testing.T) {
 
 	router.Handle("GET", "/assets/*", func(w http.ResponseWriter, r *http.Request, params Params) {
 		routed++
-		want := Params{{"path", "/scripts/main.dist.js"}}
+		want := Params{{"*", "/scripts/main.dist.js"}}
 		if !reflect.DeepEqual(params, want) {
 			t.Fatalf("invalid params: want %v, got %v", want, params)
 		}
@@ -72,7 +72,7 @@ func TestRouter(t *testing.T) {
 		}
 	})
 
-	router.Handle("POST", "/subs/:email[email]", func(w http.ResponseWriter, r *http.Request, params Params) {
+	router.Handle("POST", "/subs/:email|email", func(w http.ResponseWriter, r *http.Request, params Params) {
 		routed++
 		want := Params{{"email", "rex@gmail.com"}}
 		if !reflect.DeepEqual(params, want) {
