@@ -17,22 +17,23 @@ import (
 )
 
 type Context struct {
-	W           http.ResponseWriter
-	R           *http.Request
-	URL         *URL
-	Form        *Form
-	handles     []Handle
-	handleIndex int
-	values      sync.Map
-	permissions map[string]struct{}
-	aclUser     ACLUser
-	basicUser   BasicUser
-	sidStore    session.SIDStore
-	sessionPool session.Pool
-	session     *Session
-	sendError   bool
-	errorType   string
-	logger      Logger
+	W            http.ResponseWriter
+	R            *http.Request
+	URL          *URL
+	Form         *Form
+	handles      []Handle
+	handleIndex  int
+	values       sync.Map
+	permissions  map[string]struct{}
+	aclUser      ACLUser
+	basicUser    BasicUser
+	sidStore     session.SIDStore
+	sessionPool  session.Pool
+	session      *Session
+	sendError    bool
+	errorType    string
+	logger       Logger
+	accessLogger Logger
 }
 
 func (ctx *Context) Next() {
@@ -297,8 +298,8 @@ func (ctx *Context) File(name string) {
 		return
 	}
 	if !fi.IsDir() && fi.Size() > 1024 {
-		switch strings.TrimLeft(path.Ext(name), ".") {
-		case "html", "htm", "xml", "svg", "js", "json", "css", "txt", "map":
+		switch strings.TrimPrefix(path.Ext(name), ".") {
+		case "html", "htm", "xml", "svg", "js", "mjs", "json", "css", "map", "txt":
 			ctx.enableGzip()
 		}
 	}
@@ -322,8 +323,8 @@ func (ctx *Context) Content(name string, modtime time.Time, content io.ReadSeeke
 		return
 	}
 	if size > 1024 {
-		switch strings.TrimLeft(path.Ext(name), ".") {
-		case "html", "htm", "xml", "svg", "js", "json", "css", "txt", "map":
+		switch strings.TrimPrefix(path.Ext(name), ".") {
+		case "html", "htm", "xml", "svg", "js", "mjs", "json", "css", "map", "txt":
 			ctx.enableGzip()
 		}
 	}

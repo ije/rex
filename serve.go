@@ -12,13 +12,24 @@ import (
 )
 
 // Serve serves a rex server.
-func Serve(config Config) {
-	defaultConfig = &config
-	if defaultConfig.Logger == nil {
-		defaultConfig.Logger = log.New(os.Stderr, "", log.LstdFlags)
-	}
-
+func Serve(config ServerConfig) {
 	var wg sync.WaitGroup
+
+	defaultREST.Use(
+		Header("Connection", "keep-alive"),
+		Header("Server", "rex-serv"),
+		func(ctx *Context) {
+			if config.TLS.AutoRedirect && ctx.R.TLS == nil {
+				code := 301
+				if ctx.R.Method != "GET" {
+					code = 307
+				}
+				ctx.Redirect(fmt.Sprintf("https://%s/%s", ctx.R.Host, ctx.R.RequestURI), code)
+				return
+			}
+			ctx.Next()
+		},
+	)
 
 	if config.Port > 0 {
 		wg.Add(1)
@@ -27,14 +38,14 @@ func Serve(config Config) {
 
 			serv := &http.Server{
 				Addr:           fmt.Sprintf((":%d"), config.Port),
-				Handler:        &mux{config.TLS.AutoRedirect},
+				Handler:        defaultREST,
 				ReadTimeout:    time.Duration(config.ReadTimeout) * time.Second,
 				WriteTimeout:   time.Duration(config.WriteTimeout) * time.Second,
 				MaxHeaderBytes: int(config.MaxHeaderBytes),
 			}
 			err := serv.ListenAndServe()
 			if err != nil {
-				defaultConfig.Logger.Println("[error] rex server shutdown:", err)
+				log.Println("[error] rex server shutdown:", err)
 			}
 		}()
 	}
@@ -51,7 +62,7 @@ func Serve(config Config) {
 
 			servs := &http.Server{
 				Addr:           fmt.Sprintf((":%d"), port),
-				Handler:        &mux{},
+				Handler:        defaultREST,
 				ReadTimeout:    time.Duration(config.ReadTimeout) * time.Second,
 				WriteTimeout:   time.Duration(config.WriteTimeout) * time.Second,
 				MaxHeaderBytes: int(config.MaxHeaderBytes),
@@ -65,13 +76,13 @@ func Serve(config Config) {
 				} else if https.AutoTLS.CacheDir != "" {
 					fi, err := os.Stat(https.AutoTLS.CacheDir)
 					if err == nil && !fi.IsDir() {
-						defaultConfig.Logger.Printf("[error] AutoTLS: invalid cache dir '%s'", https.AutoTLS.CacheDir)
+						log.Printf("[error] AutoTLS: invalid cache dir '%s'", https.AutoTLS.CacheDir)
 						return
 					}
 					if err != nil && os.IsNotExist(err) {
 						err = os.MkdirAll(https.AutoTLS.CacheDir, 0755)
 						if err != nil {
-							defaultConfig.Logger.Printf("[error] AutoTLS: can't create the cache dir '%s'", https.AutoTLS.CacheDir)
+							log.Printf("[error] AutoTLS: can't create the cache dir '%s'", https.AutoTLS.CacheDir)
 							return
 						}
 					}
@@ -84,25 +95,25 @@ func Serve(config Config) {
 			}
 			err := servs.ListenAndServeTLS(https.CertFile, https.KeyFile)
 			if err != nil {
-				defaultConfig.Logger.Println("[error] rex server(https) shutdown:", err)
+				log.Println("[error] rex server(https) shutdown:", err)
 			}
 		}()
 	}
 
-	defaultConfig.Logger.Println("[info] rex server started.")
+	log.Println("[info] rex server started.")
 	wg.Wait()
 }
 
 // Start starts a REX server.
 func Start(port uint16) {
-	Serve(Config{
+	Serve(ServerConfig{
 		Port: port,
 	})
 }
 
 // StartTLS starts a REX server with TLS.
 func StartTLS(port uint16, certFile string, keyFile string) {
-	Serve(Config{
+	Serve(ServerConfig{
 		TLS: TLSConfig{
 			Port:     port,
 			CertFile: certFile,
@@ -113,7 +124,7 @@ func StartTLS(port uint16, certFile string, keyFile string) {
 
 // StartAutoTLS starts a REX server with autocert powered by Let's Encrypto SSL
 func StartAutoTLS(port uint16, hosts ...string) {
-	Serve(Config{
+	Serve(ServerConfig{
 		TLS: TLSConfig{
 			Port: port,
 			AutoTLS: AutoTLSConfig{

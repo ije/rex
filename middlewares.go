@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/ije/gox/utils"
-	"github.com/ije/rex/session"
 )
 
 // Header is REX middleware to set http header
@@ -59,7 +58,7 @@ func CORS(opts CORSOptions) Handle {
 	}
 }
 
-// ACL returns a ACL middleware.
+// ACL  returns a ACL  middleware.
 func ACL(permissions ...string) Handle {
 	return func(ctx *Context) {
 		for _, p := range permissions {
@@ -76,12 +75,12 @@ func ACL(permissions ...string) Handle {
 }
 
 // BasicAuth returns a Basic HTTP Authorization middleware.
-func BasicAuth(authFunc func(name string, password string) (ok bool, err error)) Handle {
-	return BasicAuthWithRealm("", authFunc)
+func BasicAuth(authFn func(name string, password string) (ok bool, err error)) Handle {
+	return BasicAuthWithRealm("", authFn)
 }
 
 // BasicAuthWithRealm returns a Basic HTTP Authorization middleware with realm.
-func BasicAuthWithRealm(realm string, authFunc func(name string, password string) (ok bool, err error)) Handle {
+func BasicAuthWithRealm(realm string, authFn func(name string, password string) (ok bool, err error)) Handle {
 	return func(ctx *Context) {
 		if auth := ctx.R.Header.Get("Authorization"); len(auth) > 0 {
 			if authType, authData := utils.SplitByFirstByte(auth, ' '); len(authData) > 0 && authType == "Basic" {
@@ -91,7 +90,7 @@ func BasicAuthWithRealm(realm string, authFunc func(name string, password string
 				}
 
 				name, password := utils.SplitByFirstByte(string(authInfo), ':')
-				ok, err := authFunc(name, password)
+				ok, err := authFn(name, password)
 				if err != nil {
 					ctx.Error(err.Error(), 500)
 					return
@@ -116,34 +115,12 @@ func BasicAuthWithRealm(realm string, authFunc func(name string, password string
 	}
 }
 
-// SIDStore returns a SIDStore middleware.
-func SIDStore(sidStore session.SIDStore) Handle {
-	return func(ctx *Context) {
-		if sidStore != nil {
-			ctx.sidStore = sidStore
-		}
-		ctx.Next()
-	}
-}
-
-// SessionPool returns a SessionPool middleware.
-func SessionPool(pool session.Pool) Handle {
-	return func(ctx *Context) {
-		if pool != nil {
-			ctx.sessionPool = pool
-		}
-		ctx.Next()
-	}
-}
-
 // Static returns a file static serve middleware.
 func Static(root string, fallbackPath ...string) Handle {
 	return func(ctx *Context) {
 		var fallback bool
 		var filepath string
-		if val := ctx.URL.Param("filepath"); val != "" {
-			filepath = val
-		} else if val := ctx.URL.Param("path"); val != "" {
+		if val := ctx.URL.Param("*"); val != "" {
 			filepath = val
 		} else {
 			filepath = ctx.URL.RoutePath

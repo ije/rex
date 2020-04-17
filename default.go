@@ -1,57 +1,14 @@
 package rex
 
 import (
-	"bytes"
-	"fmt"
-	"net/http"
-	"runtime"
-	"strings"
 	"time"
 
-	"github.com/ije/rex/router"
 	"github.com/ije/rex/session"
 )
 
-var defaultREST = New()
-var defaultRouter = router.New()
+var defaultREST = New("/")
 var defaultSessionPool = session.NewMemorySessionPool(time.Hour / 2)
 var defaultSIDStore = &session.CookieSIDStore{}
-
-func init() {
-	defaultRouter.HandleOptions(func(w http.ResponseWriter, r *http.Request) {
-		defaultREST.serve(w, r, nil, func(ctx *Context) {
-			ctx.End(http.StatusNoContent)
-		})
-	})
-	defaultRouter.HandlePanic(func(w http.ResponseWriter, r *http.Request, v interface{}) {
-		if err, ok := v.(*contextPanicError); ok {
-			defaultREST.serve(w, r, nil, func(ctx *Context) {
-				ctx.Error(err.message, err.code)
-			})
-			return
-		}
-
-		buf := bytes.NewBuffer(nil)
-		for i := 3; ; i++ {
-			pc, file, line, ok := runtime.Caller(i)
-			if !ok {
-				break
-			}
-			fmt.Fprint(buf, "\t", strings.TrimSpace(runtime.FuncForPC(pc).Name()), " ", file, ":", line, "\n")
-		}
-
-		defaultREST.serve(w, r, nil, func(ctx *Context) {
-			ctx.Error(fmt.Sprintf("[panic] %v\n%s", v, buf.String()), 500)
-		})
-	})
-}
-
-// NotFound sets a not found handle
-func NotFound(handle Handle) {
-	defaultRouter.NotFound(func(w http.ResponseWriter, r *http.Request) {
-		defaultREST.serve(w, r, nil, handle)
-	})
-}
 
 // Group creates a nested REST
 func Group(prefix string, callback func(*REST)) *REST {
@@ -61,6 +18,16 @@ func Group(prefix string, callback func(*REST)) *REST {
 // Use appends middleware to the REST middleware stack.
 func Use(middlewares ...Handle) {
 	defaultREST.Use(middlewares...)
+}
+
+// UseConfig appends config middlewares to current REST middleware stack.
+func UseConfig(config *Config) {
+	defaultREST.UseConfig(config)
+}
+
+// NotFound sets a NotFound handle.
+func NotFound(handle Handle) {
+	defaultREST.NotFound(handle)
 }
 
 // Options is a shortcut for rest.Handle("OPTIONS", path, handles)

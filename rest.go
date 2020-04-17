@@ -1,7 +1,12 @@
 package rex
 
 import (
+	"bytes"
+	"fmt"
+	"log"
 	"net/http"
+	"os"
+	"runtime"
 	"strings"
 	"time"
 
@@ -14,45 +19,64 @@ type Handle func(ctx *Context)
 
 // REST is REST-based router
 type REST struct {
-	// prefix to add base path at beginning of each route path
-	// for example if the Prefix equals "v2", the given route path "/path" will route "/v2/path"
-	Prefix string
+	// BasePath to add base path at beginning of each route path
+	// for example if the BasePath equals "/v2", the given route path "/path" will route "/v2/path"
+	BasePath string
 
 	middlewares []Handle
+	router      *router.Router
 }
 
 // New returns a new REST
-func New(args ...string) *REST {
-	var prefix string
-	if len(args) > 0 {
-		prefix = strings.TrimSpace(strings.Trim(strings.TrimSpace(args[0]), "/"))
-	}
+func New(base string) *REST {
 	rest := &REST{
-		Prefix: prefix,
+		BasePath: utils.CleanPath(base),
+		router:   router.New(),
 	}
+	rest.router.HandleOptions(func(w http.ResponseWriter, r *http.Request) {
+		rest.serve(w, r, nil, func(ctx *Context) {
+			ctx.End(http.StatusNoContent)
+		})
+	})
+	rest.router.HandlePanic(func(w http.ResponseWriter, r *http.Request, v interface{}) {
+		if err, ok := v.(*contextPanicError); ok {
+			rest.serve(w, r, nil, func(ctx *Context) {
+				ctx.Error(err.message, err.code)
+			})
+			return
+		}
+
+		buf := bytes.NewBuffer(nil)
+		for i := 3; ; i++ {
+			pc, file, line, ok := runtime.Caller(i)
+			if !ok {
+				break
+			}
+			fmt.Fprint(buf, "\t", strings.TrimSpace(runtime.FuncForPC(pc).Name()), " ", file, ":", line, "\n")
+		}
+
+		rest.serve(w, r, nil, func(ctx *Context) {
+			ctx.Error(fmt.Sprintf("[panic] %v\n%s", v, buf.String()), 500)
+		})
+	})
 	return rest
 }
 
 // Group creates a nested REST
-func (rest *REST) Group(prefix string, callback func(*REST)) *REST {
-	prefix = strings.TrimSpace(strings.Trim(strings.TrimSpace(prefix), "/"))
-	if prefix == "" {
-		if callback != nil {
-			callback(rest)
-		}
+func (rest *REST) Group(path string, callback func(*REST)) *REST {
+	BasePath := utils.CleanPath(rest.BasePath + "/" + path)
+	if BasePath == rest.BasePath {
 		return rest
 	}
 
-	if rest.Prefix != "" {
-		prefix = rest.Prefix + "/" + prefix
-	}
 	middlewaresCopy := make([]Handle, len(rest.middlewares))
 	for i, h := range rest.middlewares {
 		middlewaresCopy[i] = h
 	}
 	childRest := &REST{
-		Prefix:      prefix,
+		BasePath:    BasePath,
 		middlewares: middlewaresCopy,
+		router:      rest.router,
 	}
 	if callback != nil {
 		callback(childRest)
@@ -67,6 +91,38 @@ func (rest *REST) Use(middlewares ...Handle) {
 			rest.middlewares = append(rest.middlewares, handle)
 		}
 	}
+}
+
+// UseConfig appends config middlewares to current REST middleware stack.
+func (rest *REST) UseConfig(config *Config) {
+	rest.Use(func(ctx *Context) {
+		if config.SendError {
+			ctx.sendError = true
+		}
+		if config.ErrorType != "" {
+			ctx.errorType = config.ErrorType
+		}
+		if config.Logger != nil {
+			ctx.logger = config.Logger
+		}
+		if config.AccessLogger != nil {
+			ctx.accessLogger = config.AccessLogger
+		}
+		if config.SIDStore != nil {
+			ctx.sidStore = config.SIDStore
+		}
+		if config.SessionPool != nil {
+			ctx.sessionPool = config.SessionPool
+		}
+		ctx.Next()
+	})
+}
+
+// NotFound sets a NotFound handle.
+func (rest *REST) NotFound(handle Handle) {
+	rest.router.NotFound(func(w http.ResponseWriter, r *http.Request) {
+		rest.serve(w, r, nil, handle)
+	})
 }
 
 // Options is a shortcut for rest.Handle("OPTIONS", path, handles)
@@ -115,21 +171,15 @@ func (rest *REST) Handle(method string, path string, handles ...Handle) {
 		return
 	}
 
-	if rest.Prefix != "" {
-		path = utils.CleanPath(rest.Prefix + "/" + path)
-	}
-
-	defaultRouter.Handle(method, path, func(w http.ResponseWriter, r *http.Request, params router.Params) {
+	path = utils.CleanPath(rest.BasePath + "/" + path)
+	rest.router.Handle(method, path, func(w http.ResponseWriter, r *http.Request, params router.Params) {
 		rest.serve(w, r, params, handles...)
 	})
 }
 
 func (rest *REST) serve(w http.ResponseWriter, r *http.Request, params router.Params, handles ...Handle) {
 	startTime := time.Now()
-	routePath := r.URL.Path
-	if rest.Prefix != "" {
-		routePath = "/" + strings.TrimPrefix(strings.TrimPrefix(r.URL.Path, "/"+rest.Prefix), "/")
-	}
+	routePath := "/" + strings.TrimPrefix(strings.TrimPrefix(r.URL.Path, rest.BasePath), "/")
 	wr := &responseWriter{status: 200, rawWriter: w}
 	ctx := &Context{
 		W:           wr,
@@ -140,9 +190,9 @@ func (rest *REST) serve(w http.ResponseWriter, r *http.Request, params router.Pa
 		handleIndex: -1,
 		sidStore:    defaultSIDStore,
 		sessionPool: defaultSessionPool,
-		sendError:   defaultConfig.Debug,
-		errorType:   defaultConfig.ErrorType,
-		logger:      defaultConfig.Logger,
+		sendError:   false,
+		errorType:   "text",
+		logger:      log.New(os.Stderr, "", log.LstdFlags),
 	}
 
 	ctx.Next()
@@ -151,8 +201,8 @@ func (rest *REST) serve(w http.ResponseWriter, r *http.Request, params router.Pa
 		gzw.Close()
 	}
 
-	if defaultConfig.AccessLogger != nil && r.Method != "OPTIONS" {
-		defaultConfig.AccessLogger.Printf(
+	if ctx.accessLogger != nil && r.Method != "OPTIONS" {
+		ctx.accessLogger.Printf(
 			`%s %s %s %s %s %d %s "%s" %d %d %dms`,
 			r.RemoteAddr,
 			r.Host,
@@ -167,4 +217,8 @@ func (rest *REST) serve(w http.ResponseWriter, r *http.Request, params router.Pa
 			time.Since(startTime)/time.Millisecond,
 		)
 	}
+}
+
+func (rest *REST) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	rest.router.ServeHTTP(w, r)
 }

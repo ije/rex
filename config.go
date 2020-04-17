@@ -2,28 +2,28 @@ package rex
 
 import (
 	"io"
-	"log"
-	"os"
 
+	"github.com/ije/rex/session"
 	"golang.org/x/crypto/acme/autocert"
 )
 
-var defaultConfig = &Config{
-	ErrorType: "text",
-	Logger:    log.New(os.Stderr, "", log.LstdFlags),
+// Config contains context options.
+type Config struct {
+	SendError    bool
+	ErrorType    string
+	Logger       Logger
+	AccessLogger Logger
+	SIDStore     session.SIDStore
+	SessionPool  session.Pool
 }
 
-// Config contains options to run the REX server.
-type Config struct {
+// ServerConfig contains options to run the REX server.
+type ServerConfig struct {
 	Port           uint16    `json:"port"`
 	TLS            TLSConfig `json:"tls"`
 	ReadTimeout    uint32    `json:"readTimeout"`
 	WriteTimeout   uint32    `json:"writeTimeout"`
 	MaxHeaderBytes uint32    `json:"maxHeaderBytes"`
-	ErrorType      string    `json:"errorType"`
-	Debug          bool      `json:"debug"`
-	Logger         Logger    `json:"-"`
-	AccessLogger   Logger    `json:"-"`
 }
 
 // TLSConfig contains options to support https.
