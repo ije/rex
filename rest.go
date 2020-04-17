@@ -64,8 +64,11 @@ func New(base string) *REST {
 
 // Group creates a nested REST
 func (rest *REST) Group(path string, callback func(*REST)) *REST {
-	BasePath := utils.CleanPath(rest.BasePath + "/" + path)
-	if BasePath == rest.BasePath {
+	basePath := utils.CleanPath(rest.BasePath + "/" + path)
+	if basePath == rest.BasePath {
+		if callback != nil {
+			callback(rest)
+		}
 		return rest
 	}
 
@@ -74,7 +77,7 @@ func (rest *REST) Group(path string, callback func(*REST)) *REST {
 		middlewaresCopy[i] = h
 	}
 	childRest := &REST{
-		BasePath:    BasePath,
+		BasePath:    basePath,
 		middlewares: middlewaresCopy,
 		router:      rest.router,
 	}

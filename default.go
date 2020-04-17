@@ -11,8 +11,8 @@ var defaultSessionPool = session.NewMemorySessionPool(time.Hour / 2)
 var defaultSIDStore = &session.CookieSIDStore{}
 
 // Group creates a nested REST
-func Group(prefix string, callback func(*REST)) *REST {
-	return defaultREST.Group(prefix, callback)
+func Group(path string, callback func(*REST)) *REST {
+	return defaultREST.Group(path, callback)
 }
 
 // Use appends middleware to the REST middleware stack.

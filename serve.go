@@ -15,22 +15,6 @@ import (
 func Serve(config ServerConfig) {
 	var wg sync.WaitGroup
 
-	defaultREST.Use(
-		Header("Connection", "keep-alive"),
-		Header("Server", "rex-serv"),
-		func(ctx *Context) {
-			if config.TLS.AutoRedirect && ctx.R.TLS == nil {
-				code := 301
-				if ctx.R.Method != "GET" {
-					code = 307
-				}
-				ctx.Redirect(fmt.Sprintf("https://%s/%s", ctx.R.Host, ctx.R.RequestURI), code)
-				return
-			}
-			ctx.Next()
-		},
-	)
-
 	if config.Port > 0 {
 		wg.Add(1)
 		go func() {
@@ -38,7 +22,7 @@ func Serve(config ServerConfig) {
 
 			serv := &http.Server{
 				Addr:           fmt.Sprintf((":%d"), config.Port),
-				Handler:        defaultREST,
+				Handler:        &mux{config.TLS.AutoRedirect},
 				ReadTimeout:    time.Duration(config.ReadTimeout) * time.Second,
 				WriteTimeout:   time.Duration(config.WriteTimeout) * time.Second,
 				MaxHeaderBytes: int(config.MaxHeaderBytes),
@@ -62,7 +46,7 @@ func Serve(config ServerConfig) {
 
 			servs := &http.Server{
 				Addr:           fmt.Sprintf((":%d"), port),
-				Handler:        defaultREST,
+				Handler:        &mux{},
 				ReadTimeout:    time.Duration(config.ReadTimeout) * time.Second,
 				WriteTimeout:   time.Duration(config.WriteTimeout) * time.Second,
 				MaxHeaderBytes: int(config.MaxHeaderBytes),
