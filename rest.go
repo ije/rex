@@ -93,31 +93,6 @@ func (rest *REST) Use(middlewares ...Handle) {
 	}
 }
 
-// UseConfig appends config middlewares to current REST middleware stack.
-func (rest *REST) UseConfig(config *Config) {
-	rest.Use(func(ctx *Context) {
-		if config.SendError {
-			ctx.sendError = true
-		}
-		if config.ErrorType != "" {
-			ctx.errorType = config.ErrorType
-		}
-		if config.Logger != nil {
-			ctx.logger = config.Logger
-		}
-		if config.AccessLogger != nil {
-			ctx.accessLogger = config.AccessLogger
-		}
-		if config.SIDStore != nil {
-			ctx.sidStore = config.SIDStore
-		}
-		if config.SessionPool != nil {
-			ctx.sessionPool = config.SessionPool
-		}
-		ctx.Next()
-	})
-}
-
 // NotFound sets a NotFound handle.
 func (rest *REST) NotFound(handle Handle) {
 	rest.router.NotFound(func(w http.ResponseWriter, r *http.Request) {

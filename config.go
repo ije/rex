@@ -7,14 +7,15 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
-// Config contains context options.
-type Config struct {
+// Conf contains context options.
+type Conf struct {
 	SendError    bool
 	ErrorType    string
 	Logger       Logger
 	AccessLogger Logger
 	SIDStore     session.SIDStore
 	SessionPool  session.Pool
+	CORS         *CORS
 }
 
 // ServerConfig contains options to run the REX server.
@@ -43,8 +44,8 @@ type AutoTLSConfig struct {
 	Cache     autocert.Cache `json:"-"`
 }
 
-// CORSOptions contains options to CORS.
-type CORSOptions struct {
+// CORS contains options to CORS.
+type CORS struct {
 	AllowOrigin      string
 	AllowMethods     []string
 	AllowHeaders     []string

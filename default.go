@@ -20,11 +20,6 @@ func Use(middlewares ...Handle) {
 	defaultREST.Use(middlewares...)
 }
 
-// UseConfig appends config middlewares to current REST middleware stack.
-func UseConfig(config *Config) {
-	defaultREST.UseConfig(config)
-}
-
 // NotFound sets a NotFound handle.
 func NotFound(handle Handle) {
 	defaultREST.NotFound(handle)
