@@ -1,9 +1,5 @@
 package session
 
-import (
-	"time"
-)
-
 // Session for http server
 type Session interface {
 	SID() string
@@ -17,7 +13,5 @@ type Session interface {
 // A Pool to handle sessions
 type Pool interface {
 	GetSession(sid string) (Session, error)
-	SetLifetime(d time.Duration) error
-	GC() error
 	Destroy(sid string) error
 }

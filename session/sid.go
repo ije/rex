@@ -2,8 +2,7 @@ package session
 
 import (
 	"net/http"
-
-	"github.com/ije/gox/valid"
+	"strings"
 )
 
 // A SIDStore to store sid
@@ -18,9 +17,9 @@ type CookieSIDStore struct {
 }
 
 func (s *CookieSIDStore) cookieName() string {
-	name := "x-session"
-	if valid.IsSlug(s.CookieName) {
-		name = s.CookieName
+	name := strings.TrimSpace(s.CookieName)
+	if name == "" {
+		name = "x-session"
 	}
 	return name
 }
