@@ -143,6 +143,46 @@ func (rest *REST) Trace(path string, handles ...Handle) {
 	rest.Handle("TRACE", path, handles...)
 }
 
+// Static handles static files requests.
+func (rest *REST) Static(path string, root string, fallbackPath ...string) {
+	rest.Handle("GET", strings.TrimRight(path, "/*")+"/*", func(ctx *Context) {
+		var fallback bool
+		root = strings.TrimSuffix(root, "/")
+		filepath := root + utils.CleanPath(ctx.URL.Param("*"))
+	Re:
+		fi, err := os.Stat(filepath)
+		if err != nil {
+			if os.IsExist(err) {
+				ctx.Error(err.Error(), 500)
+				return
+			}
+
+			if fl := len(fallbackPath); fl > 0 && !fallback {
+				filepath = root + utils.CleanPath(fallbackPath[0])
+				fallback = true
+				goto Re
+			}
+
+			ctx.End(404)
+			return
+		}
+
+		if fi.IsDir() {
+			filepath = strings.TrimSuffix(filepath, "/") + "/index.html"
+			goto Re
+		}
+
+		file, err := os.Open(filepath)
+		if err != nil {
+			ctx.Error(err.Error(), 500)
+			return
+		}
+		defer file.Close()
+
+		ctx.Content(filepath, fi.ModTime(), file)
+	})
+}
+
 // Handle handles requests that match the method and path
 func (rest *REST) Handle(method string, path string, handles ...Handle) {
 	if method == "" || path == "" || len(handles) == 0 {

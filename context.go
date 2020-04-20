@@ -60,12 +60,12 @@ func (ctx *Context) Next() {
 
 	handle := ctx.handles[ctx.handleIndex]
 
-	// cache the 'read-only' fields in context firstly
+	// cache the public fields in context
 	w, r, url, form := ctx.W, ctx.R, ctx.URL, ctx.Form
 
 	handle(ctx)
 
-	// restore(to prevent user change) the 'read-only' fields in context
+	// restore(to prevent user change) the public fields in context
 	ctx.W = w
 	ctx.R = r
 	ctx.URL = url
@@ -109,7 +109,6 @@ func (ctx *Context) Session() *Session {
 
 		ctx.session = &Session{sess}
 
-		// restore sid
 		if sess.SID() != sid {
 			ctx.sidStore.Put(ctx.W, sess.SID())
 		}

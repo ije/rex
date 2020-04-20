@@ -4,8 +4,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
-	"os"
-	"path"
 	"strconv"
 	"strings"
 
@@ -79,7 +77,7 @@ func Config(config *Conf) Handle {
 	}
 }
 
-// ACL  returns a ACL  middleware.
+// ACL returns a ACL middleware.
 func ACL(permissions ...string) Handle {
 	return func(ctx *Context) {
 		for _, p := range permissions {
@@ -133,43 +131,5 @@ func BasicAuthWithRealm(realm string, authFn func(name string, password string) 
 		}
 		ctx.SetHeader("WWW-Authenticate", fmt.Sprintf(`Basic realm="%s"`, realm))
 		ctx.W.WriteHeader(401)
-	}
-}
-
-// Static returns a file static serve middleware.
-func Static(root string, fallbackPath ...string) Handle {
-	return func(ctx *Context) {
-		var fallback bool
-		var filepath string
-		if val := ctx.URL.Param("*"); val != "" {
-			filepath = val
-		} else {
-			filepath = ctx.URL.RoutePath
-		}
-		fp := path.Join(root, utils.CleanPath(filepath))
-	Re:
-		fi, err := os.Stat(fp)
-		if err != nil {
-			if os.IsExist(err) {
-				ctx.Error(err.Error(), 500)
-				return
-			}
-
-			if fl := len(fallbackPath); fl > 0 && !fallback {
-				fp = path.Join(root, utils.CleanPath(fallbackPath[0]))
-				fallback = true
-				goto Re
-			}
-
-			ctx.End(404)
-			return
-		}
-
-		if fi.IsDir() {
-			fp = path.Join(fp, "index.html")
-			goto Re
-		}
-
-		ctx.File(fp)
 	}
 }

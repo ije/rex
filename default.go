@@ -64,3 +64,8 @@ func Delete(path string, handles ...Handle) {
 func Trace(path string, handles ...Handle) {
 	defaultREST.Trace(path, handles...)
 }
+
+// Static handles static files requests.
+func Static(path string, root string, fallbackPath ...string) {
+	defaultREST.Static(path, root, fallbackPath...)
+}
