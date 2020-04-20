@@ -225,7 +225,7 @@ func (router *Router) getHandle(root *node, path string) (Handle, Params) {
 		if root.catchAllChild != nil {
 			return root.catchAllChild.handle, Params{
 				{
-					Key:   "path",
+					Key:   "*",
 					Value: "/",
 				},
 			}
@@ -238,7 +238,7 @@ func (router *Router) getHandle(root *node, path string) (Handle, Params) {
 
 	pathLen := len(path)
 	seg := ""
-	segStart := 1
+	segPointer := 1
 	parentNode := root
 	params := make(Params, 0, 10)
 	addParam := func(key string, value string) {
@@ -265,9 +265,9 @@ func (router *Router) getHandle(root *node, path string) (Handle, Params) {
 		end := i == pathLen-1
 		if path[i] == '/' || end {
 			if end {
-				seg = path[segStart : i+1]
+				seg = path[segPointer : i+1]
 			} else {
-				seg = path[segStart:i]
+				seg = path[segPointer:i]
 			}
 
 			childNode, ok := parentNode.lookup(seg)
@@ -315,18 +315,22 @@ func (router *Router) getHandle(root *node, path string) (Handle, Params) {
 
 			if !ok {
 				if parentNode.catchAllChild != nil {
-					addParam(parentNode.catchAllChild.name, "/"+path[segStart:])
+					addParam("*", "/"+path[segPointer:])
 					return parentNode.catchAllChild.handle, params
 				}
 				return nil, nil
 			}
 
 			if end {
+				if childNode.handle == nil && childNode.catchAllChild != nil {
+					addParam("*", "/"+path[i+1:])
+					return childNode.catchAllChild.handle, params
+				}
 				return childNode.handle, params
 			}
 
 			parentNode = childNode
-			segStart = i + 1
+			segPointer = i + 1
 		}
 	}
 

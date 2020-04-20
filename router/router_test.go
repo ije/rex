@@ -56,6 +56,14 @@ func TestRouter(t *testing.T) {
 		}
 	})
 
+	router.Handle("GET", "/www/*", func(w http.ResponseWriter, r *http.Request, params Params) {
+		routed++
+		want := Params{{"*", "/"}}
+		if !reflect.DeepEqual(params, want) {
+			t.Fatalf("invalid params: want %v, got %v", want, params)
+		}
+	})
+
 	router.Handle("GET", "/assets/*", func(w http.ResponseWriter, r *http.Request, params Params) {
 		routed++
 		want := Params{{"*", "/scripts/main.dist.js"}}
@@ -95,6 +103,9 @@ func TestRouter(t *testing.T) {
 	expectRouted++
 
 	request(router, "GET", "/v2/users") // ✓
+	expectRouted++
+
+	request(router, "GET", "/www") // ✓
 	expectRouted++
 
 	request(router, "GET", "/assets/scripts/main.dist.js") // ✓
