@@ -220,6 +220,10 @@ func (rest *REST) serve(w http.ResponseWriter, r *http.Request, params router.Pa
 	}
 
 	if ctx.accessLogger != nil && r.Method != "OPTIONS" {
+		ref := r.Referer()
+		if ref == "" {
+			ref = "-"
+		}
 		ctx.accessLogger.Printf(
 			`%s %s %s %s %s %d %s "%s" %d %d %dms`,
 			r.RemoteAddr,
@@ -228,8 +232,8 @@ func (rest *REST) serve(w http.ResponseWriter, r *http.Request, params router.Pa
 			r.Method,
 			r.RequestURI,
 			r.ContentLength,
-			r.Referer(),
-			strings.ReplaceAll(r.UserAgent(), `"`, ""),
+			ref,
+			strings.ReplaceAll(r.UserAgent(), `"`, `\"`),
 			wr.status,
 			wr.writed,
 			time.Since(startTime)/time.Millisecond,
