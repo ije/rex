@@ -25,7 +25,6 @@ type Context struct {
 	handles      []Handle
 	handleIndex  int
 	values       sync.Map
-	basicUser    *BasicUser
 	acl          map[string]struct{}
 	aclUser      ACLUser
 	sidStore     session.SIDStore
@@ -35,6 +34,11 @@ type Context struct {
 	errorType    string
 	logger       Logger
 	accessLogger Logger
+}
+
+// A ACLUser contains the Permissions method that returns the acl permissions
+type ACLUser interface {
+	Permissions() []string
 }
 
 // Next calls the next handle.
@@ -75,8 +79,8 @@ func (ctx *Context) Next() {
 }
 
 // BasicUser returns the basic user
-func (ctx *Context) BasicUser() *BasicUser {
-	return ctx.basicUser
+func (ctx *Context) BasicUser() (interface{}, bool) {
+	return ctx.values.Load("__BASIC_USER__")
 }
 
 // ACLUser returns the acl user
@@ -349,7 +353,7 @@ func (ctx *Context) WriteHeader(statusCode int) {
 
 // Write implements the io.Writer.
 func (ctx *Context) Write(p []byte) (n int, err error) {
-	return ctx.Write(p)
+	return ctx.W.Write(p)
 }
 
 // enableGzip switches the gzip writer
