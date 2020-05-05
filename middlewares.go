@@ -83,10 +83,10 @@ func ACL(permissions ...string) Handle {
 		for _, p := range permissions {
 			p = strings.TrimSpace(p)
 			if p != "" {
-				if ctx.permissions == nil {
-					ctx.permissions = map[string]struct{}{}
+				if ctx.acl == nil {
+					ctx.acl = map[string]struct{}{}
 				}
-				ctx.permissions[p] = struct{}{}
+				ctx.acl[p] = struct{}{}
 			}
 		}
 		ctx.Next()
@@ -94,29 +94,30 @@ func ACL(permissions ...string) Handle {
 }
 
 // BasicAuth returns a Basic HTTP Authorization middleware.
-func BasicAuth(authFn func(name string, password string) (ok bool, err error)) Handle {
-	return BasicAuthWithRealm("", authFn)
+func BasicAuth(auth func(name string, password string) (ok bool, err error)) Handle {
+	return BasicAuthWithRealm("", auth)
 }
 
 // BasicAuthWithRealm returns a Basic HTTP Authorization middleware with realm.
-func BasicAuthWithRealm(realm string, authFn func(name string, password string) (ok bool, err error)) Handle {
+func BasicAuthWithRealm(realm string, auth func(name string, password string) (ok bool, err error)) Handle {
 	return func(ctx *Context) {
-		if auth := ctx.R.Header.Get("Authorization"); len(auth) > 0 {
-			if authType, authData := utils.SplitByFirstByte(auth, ' '); len(authData) > 0 && authType == "Basic" {
+		value := ctx.R.Header.Get("Authorization")
+		if len(value) > 0 {
+			if authType, authData := utils.SplitByFirstByte(value, ' '); len(authData) > 0 && authType == "Basic" {
 				authInfo, e := base64.StdEncoding.DecodeString(authData)
 				if e != nil {
 					return
 				}
 
 				name, password := utils.SplitByFirstByte(string(authInfo), ':')
-				ok, err := authFn(name, password)
+				ok, err := auth(name, password)
 				if err != nil {
 					ctx.Error(err.Error(), 500)
 					return
 				}
 
 				if ok {
-					ctx.basicUser = BasicUser{
+					ctx.basicUser = &BasicUser{
 						Name:     name,
 						Password: password,
 					}

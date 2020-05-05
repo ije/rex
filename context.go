@@ -16,6 +16,7 @@ import (
 	"github.com/ije/rex/session"
 )
 
+// A Context to handle http requests.
 type Context struct {
 	W            http.ResponseWriter
 	R            *http.Request
@@ -24,9 +25,9 @@ type Context struct {
 	handles      []Handle
 	handleIndex  int
 	values       sync.Map
-	permissions  map[string]struct{}
+	basicUser    *BasicUser
+	acl          map[string]struct{}
 	aclUser      ACLUser
-	basicUser    BasicUser
 	sidStore     session.SIDStore
 	sessionPool  session.Pool
 	session      *Session
@@ -36,17 +37,18 @@ type Context struct {
 	accessLogger Logger
 }
 
+// Next calls the next handle.
 func (ctx *Context) Next() {
 	ctx.handleIndex++
 	if ctx.handleIndex >= len(ctx.handles) {
 		return
 	}
 
-	if len(ctx.permissions) > 0 {
+	if len(ctx.acl) > 0 {
 		var isGranted bool
 		if ctx.aclUser != nil {
 			for _, id := range ctx.aclUser.Permissions() {
-				_, isGranted = ctx.permissions[id]
+				_, isGranted = ctx.acl[id]
 				if isGranted {
 					break
 				}
@@ -72,14 +74,17 @@ func (ctx *Context) Next() {
 	ctx.Form = form
 }
 
-func (ctx *Context) BasicUser() BasicUser {
+// BasicUser returns the basic user
+func (ctx *Context) BasicUser() *BasicUser {
 	return ctx.basicUser
 }
 
+// ACLUser returns the acl user
 func (ctx *Context) ACLUser() ACLUser {
 	return ctx.aclUser
 }
 
+// SetACLUser sets the acl user
 func (ctx *Context) SetACLUser(user ACLUser) {
 	ctx.aclUser = user
 }
@@ -95,6 +100,7 @@ func (ctx *Context) StoreValue(key string, value interface{}) {
 	ctx.values.Store(key, value)
 }
 
+// Session returns the session if it is undefined then create a new one.
 func (ctx *Context) Session() *Session {
 	if ctx.sessionPool == nil {
 		panic(&contextPanicError{"session pool is nil", 500})
@@ -117,16 +123,19 @@ func (ctx *Context) Session() *Session {
 	return ctx.session
 }
 
+// GetCookie returns the cookie by name.
 func (ctx *Context) GetCookie(name string) (cookie *http.Cookie, err error) {
 	return ctx.R.Cookie(name)
 }
 
+// SetCookie sets a cookie.
 func (ctx *Context) SetCookie(cookie *http.Cookie) {
 	if cookie != nil {
 		ctx.AddHeader("Set-Cookie", cookie.String())
 	}
 }
 
+// RemoveCookie removes the cookie.
 func (ctx *Context) RemoveCookie(cookie *http.Cookie) {
 	if cookie != nil {
 		cookie.Value = "-"
@@ -135,6 +144,7 @@ func (ctx *Context) RemoveCookie(cookie *http.Cookie) {
 	}
 }
 
+// RemoveCookieByName removes the cookie by name.
 func (ctx *Context) RemoveCookieByName(name string) {
 	ctx.SetCookie(&http.Cookie{
 		Name:    name,
@@ -154,6 +164,7 @@ func (ctx *Context) SetHeader(key string, value string) {
 	ctx.W.Header().Set(key, value)
 }
 
+// RemoteIP returns the remote client IP
 func (ctx *Context) RemoteIP() string {
 	ip := ctx.R.Header.Get("X-Real-IP")
 	if len(ip) == 0 {
@@ -168,10 +179,13 @@ func (ctx *Context) RemoteIP() string {
 	return strings.TrimSpace(ip)
 }
 
+// Redirect replies to the request with a redirect to url,
+// which may be a path relative to the request path.
 func (ctx *Context) Redirect(url string, status int) {
 	http.Redirect(ctx.W, ctx.R, url, status)
 }
 
+// IfModified handles caches by modified date.
 func (ctx *Context) IfModified(modtime time.Time, then func()) {
 	if t, err := time.Parse(http.TimeFormat, ctx.R.Header.Get("If-Modified-Since")); err == nil && modtime.Before(t.Add(1*time.Second)) {
 		ctx.End(http.StatusNotModified)
@@ -182,6 +196,7 @@ func (ctx *Context) IfModified(modtime time.Time, then func()) {
 	then()
 }
 
+// IfNotMatch handles caches by etag.
 func (ctx *Context) IfNotMatch(etag string, then func()) {
 	if ctx.R.Header.Get("If-Not-Match") == etag {
 		ctx.End(http.StatusNotModified)
@@ -192,6 +207,7 @@ func (ctx *Context) IfNotMatch(etag string, then func()) {
 	then()
 }
 
+// JSON replies to the request as a json.
 func (ctx *Context) JSON(v interface{}, status int) {
 	data, err := json.Marshal(v)
 	if err != nil {
@@ -200,30 +216,31 @@ func (ctx *Context) JSON(v interface{}, status int) {
 	}
 
 	if len(data) > 1024 {
-		ctx.enableGzip()
+		ctx.enableGzip("json")
 	}
 
 	ctx.SetHeader("Content-Type", "application/json; charset=utf-8")
-	ctx.W.WriteHeader(status)
-	ctx.W.Write(data)
+	ctx.WriteHeader(status)
+	ctx.Write(data)
 }
 
-// Ok replies to the request the plain text with 200 status.
-func (ctx *Context) Ok(text string) {
-	ctx.End(200, text)
-}
-
+// End replies to the request the status.
 func (ctx *Context) End(status int, a ...string) {
 	wh := ctx.W.Header()
 	if _, ok := wh["Content-Type"]; !ok {
 		wh.Set("Content-Type", "text/plain; charset=utf-8")
 	}
-	ctx.W.WriteHeader(status)
+	ctx.WriteHeader(status)
 	if len(a) > 0 {
-		ctx.W.Write([]byte(strings.Join(a, " ")))
+		ctx.Write([]byte(strings.Join(a, " ")))
 	} else {
-		ctx.W.Write([]byte(http.StatusText(status)))
+		ctx.Write([]byte(http.StatusText(status)))
 	}
+}
+
+// Ok replies to the request the plain text with 200 status.
+func (ctx *Context) Ok(text string) {
+	ctx.End(200, text)
 }
 
 // Error replies to the request a internal server error.
@@ -250,10 +267,10 @@ func (ctx *Context) Error(message string, status int) {
 // HTML replies to the request as a html.
 func (ctx *Context) HTML(html string) {
 	if len(html) > 1024 {
-		ctx.enableGzip()
+		ctx.enableGzip("html")
 	}
 	ctx.SetHeader("Content-Type", "text/html; charset=utf-8")
-	ctx.W.Write([]byte(html))
+	ctx.Write([]byte(html))
 }
 
 // RenderHTML applies a unparsed html template with the specified data object,
@@ -278,31 +295,10 @@ func (ctx *Context) Render(template Template, data interface{}) {
 	}
 
 	if buf.Len() > 1024 {
-		ctx.enableGzip()
+		ctx.enableGzip("html")
 	}
 	ctx.SetHeader("Content-Type", "text/html; charset=utf-8")
 	io.Copy(ctx.W, buf)
-}
-
-// File replies to the request with the contents of the named
-// file or directory.
-func (ctx *Context) File(name string) {
-	fi, err := os.Stat(name)
-	if err != nil {
-		if os.IsNotExist(err) {
-			ctx.End(404)
-		} else {
-			ctx.Error(err.Error(), 500)
-		}
-		return
-	}
-	if !fi.IsDir() && fi.Size() > 1024 {
-		switch strings.TrimPrefix(path.Ext(name), ".") {
-		case "html", "htm", "xml", "svg", "js", "mjs", "json", "css", "map", "txt":
-			ctx.enableGzip()
-		}
-	}
-	http.ServeFile(ctx.W, ctx.R, name)
 }
 
 // Content replies to the request using the content in the
@@ -322,19 +318,49 @@ func (ctx *Context) Content(name string, modtime time.Time, content io.ReadSeeke
 		return
 	}
 	if size > 1024 {
-		switch strings.TrimPrefix(path.Ext(name), ".") {
-		case "html", "htm", "xml", "svg", "js", "mjs", "json", "css", "map", "txt":
-			ctx.enableGzip()
-		}
+		ctx.enableGzip(path.Ext(name))
 	}
 	http.ServeContent(ctx.W, ctx.R, name, modtime, content)
 }
 
-func (ctx *Context) enableGzip() {
+// File replies to the request with the contents of the named
+// file or directory.
+func (ctx *Context) File(name string) {
+	fi, err := os.Stat(name)
+	if err != nil {
+		if os.IsNotExist(err) {
+			ctx.End(404)
+		} else {
+			ctx.Error(err.Error(), 500)
+		}
+		return
+	}
+	if !fi.IsDir() && fi.Size() > 1024 {
+		ctx.enableGzip(path.Ext(name))
+	}
+	http.ServeFile(ctx.W, ctx.R, name)
+}
+
+// WriteHeader sends an HTTP response header with the provided
+// status code.
+func (ctx *Context) WriteHeader(statusCode int) {
+	ctx.W.WriteHeader(statusCode)
+}
+
+// Write implements the io.Writer.
+func (ctx *Context) Write(p []byte) (n int, err error) {
+	return ctx.Write(p)
+}
+
+// enableGzip switches the gzip writer
+func (ctx *Context) enableGzip(ext string) {
 	if strings.Contains(ctx.R.Header.Get("Accept-Encoding"), "gzip") {
-		if w, ok := ctx.W.(*responseWriter); ok {
-			if _, ok = w.rawWriter.(*gzipResponseWriter); !ok {
-				w.rawWriter = newGzipWriter(w.rawWriter)
+		switch strings.ToLower(strings.TrimPrefix(ext, ".")) {
+		case "html", "htm", "xml", "svg", "css", "json", "js", "mjs", "map", "md", "txt":
+			if w, ok := ctx.W.(*responseWriter); ok {
+				if _, ok = w.rawWriter.(*gzipResponseWriter); !ok {
+					w.rawWriter = newGzipWriter(w.rawWriter)
+				}
 			}
 		}
 	}

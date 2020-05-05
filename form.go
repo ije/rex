@@ -11,7 +11,7 @@ const (
 	defaultMaxMemory = 32 << 20 // 32 MB
 )
 
-// Form handles http form
+// A Form to handle http form
 type Form struct {
 	R *http.Request
 }
@@ -59,6 +59,7 @@ func (form *Form) Float(key string) (float64, error) {
 	return strconv.ParseFloat(v, 64)
 }
 
+// Require requires a value
 func (form *Form) Require(key string) string {
 	value := form.Value(key)
 	if value == "" {
@@ -67,6 +68,7 @@ func (form *Form) Require(key string) string {
 	return value
 }
 
+// RequireInt requires a value as int
 func (form *Form) RequireInt(key string) int64 {
 	i, err := strconv.ParseInt(strings.TrimSpace(form.Require(key)), 10, 64)
 	if err != nil {
@@ -75,6 +77,7 @@ func (form *Form) RequireInt(key string) int64 {
 	return i
 }
 
+// RequireFloat requires a value as float
 func (form *Form) RequireFloat(key string) float64 {
 	f, err := strconv.ParseFloat(strings.TrimSpace(form.Require(key)), 64)
 	if err != nil {
