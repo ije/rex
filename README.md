@@ -14,7 +14,7 @@ import (
 )
 
 func main() {
-    rex.Get("/hello/:name", func(ctx *rex.Context) {
+    rex.Get("/:name", func(ctx *rex.Context) {
 	    ctx.Ok("Hello, " + ctx.URL.Param("name"))
     })
 

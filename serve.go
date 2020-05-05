@@ -1,3 +1,4 @@
+// Package rex provides a simple & light-weight REST server in golang
 package rex
 
 import (
