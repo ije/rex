@@ -72,7 +72,7 @@ func TestRouter(t *testing.T) {
 		}
 	})
 
-	router.Handle("POST", "/(works|work)/:id", func(w http.ResponseWriter, r *http.Request, params Params) {
+	router.Handle("POST", "/(works|w)/:id", func(w http.ResponseWriter, r *http.Request, params Params) {
 		routed++
 		want := Params{{"id", "rex"}}
 		if !reflect.DeepEqual(params, want) {
@@ -111,10 +111,10 @@ func TestRouter(t *testing.T) {
 	request(router, "GET", "/assets/scripts/main.dist.js") // ✓
 	expectRouted++
 
-	request(router, "POST", "/work/rex") // ✓
+	request(router, "POST", "/works/rex") // ✓
 	expectRouted++
 
-	request(router, "POST", "/works/rex") // ✓
+	request(router, "POST", "/w/rex") // ✓
 	expectRouted++
 
 	request(router, "POST", "/subs/rex@gmail.com") // ✓
