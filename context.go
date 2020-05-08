@@ -79,8 +79,9 @@ func (ctx *Context) Next() {
 }
 
 // BasicUser returns the basic user
-func (ctx *Context) BasicUser() (interface{}, bool) {
-	return ctx.values.Load("__BASIC_USER__")
+func (ctx *Context) BasicUser() interface{} {
+	v, _ := ctx.values.Load("__BASIC_USER__")
+	return v
 }
 
 // ACLUser returns the acl user

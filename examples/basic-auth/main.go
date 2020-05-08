@@ -22,7 +22,7 @@ func main() {
 		}
 		return nil, nil
 	}), func(ctx *rex.Context) {
-		user, _ := ctx.BasicUser()
+		user := ctx.BasicUser()
 		ctx.Ok(fmt.Sprintf("Hello, %v!", user))
 	})
 
