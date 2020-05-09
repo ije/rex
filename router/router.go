@@ -132,7 +132,7 @@ func (router *Router) mapPath(n *node, fullPath string, pathSegs []string, handl
 		}
 
 		if n.paramChild != nil {
-			n.paramChild.alias = append(n.paramChild.alias, [2]string{fn, validate})
+			n.paramChild.paramAlias = append(n.paramChild.paramAlias, [2]string{fn, validate})
 		} else {
 			n.paramChild = &node{
 				name: fn,
@@ -160,10 +160,8 @@ func (router *Router) mapPath(n *node, fullPath string, pathSegs []string, handl
 				names[name] = struct{}{}
 			}
 		}
-		if len(names) == 0 {
-			panic("bad route pattern: '" + fullPath + "'")
-		}
-	} else {
+	}
+	if len(names) == 0 {
 		names[fs] = struct{}{}
 	}
 
@@ -280,8 +278,8 @@ func (router *Router) getHandle(root *node, path string) (Handle, Params) {
 					if ok {
 						ok = fn(seg)
 					}
-					if !ok && len(parentNode.paramChild.alias) > 0 {
-						for _, alia := range parentNode.paramChild.alias {
+					if !ok && len(parentNode.paramChild.paramAlias) > 0 {
+						for _, alia := range parentNode.paramChild.paramAlias {
 							if alia[1] == "" {
 								ok = true
 								break
@@ -298,8 +296,8 @@ func (router *Router) getHandle(root *node, path string) (Handle, Params) {
 				if ok {
 					childNode = parentNode.paramChild
 					addParam(childNode.name, seg)
-					if len(childNode.alias) > 0 {
-						for _, alia := range childNode.alias {
+					if len(childNode.paramAlias) > 0 {
+						for _, alia := range childNode.paramAlias {
 							if alia[1] == "" {
 								addParam(alia[0], seg)
 							} else {

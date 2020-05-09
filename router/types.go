@@ -6,10 +6,10 @@ import (
 
 type node struct {
 	name           string
-	alias          [][2]string
-	staticChildren []*node
+	paramAlias     [][2]string
 	paramChild     *node
 	catchAllChild  *node
+	staticChildren []*node
 	validate       string
 	handle         Handle
 }
