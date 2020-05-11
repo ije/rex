@@ -2,6 +2,7 @@ package rex
 
 import (
 	"bufio"
+	"bytes"
 	"compress/gzip"
 	"fmt"
 	"io"
@@ -12,7 +13,7 @@ import (
 // A responseWriter is used by rex.Context to construct a HTTP response.
 type responseWriter struct {
 	status    int
-	writed    int
+	written   int
 	rawWriter http.ResponseWriter
 }
 
@@ -24,7 +25,7 @@ func (w *responseWriter) Header() http.Header {
 // WriteHeader sends a HTTP response header with the provided status code.
 func (w *responseWriter) WriteHeader(status int) {
 	w.status = status
-	if w.writed == 0 {
+	if w.written == 0 {
 		w.rawWriter.WriteHeader(status)
 	}
 }
@@ -32,7 +33,7 @@ func (w *responseWriter) WriteHeader(status int) {
 // Write writes the data to the connection as part of an HTTP reply.
 func (w *responseWriter) Write(p []byte) (n int, err error) {
 	n, err = w.rawWriter.Write(p)
-	w.writed += n
+	w.written += n
 	return
 }
 
@@ -48,31 +49,68 @@ func (w *responseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 
 // A gzipResponseWriter is used by rex.Context to construct a HTTP response with gzip compress.
 type gzipResponseWriter struct {
+	buffer     *bytes.Buffer
+	written    int
 	gzipWriter io.WriteCloser
 	rawWriter  http.ResponseWriter
+	status     int
 }
 
 func newGzipWriter(w http.ResponseWriter) (gzw *gzipResponseWriter) {
-	wh := w.Header()
-	wh.Set("Content-Encoding", "gzip")
-	wh.Set("Vary", "Accept-Encoding")
-	gzipWriter, _ := gzip.NewWriterLevel(w, gzip.BestSpeed)
-	gzw = &gzipResponseWriter{gzipWriter, w}
+	gzw = &gzipResponseWriter{bytes.NewBuffer(nil), 0, nil, w, 200}
 	return
 }
 
+// Header returns the header map that will be sent by WriteHeader.
 func (w *gzipResponseWriter) Header() http.Header {
 	return w.rawWriter.Header()
 }
 
+// WriteHeader sends a HTTP response header with the provided status code.
 func (w *gzipResponseWriter) WriteHeader(status int) {
-	w.rawWriter.WriteHeader(status)
+	w.status = status
 }
 
+// Write writes the data to the connection as part of an HTTP reply.
 func (w *gzipResponseWriter) Write(p []byte) (int, error) {
-	return w.gzipWriter.Write(p)
+	if w.written >= 1024 {
+		return w.gzipWriter.Write(p)
+	}
+	n, err := w.buffer.Write(p)
+	if err != nil {
+		return n, err
+	}
+
+	w.written += n
+	if w.written >= 1024 {
+		wh := w.Header()
+		wh.Set("Content-Encoding", "gzip")
+		wh.Set("Vary", "Accept-Encoding")
+		w.rawWriter.WriteHeader(w.status)
+		w.gzipWriter, _ = gzip.NewWriterLevel(w.rawWriter, gzip.BestSpeed)
+		w.gzipWriter.Write(w.buffer.Bytes())
+		w.buffer.Reset()
+	}
+	return n, err
+}
+
+// Hijack lets the caller take over the connection.
+func (w *gzipResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	h, ok := w.rawWriter.(http.Hijacker)
+	if ok {
+		return h.Hijack()
+	}
+
+	return nil, nil, fmt.Errorf("The raw response writer does not implement the http.Hijacker")
 }
 
 func (w *gzipResponseWriter) Close() error {
-	return w.gzipWriter.Close()
+	if w.gzipWriter != nil {
+		return w.gzipWriter.Close()
+	} else if w.buffer.Len() > 0 {
+		w.rawWriter.WriteHeader(w.status)
+		_, err := w.rawWriter.Write(w.buffer.Bytes())
+		return err
+	}
+	return nil
 }

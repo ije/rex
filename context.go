@@ -1,8 +1,8 @@
 package rex
 
 import (
-	"bytes"
 	"encoding/json"
+	"fmt"
 	"html/template"
 	"io"
 	"net/http"
@@ -214,19 +214,14 @@ func (ctx *Context) IfNotMatch(etag string, then func()) {
 
 // JSON replies to the request as a json.
 func (ctx *Context) JSON(v interface{}, status int) {
-	data, err := json.Marshal(v)
-	if err != nil {
-		ctx.Error(err.Error(), status)
-		return
-	}
-
-	if len(data) > 1024 {
-		ctx.enableGzip("json")
-	}
-
 	ctx.SetHeader("Content-Type", "application/json; charset=utf-8")
-	ctx.WriteHeader(status)
-	ctx.Write(data)
+	ctx.enableGzip(".json")
+	ctx.W.WriteHeader(status)
+	err := json.NewEncoder(ctx.W).Encode(v)
+	if err != nil {
+		fmt.Println(err)
+		ctx.Error(err.Error(), 500)
+	}
 }
 
 // End replies to the request the status.
@@ -235,7 +230,7 @@ func (ctx *Context) End(status int, a ...string) {
 	if _, ok := wh["Content-Type"]; !ok {
 		wh.Set("Content-Type", "text/plain; charset=utf-8")
 	}
-	ctx.WriteHeader(status)
+	ctx.W.WriteHeader(status)
 	if len(a) > 0 {
 		ctx.Write([]byte(strings.Join(a, " ")))
 	} else {
@@ -271,10 +266,8 @@ func (ctx *Context) Error(message string, status int) {
 
 // HTML replies to the request as a html.
 func (ctx *Context) HTML(html string) {
-	if len(html) > 1024 {
-		ctx.enableGzip("html")
-	}
 	ctx.SetHeader("Content-Type", "text/html; charset=utf-8")
+	ctx.enableGzip(".html")
 	ctx.Write([]byte(html))
 }
 
@@ -292,18 +285,13 @@ func (ctx *Context) RenderHTML(html string, data interface{}) {
 // Render applies a parsed template with the specified data object,
 // replies to the request.
 func (ctx *Context) Render(template Template, data interface{}) {
-	buf := bytes.NewBuffer(nil)
-	err := template.Execute(buf, data)
+	ctx.SetHeader("Content-Type", "text/html; charset=utf-8")
+	ctx.enableGzip(".html")
+	err := template.Execute(ctx.W, data)
 	if err != nil {
 		ctx.Error(err.Error(), 500)
 		return
 	}
-
-	if buf.Len() > 1024 {
-		ctx.enableGzip("html")
-	}
-	ctx.SetHeader("Content-Type", "text/html; charset=utf-8")
-	io.Copy(ctx.W, buf)
 }
 
 // Content replies to the request using the content in the
@@ -312,19 +300,7 @@ func (ctx *Context) Render(template Template, data interface{}) {
 // handles If-Match, If-Unmodified-Since, If-None-Match, If-Modified-Since,
 // and If-Range requests.
 func (ctx *Context) Content(name string, modtime time.Time, content io.ReadSeeker) {
-	size, err := content.Seek(0, io.SeekEnd)
-	if err != nil {
-		ctx.Error(err.Error(), 500)
-		return
-	}
-	_, err = content.Seek(0, io.SeekStart)
-	if err != nil {
-		ctx.Error(err.Error(), 500)
-		return
-	}
-	if size > 1024 {
-		ctx.enableGzip(path.Ext(name))
-	}
+	ctx.enableGzip(path.Ext(name))
 	http.ServeContent(ctx.W, ctx.R, name, modtime, content)
 }
 
@@ -340,16 +316,12 @@ func (ctx *Context) File(name string) {
 		}
 		return
 	}
-	if !fi.IsDir() && fi.Size() > 1024 {
-		ctx.enableGzip(path.Ext(name))
+	if !fi.IsDir() {
+		ctx.File(path.Join(name, "index.html"))
+		return
 	}
+	ctx.enableGzip(path.Ext(name))
 	http.ServeFile(ctx.W, ctx.R, name)
-}
-
-// WriteHeader sends an HTTP response header with the provided
-// status code.
-func (ctx *Context) WriteHeader(statusCode int) {
-	ctx.W.WriteHeader(statusCode)
 }
 
 // Write implements the io.Writer.
@@ -361,7 +333,7 @@ func (ctx *Context) Write(p []byte) (n int, err error) {
 func (ctx *Context) enableGzip(ext string) {
 	if strings.Contains(ctx.R.Header.Get("Accept-Encoding"), "gzip") {
 		switch strings.ToLower(strings.TrimPrefix(ext, ".")) {
-		case "html", "htm", "xml", "svg", "css", "json", "js", "mjs", "map", "md", "txt":
+		case "html", "htm", "xml", "svg", "css", "json", "js", "jsx", "mjs", "ts", "tsx", "map", "md", "txt":
 			if w, ok := ctx.W.(*responseWriter); ok {
 				if _, ok = w.rawWriter.(*gzipResponseWriter); !ok {
 					w.rawWriter = newGzipWriter(w.rawWriter)

@@ -3,13 +3,13 @@ package rex
 import (
 	"bytes"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"runtime"
 	"strings"
 	"time"
 
+	"github.com/ije/gox/log"
 	"github.com/ije/gox/utils"
 	"github.com/ije/rex/router"
 )
@@ -210,7 +210,7 @@ func (rest *REST) serve(w http.ResponseWriter, r *http.Request, params router.Pa
 		sessionPool: defaultSessionPool,
 		sendError:   false,
 		errorType:   "text",
-		logger:      log.New(os.Stderr, "", log.LstdFlags),
+		logger:      &log.Logger{},
 	}
 
 	ctx.Next()
@@ -235,7 +235,7 @@ func (rest *REST) serve(w http.ResponseWriter, r *http.Request, params router.Pa
 			ref,
 			strings.ReplaceAll(r.UserAgent(), `"`, `\"`),
 			wr.status,
-			wr.writed,
+			wr.written,
 			time.Since(startTime)/time.Millisecond,
 		)
 	}
