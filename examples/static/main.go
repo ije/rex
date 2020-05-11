@@ -16,5 +16,6 @@ func main() {
 
 	rex.Static("/www/", "./www", "e404.html")
 
+	rex.Use(rex.SendError())
 	rex.Start(8080)
 }

@@ -60,5 +60,6 @@ func main() {
 		})
 	})
 
+	rex.Use(rex.SendError())
 	rex.Start(8080)
 }

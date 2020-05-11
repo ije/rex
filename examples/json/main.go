@@ -25,7 +25,7 @@ func main() {
 	})
 
 	rex.Get("/json2", func(ctx *rex.Context) {
-		resp, err := http.Get("https://api.github.com/")
+		resp, err := http.Get("https://api.github.com/emojis")
 		if err != nil {
 			ctx.Error(err.Error(), http.StatusBadGateway)
 			return
@@ -41,5 +41,6 @@ func main() {
 		ctx.JSON(ret, 200)
 	})
 
+	rex.Use(rex.SendError())
 	rex.Start(8080)
 }

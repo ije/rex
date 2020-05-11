@@ -19,10 +19,6 @@ const indexHTML = `
 `
 
 func main() {
-	rex.Use(rex.Config(&rex.Conf{
-		SessionPool: session.NewMemorySessionPool(15 * time.Second),
-	}))
-
 	rex.Get("/", func(ctx *rex.Context) {
 		ctx.RenderHTML(indexHTML, map[string]interface{}{
 			"user": ctx.Session().Get("user"),
@@ -46,5 +42,7 @@ func main() {
 		},
 	)
 
+	rex.Use(rex.SessionPool(session.NewMemorySessionPool(15 * time.Second)))
+	rex.Use(rex.SendError())
 	rex.Start(8080)
 }

@@ -18,5 +18,6 @@ func main() {
 		ctx.Ok("Hello, " + ctx.URL.Param("name") + "!")
 	})
 
+	rex.Use(rex.SendError())
 	rex.Start(8080)
 }

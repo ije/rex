@@ -23,5 +23,6 @@ func main() {
 		ctx.HTML(e404HTML)
 	})
 
+	rex.Use(rex.SendError())
 	rex.Start(8080)
 }

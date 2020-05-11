@@ -26,5 +26,6 @@ func main() {
 		ctx.Ok(fmt.Sprintf("Hello, %v!", user))
 	})
 
+	rex.Use(rex.SendError())
 	rex.Start(8080)
 }

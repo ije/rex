@@ -72,6 +72,7 @@ func main() {
 		ctx.Content("application/zip", modtime, bytes.NewReader(zipContent))
 	})
 
+	rex.Use(rex.SendError())
 	rex.Start(8080)
 }
 
