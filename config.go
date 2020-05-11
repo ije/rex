@@ -15,7 +15,7 @@ type Conf struct {
 	AccessLogger Logger
 	SIDStore     session.SIDStore
 	SessionPool  session.Pool
-	CORS         *CORS
+	CORS         CORS
 }
 
 // ServerConfig contains options to run the REX server.
