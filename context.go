@@ -265,7 +265,7 @@ func (ctx *Context) Error(message string, status int) {
 		ctx.End(status, message)
 	}
 	if ctx.logger != nil && status >= 500 {
-		ctx.logger.Println("[error]", message)
+		ctx.logger.Print("[error]", message)
 	}
 }
 

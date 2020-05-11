@@ -59,8 +59,8 @@ type Template interface {
 	Execute(wr io.Writer, data interface{}) error
 }
 
-// Logger is a logger contains Println and Printf methods.
+// Logger is a logger contains Print and Printf methods.
 type Logger interface {
-	Println(v ...interface{})
+	Print(v ...interface{})
 	Printf(format string, v ...interface{})
 }
