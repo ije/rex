@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/ije/gox/utils"
+	"github.com/ije/rex/session"
 )
 
 // Header is REX middleware to set http header
@@ -20,29 +21,63 @@ func Header(key string, value string) Handle {
 	}
 }
 
-// Config returns a Config middleware.
-func Config(conf Conf) Handle {
+// SendError returns a SendError middleware.
+func SendError() Handle {
 	return func(ctx *Context) {
-		if conf.SendError {
-			ctx.sendError = true
-		}
-		if conf.ErrorType != "" {
-			ctx.errorType = conf.ErrorType
-		}
-		if conf.Logger != nil {
-			ctx.logger = conf.Logger
-		}
-		if conf.AccessLogger != nil {
-			ctx.accessLogger = conf.AccessLogger
-		}
-		if conf.SIDStore != nil {
-			ctx.sidStore = conf.SIDStore
-		}
-		if conf.SessionPool != nil {
-			ctx.sessionPool = conf.SessionPool
-		}
+		ctx.sendError = true
+		ctx.Next()
+	}
+}
 
-		cors := conf.CORS
+// JSONError returns a JSONError middleware to pass error as json.
+func JSONError() Handle {
+	return func(ctx *Context) {
+		ctx.errorType = "json"
+		ctx.Next()
+	}
+}
+
+// ErrorLogger returns a ErrorLogger middleware to sets the error logger.
+func ErrorLogger(logger Logger) Handle {
+	return func(ctx *Context) {
+		if logger != nil {
+			ctx.logger = logger
+		}
+		ctx.Next()
+	}
+}
+
+// AccessLogger returns a AccessLogger middleware to sets the access logger.
+func AccessLogger(logger Logger) Handle {
+	return func(ctx *Context) {
+		ctx.accessLogger = logger
+		ctx.Next()
+	}
+}
+
+// SIDStore returns a SIDStore middleware to sets sid store for session.
+func SIDStore(sidStore session.SIDStore) Handle {
+	return func(ctx *Context) {
+		if sidStore != nil {
+			ctx.sidStore = sidStore
+		}
+		ctx.Next()
+	}
+}
+
+// SessionPool returns a SessionPool middleware to set the session pool.
+func SessionPool(pool session.Pool) Handle {
+	return func(ctx *Context) {
+		if pool != nil {
+			ctx.sessionPool = pool
+		}
+		ctx.Next()
+	}
+}
+
+// Cors returns a Cors middleware to handle cors.
+func Cors(cors CORS) Handle {
+	return func(ctx *Context) {
 		if len(cors.AllowOrigin) > 0 {
 			ctx.SetHeader("Access-Control-Allow-Origin", cors.AllowOrigin)
 			if cors.AllowCredentials {

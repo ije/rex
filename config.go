@@ -3,20 +3,8 @@ package rex
 import (
 	"io"
 
-	"github.com/ije/rex/session"
 	"golang.org/x/crypto/acme/autocert"
 )
-
-// Conf contains context options.
-type Conf struct {
-	SendError    bool
-	ErrorType    string
-	Logger       Logger
-	AccessLogger Logger
-	SIDStore     session.SIDStore
-	SessionPool  session.Pool
-	CORS         CORS
-}
 
 // ServerConfig contains options to run the REX server.
 type ServerConfig struct {
