@@ -21,28 +21,28 @@ func Header(key string, value string) Handle {
 }
 
 // Config returns a Config middleware.
-func Config(config *Conf) Handle {
+func Config(conf Conf) Handle {
 	return func(ctx *Context) {
-		if config.SendError {
+		if conf.SendError {
 			ctx.sendError = true
 		}
-		if config.ErrorType != "" {
-			ctx.errorType = config.ErrorType
+		if conf.ErrorType != "" {
+			ctx.errorType = conf.ErrorType
 		}
-		if config.Logger != nil {
-			ctx.logger = config.Logger
+		if conf.Logger != nil {
+			ctx.logger = conf.Logger
 		}
-		if config.AccessLogger != nil {
-			ctx.accessLogger = config.AccessLogger
+		if conf.AccessLogger != nil {
+			ctx.accessLogger = conf.AccessLogger
 		}
-		if config.SIDStore != nil {
-			ctx.sidStore = config.SIDStore
+		if conf.SIDStore != nil {
+			ctx.sidStore = conf.SIDStore
 		}
-		if config.SessionPool != nil {
-			ctx.sessionPool = config.SessionPool
+		if conf.SessionPool != nil {
+			ctx.sessionPool = conf.SessionPool
 		}
-		if config.CORS != nil {
-			cors := config.CORS
+		if conf.CORS != nil {
+			cors := conf.CORS
 			isPreflight := ctx.R.Method == "OPTIONS"
 			if len(cors.AllowOrigin) > 0 {
 				ctx.SetHeader("Access-Control-Allow-Origin", cors.AllowOrigin)
