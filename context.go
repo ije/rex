@@ -220,7 +220,7 @@ func (ctx *Context) JSON(v interface{}) {
 // json replies to the request as a json with status.
 func (ctx *Context) json(v interface{}, status int) {
 	ctx.SetHeader("Content-Type", "application/json; charset=utf-8")
-	ctx.enableGzip(".json")
+	ctx.enableGzip("*.json")
 	ctx.W.WriteHeader(status)
 	err := json.NewEncoder(ctx.W).Encode(v)
 	if err != nil {
@@ -272,7 +272,7 @@ func (ctx *Context) Error(message string, status int) {
 // HTML replies to the request as a html.
 func (ctx *Context) HTML(html string) {
 	ctx.SetHeader("Content-Type", "text/html; charset=utf-8")
-	ctx.enableGzip(".html")
+	ctx.enableGzip("*.html")
 	ctx.Write([]byte(html))
 }
 
@@ -291,7 +291,7 @@ func (ctx *Context) RenderHTML(html string, data interface{}) {
 // replies to the request.
 func (ctx *Context) Render(template Template, data interface{}) {
 	ctx.SetHeader("Content-Type", "text/html; charset=utf-8")
-	ctx.enableGzip(".html")
+	ctx.enableGzip("*.html")
 	err := template.Execute(ctx.W, data)
 	if err != nil {
 		ctx.Error(err.Error(), 500)
@@ -305,7 +305,7 @@ func (ctx *Context) Render(template Template, data interface{}) {
 // handles If-Match, If-Unmodified-Since, If-None-Match, If-Modified-Since,
 // and If-Range requests.
 func (ctx *Context) Content(name string, modtime time.Time, content io.ReadSeeker) {
-	ctx.enableGzip(path.Ext(name))
+	ctx.enableGzip(name)
 	http.ServeContent(ctx.W, ctx.R, name, modtime, content)
 }
 
@@ -321,12 +321,18 @@ func (ctx *Context) File(name string) {
 		}
 		return
 	}
-	if !fi.IsDir() {
+	if fi.IsDir() {
 		ctx.File(path.Join(name, "index.html"))
 		return
 	}
-	ctx.enableGzip(path.Ext(name))
-	http.ServeFile(ctx.W, ctx.R, name)
+
+	file, err := os.Open(name)
+	if err != nil {
+		ctx.Error(err.Error(), 500)
+	}
+	defer file.Close()
+
+	ctx.Content(name, fi.ModTime(), file)
 }
 
 // Write implements the io.Writer.
@@ -335,9 +341,9 @@ func (ctx *Context) Write(p []byte) (n int, err error) {
 }
 
 // enableGzip switches the gzip writer
-func (ctx *Context) enableGzip(ext string) {
+func (ctx *Context) enableGzip(filepath string) {
 	if strings.Contains(ctx.R.Header.Get("Accept-Encoding"), "gzip") {
-		switch strings.ToLower(strings.TrimPrefix(ext, ".")) {
+		switch strings.ToLower(strings.TrimPrefix(path.Ext(filepath), ".")) {
 		case "html", "htm", "xml", "svg", "css", "json", "js", "jsx", "mjs", "ts", "tsx", "map", "md", "txt":
 			if w, ok := ctx.W.(*responseWriter); ok {
 				if _, ok = w.rawWriter.(*gzipResponseWriter); !ok {
