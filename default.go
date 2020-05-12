@@ -10,6 +10,11 @@ var defaultREST = New("/")
 var defaultSessionPool = session.NewMemorySessionPool(time.Hour / 2)
 var defaultSIDStore = &session.CookieSIDStore{}
 
+// Default returns the default REST
+func Default() *REST {
+	return defaultREST
+}
+
 // Group creates a nested REST
 func Group(path string, callback func(*REST)) *REST {
 	return defaultREST.Group(path, callback)
