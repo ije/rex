@@ -21,7 +21,7 @@ func main() {
 	rex.Get("/json1", func(ctx *rex.Context) {
 		ctx.JSON(map[string]string{
 			"foo": "bar",
-		}, 200)
+		})
 	})
 
 	rex.Get("/json2", func(ctx *rex.Context) {
@@ -38,7 +38,7 @@ func main() {
 			return
 		}
 
-		ctx.JSON(ret, 200)
+		ctx.JSON(ret)
 	})
 
 	rex.Use(rex.SendError())
