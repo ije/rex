@@ -85,7 +85,7 @@ func (w *gzipResponseWriter) Write(p []byte) (int, error) {
 	if w.written >= 1024 {
 		wh := w.Header()
 		wh.Set("Content-Encoding", "gzip")
-		wh.Set("Vary", "Accept-Encoding")
+		// wh.Set("Vary", "Accept-Encoding")
 		w.rawWriter.WriteHeader(w.status)
 		w.gzipWriter, _ = gzip.NewWriterLevel(w.rawWriter, gzip.BestSpeed)
 		w.gzipWriter.Write(w.buffer.Bytes())

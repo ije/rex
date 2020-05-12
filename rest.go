@@ -215,7 +215,8 @@ func (rest *REST) serve(w http.ResponseWriter, r *http.Request, params router.Pa
 
 	ctx.Next()
 
-	if gzw, ok := wr.rawWriter.(*gzipResponseWriter); ok {
+	gzw, ok := wr.rawWriter.(*gzipResponseWriter)
+	if ok {
 		gzw.Close()
 	}
 
