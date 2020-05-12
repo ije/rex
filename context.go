@@ -172,16 +172,16 @@ func (ctx *Context) SetHeader(key string, value string) {
 // RemoteIP returns the remote client IP
 func (ctx *Context) RemoteIP() string {
 	ip := ctx.R.Header.Get("X-Real-IP")
-	if len(ip) == 0 {
+	if ip == "" {
 		ip = ctx.R.Header.Get("X-Forwarded-For")
-		if len(ip) > 0 {
+		if ip != "" {
 			ip, _ = utils.SplitByFirstByte(ip, ',')
 		} else {
 			ip = ctx.R.RemoteAddr
 		}
 	}
 	ip, _ = utils.SplitByLastByte(ip, ':')
-	return strings.TrimSpace(ip)
+	return ip
 }
 
 // Redirect replies to the request with a redirect to url,

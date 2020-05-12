@@ -226,7 +226,7 @@ func (rest *REST) serve(w http.ResponseWriter, r *http.Request, params router.Pa
 		}
 		ctx.accessLogger.Printf(
 			`%s %s %s %s %s %d %s "%s" %d %d %dms`,
-			r.RemoteAddr,
+			ctx.RemoteIP(),
 			r.Host,
 			r.Proto,
 			r.Method,
