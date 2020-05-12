@@ -213,7 +213,12 @@ func (ctx *Context) IfNotMatch(etag string, then func()) {
 }
 
 // JSON replies to the request as a json.
-func (ctx *Context) JSON(v interface{}, status int) {
+func (ctx *Context) JSON(v interface{}) {
+	ctx.json(v, 200)
+}
+
+// json replies to the request as a json with status.
+func (ctx *Context) json(v interface{}, status int) {
 	ctx.SetHeader("Content-Type", "application/json; charset=utf-8")
 	ctx.enableGzip(".json")
 	ctx.W.WriteHeader(status)
@@ -250,7 +255,7 @@ func (ctx *Context) Error(message string, status int) {
 		message = http.StatusText(status)
 	}
 	if ctx.errorType == "json" {
-		ctx.JSON(map[string]interface{}{
+		ctx.json(map[string]interface{}{
 			"error": map[string]interface{}{
 				"code":    status,
 				"message": message,
