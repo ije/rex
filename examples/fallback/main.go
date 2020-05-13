@@ -11,7 +11,7 @@ const indexHTML = `
 
 const e404HTML = `
 <h1>Welcome to use REX!</h1>
-<p>404 - not found</p>
+<p>404 - page not found</p>
 `
 
 func main() {
@@ -19,7 +19,7 @@ func main() {
 		ctx.HTML(indexHTML)
 	})
 
-	rex.NotFound(func(ctx *rex.Context) {
+	rex.Fallback(func(ctx *rex.Context) {
 		ctx.HTML(e404HTML)
 	})
 

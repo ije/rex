@@ -24,11 +24,11 @@ const indexHTML = `
 var errNotFound = errors.New("not found")
 
 func main() {
+	now := time.Now()
+
 	rex.Get("/", func(ctx *rex.Context) {
 		ctx.HTML(indexHTML)
 	})
-
-	modtime := time.Now()
 
 	rex.Get("/nil.zip", func(ctx *rex.Context) {
 		zipContent, err := compress("../static/www/nil")
@@ -41,7 +41,7 @@ func main() {
 			return
 		}
 
-		ctx.Content("application/zip", modtime, bytes.NewReader(zipContent))
+		ctx.Content("nil.zip", now, bytes.NewReader(zipContent))
 	})
 
 	rex.Get("/main.js.zip", func(ctx *rex.Context) {
@@ -55,7 +55,7 @@ func main() {
 			return
 		}
 
-		ctx.Content("application/zip", modtime, bytes.NewReader(zipContent))
+		ctx.Content("main.js.zip", now, bytes.NewReader(zipContent))
 	})
 
 	rex.Get("/www.zip", func(ctx *rex.Context) {
@@ -69,7 +69,7 @@ func main() {
 			return
 		}
 
-		ctx.Content("application/zip", modtime, bytes.NewReader(zipContent))
+		ctx.Content("www.zip", now, bytes.NewReader(zipContent))
 	})
 
 	rex.Use(rex.SendError())

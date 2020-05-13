@@ -26,7 +26,7 @@ func main() {
 	})
 
 	rex.Post("/login", func(ctx *rex.Context) {
-		user := ctx.Form.Value("user")
+		user := ctx.Form.Get("user")
 		if user != "" {
 			ctx.Session().Set("user", user)
 		}
@@ -42,7 +42,9 @@ func main() {
 		},
 	)
 
-	rex.Use(rex.SessionPool(session.NewMemorySessionPool(15 * time.Second)))
-	rex.Use(rex.SendError())
+	rex.Use(
+		rex.SessionPool(session.NewMemorySessionPool(15*time.Second)),
+		rex.SendError(),
+	)
 	rex.Start(8080)
 }
