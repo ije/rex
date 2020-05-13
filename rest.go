@@ -14,9 +14,6 @@ import (
 	"github.com/ije/rex/router"
 )
 
-// Handle defines a REST handle
-type Handle func(ctx *Context)
-
 // REST is REST-based router
 type REST struct {
 	// BasePath to add base path at beginning of each route path
@@ -39,7 +36,7 @@ func New(base string) *REST {
 		})
 	})
 	rest.router.HandlePanic(func(w http.ResponseWriter, r *http.Request, v interface{}) {
-		if err, ok := v.(*contextPanicError); ok {
+		if err, ok := v.(*recoverMessage); ok {
 			rest.serve(w, r, nil, func(ctx *Context) {
 				ctx.Error(err.message, err.code)
 			})
@@ -62,7 +59,7 @@ func New(base string) *REST {
 	return rest
 }
 
-// Group creates a nested REST
+// Group creates a nested REST.
 func (rest *REST) Group(path string, callback func(*REST)) *REST {
 	basePath := utils.CleanPath(rest.BasePath + "/" + path)
 	if basePath == rest.BasePath {
@@ -96,49 +93,49 @@ func (rest *REST) Use(middlewares ...Handle) {
 	}
 }
 
-// NotFound sets a NotFound handle.
-func (rest *REST) NotFound(handle Handle) {
+// Fallback handles the out-routed requests.
+func (rest *REST) Fallback(handle Handle) {
 	rest.router.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		rest.serve(w, r, nil, handle)
 	})
 }
 
-// Options is a shortcut for rest.Handle("OPTIONS", path, handles)
+// Options is a shortcut for `rest.Handle("OPTIONS", path, handles)`
 func (rest *REST) Options(path string, handles ...Handle) {
 	rest.Handle("OPTIONS", path, handles...)
 }
 
-// Head is a shortcut for rest.Handle("HEAD", path, handles)
+// Head is a shortcut for `rest.Handle("HEAD", path, handles)`
 func (rest *REST) Head(path string, handles ...Handle) {
 	rest.Handle("HEAD", path, handles...)
 }
 
-// Get is a shortcut for rest.Handle("GET", path, handles)
+// Get is a shortcut for `rest.Handle("GET", path, handles)`
 func (rest *REST) Get(path string, handles ...Handle) {
 	rest.Handle("GET", path, handles...)
 }
 
-// Post is a shortcut for rest.Handle("POST", path, handles)
+// Post is a shortcut for `rest.Handle("POST", path, handles)`
 func (rest *REST) Post(path string, handles ...Handle) {
 	rest.Handle("POST", path, handles...)
 }
 
-// Put is a shortcut for rest.Handle("PUT", path, handles)
+// Put is a shortcut for `rest.Handle("PUT", path, handles)`
 func (rest *REST) Put(path string, handles ...Handle) {
 	rest.Handle("PUT", path, handles...)
 }
 
-// Patch is a shortcut for rest.Handle("PATCH", path, handles)
+// Patch is a shortcut for `rest.Handle("PATCH", path, handles)`
 func (rest *REST) Patch(path string, handles ...Handle) {
 	rest.Handle("PATCH", path, handles...)
 }
 
-// Delete is a shortcut for rest.Handle("DELETE", path, handles)
+// Delete is a shortcut for `rest.Handle("DELETE", path, handles)`
 func (rest *REST) Delete(path string, handles ...Handle) {
 	rest.Handle("DELETE", path, handles...)
 }
 
-// Trace is a shortcut for rest.Handle("TRACE", path, handles)
+// Trace is a shortcut for `rest.Handle("TRACE", path, handles)`
 func (rest *REST) Trace(path string, handles ...Handle) {
 	rest.Handle("TRACE", path, handles...)
 }
@@ -183,7 +180,7 @@ func (rest *REST) Static(path string, root string, fallbackPath ...string) {
 	})
 }
 
-// Handle handles requests that match the method and path
+// Handle handles requests that match the method and path.
 func (rest *REST) Handle(method string, path string, handles ...Handle) {
 	if method == "" || path == "" || len(handles) == 0 {
 		return

@@ -78,26 +78,84 @@ func SessionPool(pool session.Pool) Handle {
 // Cors returns a Cors middleware to handle cors.
 func Cors(cors CORS) Handle {
 	return func(ctx *Context) {
-		if len(cors.AllowOrigin) > 0 {
-			ctx.SetHeader("Access-Control-Allow-Origin", cors.AllowOrigin)
+		if cors.AllowAllOrigins || len(cors.AllowOrigins) > 0 {
+			// always set Vary headers
+			// see https://github.com/rs/cors/issues/10
+			ctx.SetHeader("Vary", "Origin")
+
+			currentOrigin := ctx.R.Header.Get("Origin")
+			if currentOrigin == "" {
+				// not a cors resquest
+				ctx.Next()
+				return
+			}
+
+			isPreflight := ctx.R.Method == "OPTIONS"
+			allowAll := cors.AllowAllOrigins
+			allowCurrent := allowAll
+			if !allowAll {
+				for _, origin := range cors.AllowOrigins {
+					if origin == "*" {
+						allowAll = true
+						allowCurrent = true
+						break
+					} else if origin == currentOrigin {
+						allowCurrent = true
+					}
+				}
+			}
+
+			if !allowCurrent {
+				if isPreflight {
+					ctx.End(http.StatusNoContent)
+				} else {
+					ctx.Next()
+				}
+				return
+			}
+
+			allowOrigin := "*"
+			if !allowAll {
+				allowOrigin = strings.Join(cors.AllowOrigins, ",")
+			}
+			ctx.SetHeader("Access-Control-Allow-Origin", allowOrigin)
 			if cors.AllowCredentials {
 				ctx.SetHeader("Access-Control-Allow-Credentials", "true")
 			}
-			if len(cors.ExposeHeaders) > 0 {
-				ctx.SetHeader("Access-Control-Expose-Headers", strings.Join(cors.ExposeHeaders, ", "))
-			}
-			if ctx.R.Method == "OPTIONS" {
+
+			if isPreflight {
+				ctx.SetHeader("Vary", "Access-Control-Request-Method")
+				ctx.SetHeader("Vary", "Access-Control-Request-Headers")
+
+				reqMethod := ctx.R.Header.Get("Access-Control-Request-Method")
+				if reqMethod == "" {
+					// invalid preflight request
+					ctx.DeleteHeader("Access-Control-Allow-Origin")
+					ctx.DeleteHeader("Access-Control-Allow-Credentials")
+					ctx.End(http.StatusNoContent)
+					return
+				}
+
 				if len(cors.AllowMethods) > 0 {
-					ctx.SetHeader("Access-Control-Allow-Methods", strings.Join(cors.AllowMethods, ", "))
+					ctx.SetHeader("Access-Control-Allow-Methods", strings.Join(cors.AllowMethods, ","))
 				}
 				if len(cors.AllowHeaders) > 0 {
-					ctx.SetHeader("Access-Control-Allow-Headers", strings.Join(cors.AllowHeaders, ", "))
+					ctx.SetHeader("Access-Control-Allow-Headers", strings.Join(cors.AllowHeaders, ","))
+				} else {
+					reqHeaders := ctx.R.Header.Get("Access-Control-Request-Headers")
+					if reqHeaders != "" {
+						ctx.SetHeader("Access-Control-Allow-Headers", reqHeaders)
+					}
 				}
 				if cors.MaxAge > 0 {
 					ctx.SetHeader("Access-Control-Max-Age", strconv.Itoa(cors.MaxAge))
 				}
 				ctx.End(http.StatusNoContent)
 				return
+			}
+
+			if len(cors.ExposeHeaders) > 0 {
+				ctx.SetHeader("Access-Control-Expose-Headers", strings.Join(cors.ExposeHeaders, ","))
 			}
 		}
 		ctx.Next()

@@ -51,13 +51,13 @@ func (w *responseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 type gzipResponseWriter struct {
 	buffer     *bytes.Buffer
 	written    int
+	status     int
 	gzipWriter io.WriteCloser
 	rawWriter  http.ResponseWriter
-	status     int
 }
 
 func newGzipWriter(w http.ResponseWriter) (gzw *gzipResponseWriter) {
-	gzw = &gzipResponseWriter{bytes.NewBuffer(nil), 0, nil, w, 200}
+	gzw = &gzipResponseWriter{bytes.NewBuffer(nil), 0, 200, nil, w}
 	return
 }
 
@@ -84,8 +84,8 @@ func (w *gzipResponseWriter) Write(p []byte) (int, error) {
 
 	w.written += n
 	if w.written >= 1024 {
-		w.Header().Set("Content-Encoding", "gzip")
 		// w.Header().Set("Vary", "Accept-Encoding")
+		w.Header().Set("Content-Encoding", "gzip")
 		w.rawWriter.WriteHeader(w.status)
 		w.gzipWriter, _ = gzip.NewWriterLevel(w.rawWriter, gzip.BestSpeed)
 		w.gzipWriter.Write(w.buffer.Bytes())

@@ -36,11 +36,6 @@ type Context struct {
 	accessLogger Logger
 }
 
-// A ACLUser contains the Permissions method that returns the acl permissions
-type ACLUser interface {
-	Permissions() []string
-}
-
 // Next calls the next handle.
 func (ctx *Context) Next() {
 	ctx.handleIndex++
@@ -105,17 +100,23 @@ func (ctx *Context) StoreValue(key string, value interface{}) {
 	ctx.values.Store(key, value)
 }
 
+// Param returns the value of the first Param which key matches the given name.
+// If no matching Param is found, an empty string is returned.
+func (ctx *Context) Param(name string) string {
+	return ctx.URL.Param(name)
+}
+
 // Session returns the session if it is undefined then create a new one.
 func (ctx *Context) Session() *Session {
 	if ctx.sessionPool == nil {
-		panic(&contextPanicError{"session pool is nil", 500})
+		panic(&recoverMessage{500, "session pool is nil"})
 	}
 
 	if ctx.session == nil {
 		sid := ctx.sidStore.Get(ctx.R)
 		sess, err := ctx.sessionPool.GetSession(sid)
 		if err != nil {
-			panic(&contextPanicError{err.Error(), 500})
+			panic(&recoverMessage{500, err.Error()})
 		}
 
 		ctx.session = &Session{sess}
@@ -169,7 +170,12 @@ func (ctx *Context) SetHeader(key string, value string) {
 	ctx.W.Header().Set(key, value)
 }
 
-// RemoteIP returns the remote client IP
+// DeleteHeader deletes the values associated with key.
+func (ctx *Context) DeleteHeader(key string) {
+	ctx.W.Header().Del(key)
+}
+
+// RemoteIP returns the remote client IP.
 func (ctx *Context) RemoteIP() string {
 	ip := ctx.R.Header.Get("X-Real-IP")
 	if ip == "" {
@@ -191,42 +197,26 @@ func (ctx *Context) Redirect(url string, status int) {
 }
 
 // IfModified handles caches by modified date.
-func (ctx *Context) IfModified(modtime time.Time, then func()) {
-	if t, err := time.Parse(http.TimeFormat, ctx.R.Header.Get("If-Modified-Since")); err == nil && modtime.Before(t.Add(1*time.Second)) {
+func (ctx *Context) IfModified(modtime time.Time, next func()) {
+	t, err := time.Parse(http.TimeFormat, ctx.R.Header.Get("If-Modified-Since"))
+	if err == nil && modtime.Before(t.Add(1*time.Second)) {
 		ctx.End(http.StatusNotModified)
 		return
 	}
 
 	ctx.SetHeader("Last-Modified", modtime.Format(http.TimeFormat))
-	then()
+	next()
 }
 
 // IfNotMatch handles caches by etag.
-func (ctx *Context) IfNotMatch(etag string, then func()) {
+func (ctx *Context) IfNotMatch(etag string, next func()) {
 	if ctx.R.Header.Get("If-Not-Match") == etag {
 		ctx.End(http.StatusNotModified)
 		return
 	}
 
 	ctx.SetHeader("ETag", etag)
-	then()
-}
-
-// JSON replies to the request as a json.
-func (ctx *Context) JSON(v interface{}) {
-	ctx.json(v, 200)
-}
-
-// json replies to the request as a json with status.
-func (ctx *Context) json(v interface{}, status int) {
-	ctx.SetHeader("Content-Type", "application/json; charset=utf-8")
-	ctx.enableGzip("*.json")
-	ctx.W.WriteHeader(status)
-	err := json.NewEncoder(ctx.W).Encode(v)
-	if err != nil {
-		fmt.Println(err)
-		ctx.Error(err.Error(), 500)
-	}
+	next()
 }
 
 // End replies to the request the status.
@@ -251,7 +241,8 @@ func (ctx *Context) Ok(text string) {
 // Error replies to the request a internal server error.
 // if debug is enable, replies the error message.
 func (ctx *Context) Error(message string, status int) {
-	if status >= 500 && !ctx.sendError {
+	isServerError := status >= 500
+	if isServerError && !ctx.sendError {
 		message = http.StatusText(status)
 	}
 	if ctx.errorType == "json" {
@@ -264,8 +255,25 @@ func (ctx *Context) Error(message string, status int) {
 	} else {
 		ctx.End(status, message)
 	}
-	if ctx.logger != nil && status >= 500 {
-		ctx.logger.Print("[error]", message)
+	if isServerError && ctx.logger != nil {
+		ctx.logger.Printf("[error] %s", message)
+	}
+}
+
+// JSON replies to the request as a json.
+func (ctx *Context) JSON(v interface{}) {
+	ctx.json(v, 200)
+}
+
+// json replies to the request as a json with status.
+func (ctx *Context) json(v interface{}, status int) {
+	ctx.SetHeader("Content-Type", "application/json; charset=utf-8")
+	ctx.enableGzip("*.json")
+	ctx.W.WriteHeader(status)
+	err := json.NewEncoder(ctx.W).Encode(v)
+	if err != nil {
+		fmt.Println(err)
+		ctx.Error(err.Error(), 500)
 	}
 }
 

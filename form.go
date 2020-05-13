@@ -7,52 +7,41 @@ import (
 	"strings"
 )
 
-const (
-	defaultMaxMemory = 32 << 20 // 32 MB
-)
-
 // A Form to handle http form
 type Form struct {
 	R *http.Request
 }
 
-// Value returns the first value for the named component of the POST,
+// Get returns the first value for the named component of the POST,
 // PATCH, or PUT request body, or returns the first value for
 // the named component of the request url query.
-func (form *Form) Value(key string) string {
+func (form *Form) Get(key string, defaultValue ...string) string {
+	var value string
 	switch form.R.Method {
 	case "POST", "PUT", "PATCH":
-		if form.R.PostForm == nil {
-			form.R.ParseMultipartForm(defaultMaxMemory)
-		}
-		if vs := form.R.PostForm[key]; len(vs) > 0 {
-			return vs[0]
-		}
+		value = form.R.PostFormValue(key)
 	}
-	return form.R.FormValue(key)
-}
-
-// Default returns the defaultValue if the form value is empty
-func (form *Form) Default(key string, defaultValue string) string {
-	value := form.Value(key)
 	if value == "" {
-		return defaultValue
+		value = form.R.FormValue(key)
+	}
+	if value == "" && len(defaultValue) > 0 {
+		value = defaultValue[0]
 	}
 	return value
 }
 
-// Int returns the form value as integer
-func (form *Form) Int(key string) (int64, error) {
-	v := strings.TrimSpace(form.Value(key))
+// GetInt returns the form value as integer
+func (form *Form) GetInt(key string) (int64, error) {
+	v := strings.TrimSpace(form.Get(key))
 	if v == "" {
 		return 0, strconv.ErrSyntax
 	}
 	return strconv.ParseInt(v, 10, 64)
 }
 
-// Float returns the form value as float
-func (form *Form) Float(key string) (float64, error) {
-	v := strings.TrimSpace(form.Value(key))
+// GetFloat returns the form value as float
+func (form *Form) GetFloat(key string) (float64, error) {
+	v := strings.TrimSpace(form.Get(key))
 	if v == "" {
 		return 0.0, strconv.ErrSyntax
 	}
@@ -61,27 +50,29 @@ func (form *Form) Float(key string) (float64, error) {
 
 // Require requires a value
 func (form *Form) Require(key string) string {
-	value := form.Value(key)
+	value := form.Get(key)
 	if value == "" {
-		panic(&contextPanicError{"require form value '" + key + "'", 400})
+		panic(&recoverMessage{400, "require form value '" + key + "'"})
 	}
 	return value
 }
 
 // RequireInt requires a value as int
 func (form *Form) RequireInt(key string) int64 {
-	i, err := strconv.ParseInt(strings.TrimSpace(form.Require(key)), 10, 64)
+	val := strings.TrimSpace(form.Require(key))
+	i, err := strconv.ParseInt(val, 10, 64)
 	if err != nil {
-		panic(&contextPanicError{"require form value '" + key + "' as int", 400})
+		panic(&recoverMessage{400, "require form value '" + key + "' as int"})
 	}
 	return i
 }
 
 // RequireFloat requires a value as float
 func (form *Form) RequireFloat(key string) float64 {
-	f, err := strconv.ParseFloat(strings.TrimSpace(form.Require(key)), 64)
+	val := strings.TrimSpace(form.Require(key))
+	f, err := strconv.ParseFloat(val, 64)
 	if err != nil {
-		panic(&contextPanicError{"require form value '" + key + "' as float", 400})
+		panic(&recoverMessage{400, "require form value '" + key + "' as float"})
 	}
 	return f
 }

@@ -22,7 +22,7 @@ func Serve(config ServerConfig) {
 			defer wg.Done()
 
 			serv := &http.Server{
-				Addr:           fmt.Sprintf((":%d"), config.Port),
+				Addr:           fmt.Sprintf(("%s:%d"), config.Host, config.Port),
 				Handler:        &mux{config.TLS.AutoRedirect},
 				ReadTimeout:    time.Duration(config.ReadTimeout) * time.Second,
 				WriteTimeout:   time.Duration(config.WriteTimeout) * time.Second,
@@ -46,7 +46,7 @@ func Serve(config ServerConfig) {
 			defer wg.Done()
 
 			servs := &http.Server{
-				Addr:           fmt.Sprintf((":%d"), port),
+				Addr:           fmt.Sprintf(("%s:%d"), config.Host, port),
 				Handler:        &mux{},
 				ReadTimeout:    time.Duration(config.ReadTimeout) * time.Second,
 				WriteTimeout:   time.Duration(config.WriteTimeout) * time.Second,

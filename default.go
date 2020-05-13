@@ -25,9 +25,9 @@ func Use(middlewares ...Handle) {
 	defaultREST.Use(middlewares...)
 }
 
-// NotFound sets a NotFound handle.
-func NotFound(handle Handle) {
-	defaultREST.NotFound(handle)
+// Fallback handles the out-routed requests.
+func Fallback(handle Handle) {
+	defaultREST.Fallback(handle)
 }
 
 // Options is a shortcut for rest.Handle("OPTIONS", path, handles)
