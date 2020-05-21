@@ -22,7 +22,7 @@ func (m *mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "GET" {
 			code = 307
 		}
-		http.Redirect(w, r, fmt.Sprintf("https://%s/%s", r.Host, r.RequestURI), code)
+		http.Redirect(w, r, fmt.Sprintf("https://%s%s", r.Host, r.RequestURI), code)
 		return
 	}
 
