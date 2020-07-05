@@ -32,7 +32,7 @@ func TestRouter(t *testing.T) {
 		}
 	})
 
-	router.Handle("GET", "/post/:id|number", func(w http.ResponseWriter, r *http.Request, params Params) {
+	router.Handle("GET", "/post/:id?number", func(w http.ResponseWriter, r *http.Request, params Params) {
 		routed++
 		want := Params{{"id", "123"}}
 		if !reflect.DeepEqual(params, want) {
@@ -88,7 +88,7 @@ func TestRouter(t *testing.T) {
 		}
 	})
 
-	router.Handle("POST", "/subs/:email|email", func(w http.ResponseWriter, r *http.Request, params Params) {
+	router.Handle("POST", "/subs/:email?email", func(w http.ResponseWriter, r *http.Request, params Params) {
 		routed++
 		want := Params{{"email", "rex@gmail.com"}}
 		if !reflect.DeepEqual(params, want) {
@@ -149,12 +149,8 @@ func (m *nullWriter) Header() (h http.Header) {
 	return http.Header{}
 }
 
+func (m *nullWriter) WriteHeader(int) {}
+
 func (m *nullWriter) Write(p []byte) (n int, err error) {
 	return len(p), nil
 }
-
-func (m *nullWriter) WriteString(s string) (n int, err error) {
-	return len(s), nil
-}
-
-func (m *nullWriter) WriteHeader(int) {}

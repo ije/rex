@@ -7,9 +7,12 @@ import (
 	"github.com/ije/gox/utils"
 )
 
+// ValidateFn is a function to validate route params
+type ValidateFn func(s string) (ok bool)
+
 // Router is a http.Handler which can be used to dispatch requests to different handler functions.
 type Router struct {
-	nodes          map[string]*node
+	rootNodes      map[string]*node
 	validates      map[string]ValidateFn
 	notFoundHandle func(http.ResponseWriter, *http.Request)
 	optionsHandle  func(http.ResponseWriter, *http.Request)
@@ -19,7 +22,7 @@ type Router struct {
 // New returns a new initialized Router.
 func New() *Router {
 	return &Router{
-		nodes:     map[string]*node{},
+		rootNodes: map[string]*node{},
 		validates: map[string]ValidateFn{},
 	}
 }
@@ -74,15 +77,15 @@ func (router *Router) Handle(method string, path string, handle Handle) {
 
 func (router *Router) getRootNode(method string) *node {
 	method = strings.ToUpper(method)
-	if router.nodes == nil {
-		router.nodes = map[string]*node{}
+	if router.rootNodes == nil {
+		router.rootNodes = map[string]*node{}
 	}
-	rootNode, ok := router.nodes[method]
+	rootNode, ok := router.rootNodes[method]
 	if !ok {
 		rootNode = &node{
 			name: "/",
 		}
-		router.nodes[method] = rootNode
+		router.rootNodes[method] = rootNode
 	}
 	return rootNode
 }
@@ -116,7 +119,7 @@ func (router *Router) mapPath(n *node, fullPath string, pathSegs []string, handl
 
 	if isParam {
 		fn = fs[1:]
-		s1, s2 := utils.SplitByFirstByte(fn, '|')
+		s1, s2 := utils.SplitByFirstByte(fn, '?')
 		if s2 != "" {
 			fn = strings.TrimSpace(s1)
 			validate = strings.TrimSpace(s2)
@@ -192,7 +195,7 @@ func (router *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		defer router.recover(w, r)
 	}
 
-	root, ok := router.nodes[r.Method]
+	root, ok := router.rootNodes[r.Method]
 	if !ok {
 		if r.Method == "OPTIONS" && router.optionsHandle != nil {
 			router.optionsHandle(w, r)
@@ -339,4 +342,23 @@ func (router *Router) recover(w http.ResponseWriter, r *http.Request) {
 	if v := recover(); v != nil {
 		router.panicHandle(w, r, v)
 	}
+}
+
+type node struct {
+	name           string
+	paramAlias     [][2]string
+	paramChild     *node
+	catchAllChild  *node
+	staticChildren []*node
+	validate       string
+	handle         Handle
+}
+
+func (n *node) lookup(name string) (*node, bool) {
+	for _, nod := range n.staticChildren {
+		if nod.name == name {
+			return nod, true
+		}
+	}
+	return nil, false
 }
