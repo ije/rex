@@ -16,8 +16,8 @@ func Default() *REST {
 }
 
 // Group creates a nested REST
-func Group(path string, callback func(*REST)) *REST {
-	return defaultREST.Group(path, callback)
+func Group(path string, nest func(*REST)) *REST {
+	return defaultREST.Group(path, nest)
 }
 
 // Use appends middleware to the REST middleware stack.
