@@ -41,7 +41,7 @@ const indexHTML = `
 `
 
 type user struct {
-	id          string
+	name        string
 	permissions []string
 }
 
@@ -56,7 +56,7 @@ func main() {
 	rex.Use(func(ctx *rex.Context) {
 		if ctx.Session().Has("USER") {
 			ctx.SetACLUser(&user{
-				id:          ctx.Session().Get("USER").(string),
+				name:        string(ctx.Session().Get("USER")),
 				permissions: []string{"add", "remove"},
 			})
 		}
@@ -66,8 +66,8 @@ func main() {
 	rex.Get("/", func(ctx *rex.Context) {
 		if u := ctx.ACLUser(); u != nil {
 			ctx.Render(tpl, map[string]interface{}{
-				"user":  u.(*user).id,
-				"todos": todos[u.(*user).id],
+				"user":  u.(*user).name,
+				"todos": todos[u.(*user).name],
 			})
 		} else {
 			ctx.Render(tpl, nil)
@@ -76,14 +76,14 @@ func main() {
 
 	rex.Post("/add-todo", rex.ACL("add"), func(ctx *rex.Context) {
 		todo := ctx.Form.Require("todo")
-		user := ctx.ACLUser().(*user).id
+		user := ctx.ACLUser().(*user).name
 		todos[user] = append(todos[user], todo)
 		ctx.Redirect("/", 301)
 	})
 
 	rex.Post("/delete-todo", rex.ACL("remove"), func(ctx *rex.Context) {
 		index := ctx.Form.RequireInt("index")
-		user := ctx.ACLUser().(*user).id
+		user := ctx.ACLUser().(*user).name
 		_todos := todos[user]
 		var newTodos []string
 		for i, todo := range _todos {
@@ -98,7 +98,7 @@ func main() {
 	rex.Post("/login", func(ctx *rex.Context) {
 		user := ctx.Form.Get("user")
 		if user != "" {
-			ctx.Session().Set("USER", user)
+			ctx.Session().Set("USER", []byte(user))
 		}
 		ctx.Redirect("/", 301)
 	})
