@@ -9,7 +9,7 @@ import (
 
 // Router is a http.Handler which can be used to dispatch requests to different handler functions.
 type Router struct {
-	trees          map[string]*node
+	nodes          map[string]*node
 	validates      map[string]ValidateFn
 	notFoundHandle func(http.ResponseWriter, *http.Request)
 	optionsHandle  func(http.ResponseWriter, *http.Request)
@@ -19,7 +19,7 @@ type Router struct {
 // New returns a new initialized Router.
 func New() *Router {
 	return &Router{
-		trees:     map[string]*node{},
+		nodes:     map[string]*node{},
 		validates: map[string]ValidateFn{},
 	}
 }
@@ -74,15 +74,15 @@ func (router *Router) Handle(method string, path string, handle Handle) {
 
 func (router *Router) getRootNode(method string) *node {
 	method = strings.ToUpper(method)
-	if router.trees == nil {
-		router.trees = map[string]*node{}
+	if router.nodes == nil {
+		router.nodes = map[string]*node{}
 	}
-	rootNode, ok := router.trees[method]
+	rootNode, ok := router.nodes[method]
 	if !ok {
 		rootNode = &node{
 			name: "/",
 		}
-		router.trees[method] = rootNode
+		router.nodes[method] = rootNode
 	}
 	return rootNode
 }
@@ -192,7 +192,7 @@ func (router *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		defer router.recover(w, r)
 	}
 
-	root, ok := router.trees[r.Method]
+	root, ok := router.nodes[r.Method]
 	if !ok {
 		if r.Method == "OPTIONS" && router.optionsHandle != nil {
 			router.optionsHandle(w, r)
