@@ -21,14 +21,14 @@ const indexHTML = `
 func main() {
 	rex.Get("/", func(ctx *rex.Context) {
 		ctx.RenderHTML(indexHTML, map[string]interface{}{
-			"user": ctx.Session().Get("user"),
+			"user": string(ctx.Session().Get("user")),
 		})
 	})
 
 	rex.Post("/login", func(ctx *rex.Context) {
 		user := ctx.Form.Get("user")
 		if user != "" {
-			ctx.Session().Set("user", user)
+			ctx.Session().Set("user", []byte(user))
 		}
 		ctx.Redirect("/", 301)
 	})
