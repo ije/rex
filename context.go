@@ -84,6 +84,17 @@ func (ctx *Context) StoreValue(key string, value interface{}) {
 	ctx.values.Store(key, value)
 }
 
+// BasicAuthUserName returns the BasicAuthed username
+func (ctx *Context) BasicAuthUserName() string {
+	val, ok := ctx.values.Load("REX.BasicAuthUserName")
+	if ok {
+		if name, ok := val.(string); ok {
+			return name
+		}
+	}
+	return ""
+}
+
 // ACLUser returns the acl user
 func (ctx *Context) ACLUser() ACLUser {
 	return ctx.aclUser

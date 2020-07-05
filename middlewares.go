@@ -179,12 +179,12 @@ func ACL(permissions ...string) Handle {
 }
 
 // BasicAuth returns a Basic HTTP Authorization middleware.
-func BasicAuth(auth func(name string, password string) (user ACLUser, err error)) Handle {
+func BasicAuth(auth func(name string, password string) (ok bool, err error)) Handle {
 	return BasicAuthWithRealm("", auth)
 }
 
 // BasicAuthWithRealm returns a Basic HTTP Authorization middleware with realm.
-func BasicAuthWithRealm(realm string, auth func(name string, password string) (user ACLUser, err error)) Handle {
+func BasicAuthWithRealm(realm string, auth func(name string, password string) (ok bool, err error)) Handle {
 	return func(ctx *Context) {
 		value := ctx.R.Header.Get("Authorization")
 		if len(value) > 0 {
@@ -195,14 +195,14 @@ func BasicAuthWithRealm(realm string, auth func(name string, password string) (u
 				}
 
 				name, password := utils.SplitByFirstByte(string(authInfo), ':')
-				user, err := auth(name, password)
+				ok, err := auth(name, password)
 				if err != nil {
 					ctx.Error(err.Error(), 500)
 					return
 				}
 
-				if user != nil {
-					ctx.SetACLUser(user)
+				if ok {
+					ctx.StoreValue("REX.BasicAuthUserName", name)
 					ctx.Next()
 					return
 				}
