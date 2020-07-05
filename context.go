@@ -73,10 +73,15 @@ func (ctx *Context) Next() {
 	ctx.Form = form
 }
 
-// BasicUser returns the basic user
-func (ctx *Context) BasicUser() interface{} {
-	v, _ := ctx.values.Load("__BASIC_USER__")
-	return v
+// GetValue returns the value stored in the values for a key, or nil if no
+// value is present.
+func (ctx *Context) GetValue(key string) (interface{}, bool) {
+	return ctx.values.Load(key)
+}
+
+// StoreValue sets the value for a key.
+func (ctx *Context) StoreValue(key string, value interface{}) {
+	ctx.values.Store(key, value)
 }
 
 // ACLUser returns the acl user
@@ -87,17 +92,6 @@ func (ctx *Context) ACLUser() ACLUser {
 // SetACLUser sets the acl user
 func (ctx *Context) SetACLUser(user ACLUser) {
 	ctx.aclUser = user
-}
-
-// GetValue returns the value stored in the values for a key, or nil if no
-// value is present.
-func (ctx *Context) GetValue(key string) (interface{}, bool) {
-	return ctx.values.Load(key)
-}
-
-// StoreValue sets the value for a key.
-func (ctx *Context) StoreValue(key string, value interface{}) {
-	ctx.values.Store(key, value)
 }
 
 // Param returns the value of the first Param which key matches the given name.
@@ -352,7 +346,7 @@ func (ctx *Context) Write(p []byte) (n int, err error) {
 func (ctx *Context) enableGzip(filepath string) {
 	if strings.Contains(ctx.R.Header.Get("Accept-Encoding"), "gzip") {
 		switch strings.ToLower(strings.TrimPrefix(path.Ext(filepath), ".")) {
-		case "html", "htm", "xml", "svg", "css", "json", "js", "jsx", "mjs", "ts", "tsx", "map", "md", "txt":
+		case "html", "htm", "xml", "svg", "css", "less", "json", "json5", "map", "js", "jsx", "mjs", "cjs", "ts", "tsx", "md", "mdx", "txt":
 			if w, ok := ctx.W.(*responseWriter); ok {
 				if _, ok = w.rawWriter.(*gzipResponseWriter); !ok {
 					w.rawWriter = newGzipWriter(w.rawWriter)
