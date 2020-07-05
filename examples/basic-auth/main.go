@@ -16,14 +16,14 @@ func main() {
 		ctx.HTML(indexHTML)
 	})
 
-	rex.Get("/admin", rex.BasicAuth(func(name string, password string) (interface{}, error) {
+	rex.Get("/admin", rex.BasicAuth(func(name string, password string) (bool, error) {
 		if name == "rex" && password == "rex" {
-			return "rex", nil
+			return true, nil
 		}
-		return nil, nil
+		return false, nil
 	}), func(ctx *rex.Context) {
-		user := ctx.BasicUser()
-		ctx.Ok(fmt.Sprintf("Hello, %v!", user))
+		user := ctx.BasicAuthUserName()
+		ctx.Ok(fmt.Sprintf("Hello, %s!", user))
 	})
 
 	rex.Use(rex.SendError())
