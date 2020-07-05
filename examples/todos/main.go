@@ -1,42 +1,39 @@
 package main
 
 import (
-	"html/template"
-
 	"github.com/ije/rex"
 )
 
 const indexHTML = `
-<h1>Welcome to use REX!</h1>
+<h2>TODOS</h2>
+
 {{if .user}}
-<p>Welcome back, <strong>{{.user}}</strong>!</p>
+    <p>Welcome back, <strong>{{.user}}</strong>!</p>
 
-<h2>Todos:</h2>
-<ul>
-	{{range $index,$todo := .todos}}
-	<li>
-		{{$todo}} &nbsp;
-		<form style="display:inline-block;" method="post" action="/delete-todo">
-			<input name="index" type="hidden" value="{{$index}}">
-			<input value="X" type="submit">
-		</form>
-	</li>
-	{{end}}
-</ul>
-<div>
+    <h3>Todos:</h3>
+    <ul>
+        {{range $index,$todo := .todos}}
+        <li>
+            {{$todo}} &nbsp;
+            <form style="display:inline-block;" method="post" action="/delete-todo">
+                <input name="index" type="hidden" value="{{$index}}">
+                <input value="X" type="submit">
+            </form>
+        </li>
+        {{end}}
+    </ul>
 
-<form method="post" action="/add-todo">
-	<input name="todo" type="text">
-	<input value="Add" type="submit">
-</form>
-</div>
+    <form method="post" action="/add-todo">
+        <input name="todo" type="text">
+        <input value="Add" type="submit">
+    </form>
 
-<p><a href="/logout">Logout</a></p>
+    <p><a href="/logout">Logout</a></p>
 {{else}}
-<form method="post" action="/login">
-	<label>Login as:</label>
-	<input name="user" type="text">
-</form>
+    <form method="post" action="/login">
+        <input name="user" type="text">
+		<input value="Login" type="submit">
+    </form>
 {{end}}
 `
 
@@ -50,7 +47,6 @@ func (u *user) Permissions() []string {
 }
 
 func main() {
-	tpl := template.Must(template.New("").Parse(indexHTML))
 	todos := map[string][]string{}
 
 	rex.Use(func(ctx *rex.Context) {
@@ -64,14 +60,13 @@ func main() {
 	})
 
 	rex.Get("/", func(ctx *rex.Context) {
-		if u := ctx.ACLUser(); u != nil {
-			ctx.Render(tpl, map[string]interface{}{
-				"user":  u.(*user).name,
-				"todos": todos[u.(*user).name],
-			})
-		} else {
-			ctx.Render(tpl, nil)
+		data := map[string]interface{}{}
+		aclUser := ctx.ACLUser()
+		if aclUser != nil {
+			data["user"] = aclUser.(*user).name
+			data["todos"] = todos[aclUser.(*user).name]
 		}
+		ctx.RenderHTML(indexHTML, data)
 	})
 
 	rex.Post("/add-todo", rex.ACL("add"), func(ctx *rex.Context) {
