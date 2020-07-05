@@ -9,7 +9,7 @@ import (
 
 type MemorySession struct {
 	lock    sync.RWMutex
-	store   map[string]interface{}
+	store   map[string][]byte
 	sid     string
 	expires time.Time
 }
@@ -26,7 +26,7 @@ func (ms *MemorySession) Has(key string) (ok bool, err error) {
 	return
 }
 
-func (ms *MemorySession) Get(key string) (value interface{}, err error) {
+func (ms *MemorySession) Get(key string) (value []byte, err error) {
 	ms.lock.RLock()
 	value, _ = ms.store[key]
 	ms.lock.RUnlock()
@@ -34,7 +34,7 @@ func (ms *MemorySession) Get(key string) (value interface{}, err error) {
 	return
 }
 
-func (ms *MemorySession) Set(key string, value interface{}) error {
+func (ms *MemorySession) Set(key string, value []byte) error {
 	ms.lock.Lock()
 	ms.store[key] = value
 	ms.lock.Unlock()
@@ -52,7 +52,7 @@ func (ms *MemorySession) Delete(key string) error {
 
 func (ms *MemorySession) Flush() error {
 	ms.lock.Lock()
-	ms.store = map[string]interface{}{}
+	ms.store = map[string][]byte{}
 	ms.lock.Unlock()
 
 	return nil
@@ -101,7 +101,7 @@ func (pool *MemorySessionPool) GetSession(sid string) (session Session, err erro
 		ms = &MemorySession{
 			sid:     sid,
 			expires: now.Add(pool.lifetime),
-			store:   map[string]interface{}{},
+			store:   map[string][]byte{},
 		}
 		pool.lock.Lock()
 		pool.sessions[sid] = ms

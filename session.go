@@ -24,7 +24,7 @@ func (s *Session) Has(key string) bool {
 }
 
 // Get returns a session value
-func (s *Session) Get(key string) interface{} {
+func (s *Session) Get(key string) []byte {
 	value, err := s.Session.Get(key)
 	if err != nil {
 		panic(&recoverMessage{500, err.Error()})
@@ -33,7 +33,7 @@ func (s *Session) Get(key string) interface{} {
 }
 
 // Set sets a session value
-func (s *Session) Set(key string, value interface{}) {
+func (s *Session) Set(key string, value []byte) {
 	err := s.Session.Set(key, value)
 	if err != nil {
 		panic(&recoverMessage{500, err.Error()})

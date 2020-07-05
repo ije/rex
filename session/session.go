@@ -4,8 +4,8 @@ package session
 type Session interface {
 	SID() string
 	Has(key string) (ok bool, err error)
-	Get(key string) (value interface{}, err error)
-	Set(key string, value interface{}) error
+	Get(key string) (value []byte, err error)
+	Set(key string, value []byte) error
 	Delete(key string) error
 	Flush() error
 }
