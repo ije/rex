@@ -188,23 +188,21 @@ func BasicAuthWithRealm(realm string, auth func(name string, password string) (o
 	return func(ctx *Context) {
 		value := ctx.R.Header.Get("Authorization")
 		if len(value) > 0 {
-			if authType, authData := utils.SplitByFirstByte(value, ' '); len(authData) > 0 && authType == "Basic" {
-				authInfo, e := base64.StdEncoding.DecodeString(authData)
-				if e != nil {
-					return
-				}
-
-				name, password := utils.SplitByFirstByte(string(authInfo), ':')
-				ok, err := auth(name, password)
-				if err != nil {
-					ctx.Error(err.Error(), 500)
-					return
-				}
-
-				if ok {
-					ctx.StoreValue("REX.BasicAuthUserName", name)
-					ctx.Next()
-					return
+			authType, authData := utils.SplitByFirstByte(value, ' ')
+			if strings.ToLower(authType) == "Basic" && len(authData) > 0 {
+				authInfo, err := base64.StdEncoding.DecodeString(authData)
+				if err == nil {
+					name, password := utils.SplitByFirstByte(string(authInfo), ':')
+					ok, err := auth(name, password)
+					if err != nil {
+						ctx.Error(err.Error(), 500)
+						return
+					}
+					if ok {
+						ctx.StoreValue("REX.BasicAuthUserName", name)
+						ctx.Next()
+						return
+					}
 				}
 			}
 		}
