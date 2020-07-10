@@ -189,7 +189,7 @@ func BasicAuthWithRealm(realm string, auth func(name string, password string) (o
 		value := ctx.R.Header.Get("Authorization")
 		if len(value) > 0 {
 			authType, authData := utils.SplitByFirstByte(value, ' ')
-			if strings.ToLower(authType) == "Basic" && len(authData) > 0 {
+			if strings.ToLower(authType) == "basic" && len(authData) > 0 {
 				authInfo, err := base64.StdEncoding.DecodeString(authData)
 				if err == nil {
 					name, password := utils.SplitByFirstByte(string(authInfo), ':')
