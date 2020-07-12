@@ -1,8 +1,8 @@
 package rex
 
 import (
+	"bytes"
 	"encoding/json"
-	"fmt"
 	"html/template"
 	"io"
 	"net/http"
@@ -273,19 +273,25 @@ func (ctx *Context) JSON(v interface{}) {
 // json replies to the request as a json with status.
 func (ctx *Context) json(v interface{}, status int) {
 	ctx.SetHeader("Content-Type", "application/json; charset=utf-8")
-	ctx.enableGzip("*.json")
-	ctx.W.WriteHeader(status)
-	err := json.NewEncoder(ctx.W).Encode(v)
+	buf := bytes.NewBuffer(nil)
+	err := json.NewEncoder(buf).Encode(v)
 	if err != nil {
-		fmt.Println(err)
 		ctx.Error(err.Error(), 500)
+		return
 	}
+	if buf.Len() > 1024 {
+		ctx.enableGzip("*.json")
+	}
+	ctx.W.WriteHeader(status)
+	io.Copy(ctx.W, buf)
 }
 
 // HTML replies to the request as a html.
 func (ctx *Context) HTML(html string) {
 	ctx.SetHeader("Content-Type", "text/html; charset=utf-8")
-	ctx.enableGzip("*.html")
+	if len(html) > 1024 {
+		ctx.enableGzip("*.html")
+	}
 	ctx.Write([]byte(html))
 }
 
@@ -304,12 +310,16 @@ func (ctx *Context) RenderHTML(html string, data interface{}) {
 // replies to the request.
 func (ctx *Context) Render(template Template, data interface{}) {
 	ctx.SetHeader("Content-Type", "text/html; charset=utf-8")
-	ctx.enableGzip("*.html")
-	err := template.Execute(ctx.W, data)
+	buf := bytes.NewBuffer(nil)
+	err := template.Execute(buf, data)
 	if err != nil {
 		ctx.Error(err.Error(), 500)
 		return
 	}
+	if buf.Len() > 1204 {
+		ctx.enableGzip("*.html")
+	}
+	io.Copy(ctx.W, buf)
 }
 
 // Content replies to the request using the content in the
@@ -318,7 +328,19 @@ func (ctx *Context) Render(template Template, data interface{}) {
 // handles If-Match, If-Unmodified-Since, If-None-Match, If-Modified-Since,
 // and If-Range requests.
 func (ctx *Context) Content(name string, modtime time.Time, content io.ReadSeeker) {
-	ctx.enableGzip(name)
+	size, err := content.Seek(0, io.SeekEnd)
+	if err != nil {
+		ctx.End(500)
+		return
+	}
+	_, err = content.Seek(0, io.SeekStart)
+	if err != nil {
+		ctx.End(500)
+		return
+	}
+	if size > 1024 {
+		ctx.enableGzip(name)
+	}
 	http.ServeContent(ctx.W, ctx.R, name, modtime, content)
 }
 
@@ -358,8 +380,10 @@ func (ctx *Context) enableGzip(filepath string) {
 	if strings.Contains(ctx.R.Header.Get("Accept-Encoding"), "gzip") {
 		switch strings.ToLower(strings.TrimPrefix(path.Ext(filepath), ".")) {
 		case "html", "htm", "xml", "svg", "css", "less", "json", "json5", "map", "js", "jsx", "mjs", "cjs", "ts", "tsx", "md", "mdx", "txt":
-			if w, ok := ctx.W.(*responseWriter); ok {
-				if _, ok = w.rawWriter.(*gzipResponseWriter); !ok {
+			w, ok := ctx.W.(*responseWriter)
+			if ok {
+				_, ok = w.rawWriter.(*gzipResponseWriter)
+				if !ok {
 					w.rawWriter = newGzipWriter(w.rawWriter)
 				}
 			}
