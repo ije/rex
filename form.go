@@ -12,10 +12,10 @@ type Form struct {
 	R *http.Request
 }
 
-// Get returns the first value for the named component of the POST,
+// Value returns the first value for the named component of the POST,
 // PATCH, or PUT request body, or returns the first value for
 // the named component of the request url query.
-func (form *Form) Get(key string, defaultValue ...string) string {
+func (form *Form) Value(key string) string {
 	var value string
 	switch form.R.Method {
 	case "POST", "PUT", "PATCH":
@@ -24,24 +24,21 @@ func (form *Form) Get(key string, defaultValue ...string) string {
 	if value == "" {
 		value = form.R.FormValue(key)
 	}
-	if value == "" && len(defaultValue) > 0 {
-		value = defaultValue[0]
-	}
 	return value
 }
 
-// GetInt returns the form value as integer
-func (form *Form) GetInt(key string) (int64, error) {
-	v := strings.TrimSpace(form.Get(key))
+// Int returns the form value as integer
+func (form *Form) Int(key string) (int64, error) {
+	v := strings.TrimSpace(form.Value(key))
 	if v == "" {
 		return 0, strconv.ErrSyntax
 	}
 	return strconv.ParseInt(v, 10, 64)
 }
 
-// GetFloat returns the form value as float
-func (form *Form) GetFloat(key string) (float64, error) {
-	v := strings.TrimSpace(form.Get(key))
+// Float returns the form value as float
+func (form *Form) Float(key string) (float64, error) {
+	v := strings.TrimSpace(form.Value(key))
 	if v == "" {
 		return 0.0, strconv.ErrSyntax
 	}
@@ -50,7 +47,7 @@ func (form *Form) GetFloat(key string) (float64, error) {
 
 // Require requires a value
 func (form *Form) Require(key string) string {
-	value := form.Get(key)
+	value := form.Value(key)
 	if value == "" {
 		panic(&recoverMessage{400, "require form value '" + key + "'"})
 	}
@@ -59,8 +56,7 @@ func (form *Form) Require(key string) string {
 
 // RequireInt requires a value as int
 func (form *Form) RequireInt(key string) int64 {
-	val := strings.TrimSpace(form.Require(key))
-	i, err := strconv.ParseInt(val, 10, 64)
+	i, err := form.Int(key)
 	if err != nil {
 		panic(&recoverMessage{400, "require form value '" + key + "' as int"})
 	}
@@ -69,8 +65,7 @@ func (form *Form) RequireInt(key string) int64 {
 
 // RequireFloat requires a value as float
 func (form *Form) RequireFloat(key string) float64 {
-	val := strings.TrimSpace(form.Require(key))
-	f, err := strconv.ParseFloat(val, 64)
+	f, err := form.Float(key)
 	if err != nil {
 		panic(&recoverMessage{400, "require form value '" + key + "' as float"})
 	}

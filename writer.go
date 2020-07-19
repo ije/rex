@@ -53,8 +53,6 @@ type gzipResponseWriter struct {
 }
 
 func newGzipWriter(w http.ResponseWriter) *gzipResponseWriter {
-	// w.Header().Set("Vary", "Accept-Encoding")
-	w.Header().Set("Content-Encoding", "gzip")
 	gzipWriter, _ := gzip.NewWriterLevel(w, gzip.BestSpeed)
 	return &gzipResponseWriter{gzipWriter, w}
 }

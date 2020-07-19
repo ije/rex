@@ -375,7 +375,7 @@ func (ctx *Context) Write(p []byte) (n int, err error) {
 	return ctx.W.Write(p)
 }
 
-// enableGzip switches the gzip writer
+// enableGzip enables the gzip compress
 func (ctx *Context) enableGzip(filepath string) {
 	if strings.Contains(ctx.R.Header.Get("Accept-Encoding"), "gzip") {
 		switch strings.ToLower(strings.TrimPrefix(path.Ext(filepath), ".")) {
@@ -384,6 +384,8 @@ func (ctx *Context) enableGzip(filepath string) {
 			if ok {
 				_, ok = w.rawWriter.(*gzipResponseWriter)
 				if !ok {
+					// w.Header().Set("Vary", "Accept-Encoding")
+					w.Header().Set("Content-Encoding", "gzip")
 					w.rawWriter = newGzipWriter(w.rawWriter)
 				}
 			}
