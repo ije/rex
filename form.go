@@ -7,6 +7,10 @@ import (
 	"strings"
 )
 
+const (
+	defaultMaxMemory = 32 << 20 // 32 MB
+)
+
 // A Form to handle http form
 type Form struct {
 	R *http.Request
@@ -25,6 +29,24 @@ func (form *Form) Value(key string) string {
 		value = form.R.FormValue(key)
 	}
 	return value
+}
+
+// IsNil checks the value for the key whether is nil.
+func (form *Form) IsNil(key string) bool {
+	switch form.R.Method {
+	case "POST", "PUT", "PATCH":
+		if form.R.PostForm == nil {
+			form.R.ParseMultipartForm(defaultMaxMemory)
+		}
+		_, ok := form.R.PostForm[key]
+		return !ok
+	}
+
+	if form.R.Form == nil {
+		form.R.ParseMultipartForm(defaultMaxMemory)
+	}
+	_, ok := form.R.Form[key]
+	return !ok
 }
 
 // Int returns the form value as integer
