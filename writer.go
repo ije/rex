@@ -14,6 +14,7 @@ type responseWriter struct {
 	status    int
 	written   int
 	rawWriter http.ResponseWriter
+	headerOk  bool
 }
 
 // Header returns the header map that will be sent by WriteHeader.
@@ -23,16 +24,22 @@ func (w *responseWriter) Header() http.Header {
 
 // WriteHeader sends a HTTP response header with the provided status code.
 func (w *responseWriter) WriteHeader(status int) {
-	w.status = status
-	if w.written == 0 {
+	if !w.headerOk {
+		w.status = status
 		w.rawWriter.WriteHeader(status)
+		w.headerOk = true
 	}
 }
 
 // Write writes the data to the connection as part of an HTTP reply.
 func (w *responseWriter) Write(p []byte) (n int, err error) {
 	n, err = w.rawWriter.Write(p)
-	w.written += n
+	if n > 0 {
+		w.written += n
+		if !w.headerOk {
+			w.headerOk = true
+		}
+	}
 	return
 }
 
