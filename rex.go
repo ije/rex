@@ -3,24 +3,19 @@ package rex
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 	"os"
-	"sync"
 	"time"
 
 	"golang.org/x/crypto/acme/autocert"
 )
 
 // Serve serves a rex server.
-func Serve(config ServerConfig) {
-	var wg sync.WaitGroup
+func Serve(config ServerConfig) chan error {
+	c := make(chan error, 1)
 
 	if config.Port > 0 {
-		wg.Add(1)
 		go func() {
-			defer wg.Done()
-
 			serv := &http.Server{
 				Addr:           fmt.Sprintf(("%s:%d"), config.Host, config.Port),
 				Handler:        &mux{config.TLS.AutoRedirect},
@@ -30,16 +25,13 @@ func Serve(config ServerConfig) {
 			}
 			err := serv.ListenAndServe()
 			if err != nil {
-				log.Println("[error] rex server shutdown:", err)
+				c <- fmt.Errorf("rex server shutdown: %v", err)
 			}
 		}()
 	}
 
 	if https := config.TLS; https.AutoTLS.AcceptTOS || (https.CertFile != "" && https.KeyFile != "") {
-		wg.Add(1)
 		go func() {
-			defer wg.Done()
-
 			port := https.Port
 			if port == 0 {
 				port = 443
@@ -60,13 +52,13 @@ func Serve(config ServerConfig) {
 				} else if cacheDir := https.AutoTLS.CacheDir; cacheDir != "" {
 					fi, err := os.Stat(cacheDir)
 					if err == nil && !fi.IsDir() {
-						log.Printf("[error] AutoTLS: invalid cache dir '%s'", cacheDir)
+						c <- fmt.Errorf("AutoTLS: invalid cache dir '%s'", cacheDir)
 						return
 					}
 					if err != nil && os.IsNotExist(err) {
 						err = os.MkdirAll(cacheDir, 0755)
 						if err != nil {
-							log.Printf("[error] AutoTLS: can't create the cache dir '%s'", cacheDir)
+							c <- fmt.Errorf("[error] AutoTLS: can't create the cache dir '%s'", cacheDir)
 							return
 						}
 					}
@@ -79,35 +71,37 @@ func Serve(config ServerConfig) {
 			}
 			err := servs.ListenAndServeTLS(https.CertFile, https.KeyFile)
 			if err != nil {
-				log.Println("[error] rex server(https) shutdown:", err)
+				c <- fmt.Errorf("rex server(https) shutdown: %v", err)
 			}
 		}()
 	}
 
-	wg.Wait()
+	return c
 }
 
 // Start starts a REX server.
-func Start(port uint16) {
-	Serve(ServerConfig{
+func Start(port uint16) (err error) {
+	err = <-Serve(ServerConfig{
 		Port: port,
 	})
+	return
 }
 
 // StartTLS starts a REX server with TLS.
-func StartTLS(port uint16, certFile string, keyFile string) {
-	Serve(ServerConfig{
+func StartTLS(port uint16, certFile string, keyFile string) (err error) {
+	err = <-Serve(ServerConfig{
 		TLS: TLSConfig{
 			Port:     port,
 			CertFile: certFile,
 			KeyFile:  keyFile,
 		},
 	})
+	return
 }
 
 // StartAutoTLS starts a REX server with autocert powered by Let's Encrypto SSL
-func StartAutoTLS(port uint16, hosts ...string) {
-	Serve(ServerConfig{
+func StartAutoTLS(port uint16, hosts ...string) (err error) {
+	err = <-Serve(ServerConfig{
 		TLS: TLSConfig{
 			Port: port,
 			AutoTLS: AutoTLSConfig{
@@ -117,4 +111,5 @@ func StartAutoTLS(port uint16, hosts ...string) {
 			},
 		},
 	})
+	return
 }
