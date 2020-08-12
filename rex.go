@@ -35,16 +35,15 @@ func Serve(config ServerConfig) {
 		}()
 	}
 
-	if https := config.TLS; (https.CertFile != "" && https.KeyFile != "") || https.AutoTLS.AcceptTOS {
-		port := https.Port
-		if port == 0 {
-			port = 443
-		}
-
+	if https := config.TLS; https.AutoTLS.AcceptTOS || (https.CertFile != "" && https.KeyFile != "") {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 
+			port := https.Port
+			if port == 0 {
+				port = 443
+			}
 			servs := &http.Server{
 				Addr:           fmt.Sprintf(("%s:%d"), config.Host, port),
 				Handler:        &mux{},
@@ -58,20 +57,20 @@ func Serve(config ServerConfig) {
 				}
 				if https.AutoTLS.Cache != nil {
 					m.Cache = https.AutoTLS.Cache
-				} else if https.AutoTLS.CacheDir != "" {
-					fi, err := os.Stat(https.AutoTLS.CacheDir)
+				} else if cacheDir := https.AutoTLS.CacheDir; cacheDir != "" {
+					fi, err := os.Stat(cacheDir)
 					if err == nil && !fi.IsDir() {
-						log.Printf("[error] AutoTLS: invalid cache dir '%s'", https.AutoTLS.CacheDir)
+						log.Printf("[error] AutoTLS: invalid cache dir '%s'", cacheDir)
 						return
 					}
 					if err != nil && os.IsNotExist(err) {
-						err = os.MkdirAll(https.AutoTLS.CacheDir, 0755)
+						err = os.MkdirAll(cacheDir, 0755)
 						if err != nil {
-							log.Printf("[error] AutoTLS: can't create the cache dir '%s'", https.AutoTLS.CacheDir)
+							log.Printf("[error] AutoTLS: can't create the cache dir '%s'", cacheDir)
 							return
 						}
 					}
-					m.Cache = autocert.DirCache(https.AutoTLS.CacheDir)
+					m.Cache = autocert.DirCache(cacheDir)
 				}
 				if len(https.AutoTLS.Hosts) > 0 {
 					m.HostPolicy = autocert.HostWhitelist(https.AutoTLS.Hosts...)
@@ -85,7 +84,6 @@ func Serve(config ServerConfig) {
 		}()
 	}
 
-	log.Println("[info] rex server started.")
 	wg.Wait()
 }
 
