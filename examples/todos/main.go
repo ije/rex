@@ -11,33 +11,33 @@ const indexHTML = `
     <title>TODOS</title>
 </head>
 <body>
-	<h1>TODOS</h1>
+    <h1>TODOS</h1>
 
-	{{if .user}}
-		<form method="post" action="/logout"> 
-			<p>Welcome back, <strong>{{.user}}</strong>!</p>
-			<p><input value="Logout" type="submit"></p>
-		</form>
-		<h2>Todos List:</h2>
-		<ul>
-			{{range $index,$todo := .todos}}
-			<li>
-				<form style="display:inline-block;" method="post" action="/delete-todo">
-					{{$todo}} &nbsp; <input name="index" type="hidden" value="{{$index}}"> <input value="X" type="submit">
-				</form>
-			</li>
-			{{end}}
-		</ul>
-		<form method="post" action="/add-todo">
-			<input name="todo" type="text">
-			<input value="Add" type="submit">
-		</form>
-	{{else}}
-		<form method="post" action="/login">
-			<input name="user" type="text">
-			<input value="Login" type="submit">
-		</form>
-	{{end}}
+    {{if .user}}
+        <form method="post" action="/logout"> 
+            <p>Welcome back, <strong>{{.user}}</strong>!</p>
+            <p><input value="Logout" type="submit"></p>
+        </form>
+        <h2>Todos List:</h2>
+        <ul>
+            {{range $index,$todo := .todos}}
+            <li>
+                <form style="display:inline-block;" method="post" action="/delete-todo">
+                    {{$todo}} &nbsp; <input name="index" type="hidden" value="{{$index}}"> <input value="X" type="submit">
+                </form>
+            </li>
+            {{end}}
+        </ul>
+        <form method="post" action="/add-todo">
+            <input name="todo" type="text">
+            <input value="Add" type="submit">
+        </form>
+    {{else}}
+        <form method="post" action="/login">
+            <input name="user" type="text">
+            <input value="Login" type="submit">
+        </form>
+    {{end}}
 </body>
 </html>
 `
@@ -84,9 +84,9 @@ func main() {
 	rex.Mutation("delete-todo", rex.ACL("remove"), func(ctx *rex.Context) interface{} {
 		index := ctx.Form.RequireInt("index")
 		user := ctx.ACLUser().(*user).name
-		_todos := todos[user]
+		userTodos := todos[user]
 		var newTodos []string
-		for i, todo := range _todos {
+		for i, todo := range userTodos {
 			if i != int(index) {
 				newTodos = append(newTodos, todo)
 			}
