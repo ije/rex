@@ -28,7 +28,10 @@ const indexHTML = `
         <input value="Add" type="submit">
     </form>
 
-    <p><a href="/logout">Logout</a></p>
+	<form method="post" action="/logout"> 
+		<input value="Logout" type="submit">
+	</form>
+
 {{else}}
     <form method="post" action="/login">
         <input name="user" type="text">
@@ -49,34 +52,34 @@ func (u *user) Permissions() []string {
 func main() {
 	todos := map[string][]string{}
 
-	rex.Use(func(ctx *rex.Context) {
+	rex.Use(func(ctx *rex.Context) interface{} {
 		if ctx.Session().Has("USER") {
 			ctx.SetACLUser(&user{
 				name:        string(ctx.Session().Get("USER")),
 				permissions: []string{"add", "remove"},
 			})
 		}
-		ctx.Next()
+		return rex.Next()
 	})
 
-	rex.Get("/", func(ctx *rex.Context) {
+	rex.Query("*", func(ctx *rex.Context) interface{} {
 		data := map[string]interface{}{}
 		aclUser := ctx.ACLUser()
 		if aclUser != nil {
 			data["user"] = aclUser.(*user).name
 			data["todos"] = todos[aclUser.(*user).name]
 		}
-		ctx.RenderHTML(indexHTML, data)
+		return rex.RenderHTML(indexHTML, data)
 	})
 
-	rex.Post("/add-todo", rex.ACL("add"), func(ctx *rex.Context) {
+	rex.Mutation("add-todo", rex.ACL("add"), func(ctx *rex.Context) interface{} {
 		todo := ctx.Form.Require("todo")
 		user := ctx.ACLUser().(*user).name
 		todos[user] = append(todos[user], todo)
-		ctx.Redirect("/", 301)
+		return rex.Redirect("/", 301)
 	})
 
-	rex.Post("/delete-todo", rex.ACL("remove"), func(ctx *rex.Context) {
+	rex.Mutation("delete-todo", rex.ACL("remove"), func(ctx *rex.Context) interface{} {
 		index := ctx.Form.RequireInt("index")
 		user := ctx.ACLUser().(*user).name
 		_todos := todos[user]
@@ -87,26 +90,22 @@ func main() {
 			}
 		}
 		todos[user] = newTodos
-		ctx.Redirect("/", 301)
+		return rex.Redirect("/", 301)
 	})
 
-	rex.Post("/login", func(ctx *rex.Context) {
+	rex.Mutation("login", func(ctx *rex.Context) interface{} {
 		user := ctx.Form.Value("user")
 		if user != "" {
 			ctx.Session().Set("USER", []byte(user))
 		}
-		ctx.Redirect("/", 301)
+		return rex.Redirect("/", 301)
 	})
 
-	rex.Get(
-		"/logout",
-		rex.Header("Cache-Control", "no-cache, no-store, must-revalidate"),
-		func(ctx *rex.Context) {
-			ctx.Session().Delete("USER")
-			ctx.Redirect("/", 301)
-		},
-	)
+	rex.Mutation("logout", func(ctx *rex.Context) interface{} {
+		ctx.Session().Delete("USER")
+		return rex.Redirect("/", 301)
+	})
 
-	rex.Use(rex.SendError())
+	rex.Use(rex.Debug())
 	rex.Start(8080)
 }
