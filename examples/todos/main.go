@@ -5,39 +5,41 @@ import (
 )
 
 const indexHTML = `
-<h2>TODOS</h2>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>TODOS</title>
+</head>
+<body>
+	<h1>TODOS</h1>
 
-{{if .user}}
-    <p>Welcome back, <strong>{{.user}}</strong>!</p>
-
-    <h3>Todos:</h3>
-    <ul>
-        {{range $index,$todo := .todos}}
-        <li>
-            {{$todo}} &nbsp;
-            <form style="display:inline-block;" method="post" action="/delete-todo">
-                <input name="index" type="hidden" value="{{$index}}">
-                <input value="X" type="submit">
-            </form>
-        </li>
-        {{end}}
-    </ul>
-
-    <form method="post" action="/add-todo">
-        <input name="todo" type="text">
-        <input value="Add" type="submit">
-    </form>
-
-	<form method="post" action="/logout"> 
-		<input value="Logout" type="submit">
-	</form>
-
-{{else}}
-    <form method="post" action="/login">
-        <input name="user" type="text">
-		<input value="Login" type="submit">
-    </form>
-{{end}}
+	{{if .user}}
+		<form method="post" action="/logout"> 
+			<p>Welcome back, <strong>{{.user}}</strong>!</p>
+			<p><input value="Logout" type="submit"></p>
+		</form>
+		<h2>Todos List:</h2>
+		<ul>
+			{{range $index,$todo := .todos}}
+			<li>
+				<form style="display:inline-block;" method="post" action="/delete-todo">
+					{{$todo}} &nbsp; <input name="index" type="hidden" value="{{$index}}"> <input value="X" type="submit">
+				</form>
+			</li>
+			{{end}}
+		</ul>
+		<form method="post" action="/add-todo">
+			<input name="todo" type="text">
+			<input value="Add" type="submit">
+		</form>
+	{{else}}
+		<form method="post" action="/login">
+			<input name="user" type="text">
+			<input value="Login" type="submit">
+		</form>
+	{{end}}
+</body>
+</html>
 `
 
 type user struct {
@@ -59,7 +61,7 @@ func main() {
 				permissions: []string{"add", "remove"},
 			})
 		}
-		return rex.Next()
+		return nil
 	})
 
 	rex.Query("*", func(ctx *rex.Context) interface{} {
