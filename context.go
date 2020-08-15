@@ -3,7 +3,7 @@ package rex
 import (
 	"bytes"
 	"encoding/json"
-	"html/template"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -16,83 +16,52 @@ import (
 	"github.com/ije/rex/session"
 )
 
+// A ACLUser interface contains the Permissions method that returns the permission IDs
+type ACLUser interface {
+	Permissions() []string
+}
+
+// A Logger interface contains the Printf method.
+type Logger interface {
+	Printf(format string, v ...interface{})
+}
+
 // A Context to handle http requests.
 type Context struct {
 	W            http.ResponseWriter
 	R            *http.Request
-	URL          *URL
 	Form         *Form
-	handles      []Handle
-	handleIndex  int
 	values       sync.Map
 	acl          map[string]struct{}
 	aclUser      ACLUser
-	sidStore     session.SIDStore
-	sessionPool  session.Pool
 	session      *Session
-	sendError    bool
-	errorType    string
+	sessionPool  session.Pool
+	sidStore     session.SIDStore
 	logger       Logger
 	accessLogger Logger
+	debug        bool
 }
 
-// Next calls the next handle.
-func (ctx *Context) Next() {
-	ctx.handleIndex++
-	if ctx.handleIndex >= len(ctx.handles) {
-		return
-	}
-
-	if len(ctx.acl) > 0 {
-		var isGranted bool
-		if ctx.aclUser != nil {
-			for _, id := range ctx.aclUser.Permissions() {
-				_, isGranted = ctx.acl[id]
-				if isGranted {
-					break
-				}
-			}
-		}
-		if !isGranted {
-			ctx.End(http.StatusUnauthorized)
-			return
-		}
-	}
-
-	handle := ctx.handles[ctx.handleIndex]
-
-	// cache the public fields in context
-	w, r, url, form := ctx.W, ctx.R, ctx.URL, ctx.Form
-
-	handle(ctx)
-
-	// restore(to prevent user change) the public fields in context
-	ctx.W = w
-	ctx.R = r
-	ctx.URL = url
-	ctx.Form = form
-}
-
-// GetValue returns the value stored in the values for a key, or nil if no
+// Value returns the value stored in the values for a key, or nil if no
 // value is present.
-func (ctx *Context) GetValue(key string) (interface{}, bool) {
+func (ctx *Context) Value(key string) (interface{}, bool) {
 	return ctx.values.Load(key)
 }
 
-// StoreValue sets the value for a key.
-func (ctx *Context) StoreValue(key string, value interface{}) {
+// SetValue sets the value for a key.
+func (ctx *Context) SetValue(key string, value interface{}) {
 	ctx.values.Store(key, value)
 }
 
-// BasicAuthUserName returns the BasicAuthed username
-func (ctx *Context) BasicAuthUserName() string {
-	val, ok := ctx.values.Load("REX.BasicAuthUserName")
+// BasicAuthUser returns the BasicAuthed username and secret
+func (ctx *Context) BasicAuthUser() (string, string) {
+	val, ok := ctx.values.Load("__REX.BasicAuthUserName")
 	if ok {
-		if name, ok := val.(string); ok {
-			return name
+		if a, ok := val.([2]string); ok {
+			return a[0], a[1]
 		}
 	}
-	return ""
+	return "", ""
 }
 
 // ACLUser returns the acl user
@@ -105,23 +74,17 @@ func (ctx *Context) SetACLUser(user ACLUser) {
 	ctx.aclUser = user
 }
 
-// Param returns the value of the first Param which key matches the given name.
-// If no matching Param is found, an empty string is returned.
-func (ctx *Context) Param(name string) string {
-	return ctx.URL.Param(name)
-}
-
 // Session returns the session if it is undefined then create a new one.
 func (ctx *Context) Session() *Session {
 	if ctx.sessionPool == nil {
-		panic(&recoverMessage{500, "session pool is nil"})
+		panic(Error("session pool is nil", 500))
 	}
 
 	if ctx.session == nil {
 		sid := ctx.sidStore.Get(ctx.R)
 		sess, err := ctx.sessionPool.GetSession(sid)
 		if err != nil {
-			panic(&recoverMessage{500, err.Error()})
+			panic(Error(err.Error(), 500))
 		}
 
 		ctx.session = &Session{sess}
@@ -134,8 +97,8 @@ func (ctx *Context) Session() *Session {
 	return ctx.session
 }
 
-// GetCookie returns the cookie by name.
-func (ctx *Context) GetCookie(name string) (cookie *http.Cookie, err error) {
+// Cookie returns the cookie by name.
+func (ctx *Context) Cookie(name string) (cookie *http.Cookie, err error) {
 	return ctx.R.Cookie(name)
 }
 
@@ -195,200 +158,126 @@ func (ctx *Context) RemoteIP() string {
 	return ip
 }
 
-// Redirect replies to the request with a redirect to url,
-// which may be a path relative to the request path.
-func (ctx *Context) Redirect(url string, status int) {
-	http.Redirect(ctx.W, ctx.R, url, status)
-}
-
-// IfModified handles caches by modified date.
-func (ctx *Context) IfModified(modtime time.Time, next func()) {
-	t, err := time.Parse(http.TimeFormat, ctx.R.Header.Get("If-Modified-Since"))
-	if err == nil && modtime.Before(t.Add(1*time.Second)) {
-		ctx.End(http.StatusNotModified)
-		return
-	}
-
-	ctx.SetHeader("Last-Modified", modtime.Format(http.TimeFormat))
-	next()
-}
-
-// IfNotMatch handles caches by etag.
-func (ctx *Context) IfNotMatch(etag string, next func()) {
-	if ctx.R.Header.Get("If-Not-Match") == etag {
-		ctx.End(http.StatusNotModified)
-		return
-	}
-
-	ctx.SetHeader("ETag", etag)
-	next()
-}
-
-// End replies to the request the status.
-func (ctx *Context) End(status int, a ...string) {
-	wh := ctx.W.Header()
-	if _, ok := wh["Content-Type"]; !ok {
-		wh.Set("Content-Type", "text/plain; charset=utf-8")
-	}
-	ctx.W.WriteHeader(status)
-	if len(a) > 0 {
-		ctx.Write([]byte(strings.Join(a, " ")))
-	} else {
-		ctx.Write([]byte(http.StatusText(status)))
-	}
-}
-
-// Ok replies to the request the plain text with 200 status.
-func (ctx *Context) Ok(text string) {
-	ctx.End(200, text)
-}
-
-// Error replies to the request a internal server error.
-// if debug is enable, replies the error message.
-func (ctx *Context) Error(message string, status int) {
-	isServerError := status >= 500
-	if isServerError && !ctx.sendError {
-		message = http.StatusText(status)
-	}
-	if ctx.errorType == "json" {
-		ctx.json(map[string]interface{}{
-			"error": map[string]interface{}{
-				"code":    status,
-				"message": message,
-			},
-		}, status)
-	} else {
-		ctx.End(status, message)
-	}
-	if isServerError && ctx.logger != nil {
-		ctx.logger.Printf("[error] %s", message)
-	}
-}
-
-// JSON replies to the request as a json.
-func (ctx *Context) JSON(v interface{}) {
-	ctx.json(v, 200)
-}
-
-// json replies to the request as a json with status.
-func (ctx *Context) json(v interface{}, status int) {
-	ctx.SetHeader("Content-Type", "application/json; charset=utf-8")
-	buf := bytes.NewBuffer(nil)
-	err := json.NewEncoder(buf).Encode(v)
-	if err != nil {
-		ctx.Error(err.Error(), 500)
-		return
-	}
-	if buf.Len() > 1024 {
-		ctx.enableGzip("*.json")
-	}
-	ctx.W.WriteHeader(status)
-	io.Copy(ctx.W, buf)
-}
-
-// HTML replies to the request as a html.
-func (ctx *Context) HTML(html string) {
-	ctx.SetHeader("Content-Type", "text/html; charset=utf-8")
-	if len(html) > 1024 {
-		ctx.enableGzip("*.html")
-	}
-	ctx.Write([]byte(html))
-}
-
-// RenderHTML applies a unparsed html template with the specified data object,
-// replies to the request.
-func (ctx *Context) RenderHTML(html string, data interface{}) {
-	t, err := template.New("").Parse(html)
-	if err != nil {
-		ctx.Error(err.Error(), 500)
-		return
-	}
-	ctx.Render(t, data)
-}
-
-// Render applies a parsed template with the specified data object,
-// replies to the request.
-func (ctx *Context) Render(template Template, data interface{}) {
-	ctx.SetHeader("Content-Type", "text/html; charset=utf-8")
-	buf := bytes.NewBuffer(nil)
-	err := template.Execute(buf, data)
-	if err != nil {
-		ctx.Error(err.Error(), 500)
-		return
-	}
-	if buf.Len() > 1204 {
-		ctx.enableGzip("*.html")
-	}
-	io.Copy(ctx.W, buf)
-}
-
-// Content replies to the request using the content in the
-// provided ReadSeeker. The main benefit of ServeContent over io.Copy
-// is that it handles Range requests properly, sets the MIME type, and
-// handles If-Match, If-Unmodified-Since, If-None-Match, If-Modified-Since,
-// and If-Range requests.
-func (ctx *Context) Content(name string, modtime time.Time, content io.ReadSeeker) {
-	size, err := content.Seek(0, io.SeekEnd)
-	if err != nil {
-		ctx.End(500)
-		return
-	}
-	_, err = content.Seek(0, io.SeekStart)
-	if err != nil {
-		ctx.End(500)
-		return
-	}
-	if size > 1024 {
-		ctx.enableGzip(name)
-	}
-	http.ServeContent(ctx.W, ctx.R, name, modtime, content)
-}
-
-// File replies to the request with the contents of the named
-// file or directory.
-func (ctx *Context) File(name string) {
-	fi, err := os.Stat(name)
-	if err != nil {
-		if os.IsNotExist(err) {
-			ctx.End(404)
-		} else {
-			ctx.Error(err.Error(), 500)
-		}
-		return
-	}
-	if fi.IsDir() {
-		ctx.File(path.Join(name, "index.html"))
-		return
-	}
-
-	file, err := os.Open(name)
-	if err != nil {
-		ctx.Error(err.Error(), 500)
-	}
-	defer file.Close()
-
-	ctx.Content(name, fi.ModTime(), file)
-}
-
-// Write implements the io.Writer.
-func (ctx *Context) Write(p []byte) (n int, err error) {
-	return ctx.W.Write(p)
-}
-
-// enableGzip enables the gzip compress
-func (ctx *Context) enableGzip(filepath string) {
+// EnableGzip enables the gzip compress
+func (ctx *Context) EnableGzip() {
 	if strings.Contains(ctx.R.Header.Get("Accept-Encoding"), "gzip") {
-		switch strings.ToLower(strings.TrimPrefix(path.Ext(filepath), ".")) {
-		case "html", "htm", "xml", "svg", "css", "less", "json", "json5", "map", "js", "jsx", "mjs", "cjs", "ts", "tsx", "md", "mdx", "txt":
-			w, ok := ctx.W.(*responseWriter)
-			if ok {
-				_, ok = w.rawWriter.(*gzipResponseWriter)
-				if !ok {
-					// w.Header().Set("Vary", "Accept-Encoding")
-					w.Header().Set("Content-Encoding", "gzip")
-					w.rawWriter = newGzipWriter(w.rawWriter)
-				}
+		w, ok := ctx.W.(*responseWriter)
+		if ok && !w.headerDone {
+			_, ok = w.rawWriter.(*gzipResponseWriter)
+			if !ok {
+				// w.Header().Set("Vary", "Accept-Encoding")
+				w.Header().Set("Content-Encoding", "gzip")
+				w.rawWriter = newGzipWriter(w.rawWriter)
 			}
 		}
 	}
+}
+
+func (ctx *Context) end(v interface{}) {
+	switch r := v.(type) {
+	case int:
+		statusText := http.StatusText(r)
+		if statusText != "" {
+			ctx.json(&HTTPError{r, statusText}, r)
+			return
+		}
+		ctx.SetHeader("Content-Type", "text/plain; charset=utf-8")
+		ctx.W.WriteHeader(200)
+		fmt.Fprintf(ctx.W, "%d", r)
+	case *blankStatus:
+		ctx.W.WriteHeader(r.status)
+	case *redirect:
+		http.Redirect(ctx.W, ctx.R, r.url, r.status)
+	case error:
+		ctx.json(&HTTPError{500, r.Error()}, 500)
+	case *HTTPError:
+		ctx.json(r, r.Status)
+	case []byte:
+		ctx.W.Write(r)
+	case string:
+		ctx.SetHeader("Content-Type", "text/plain; charset=utf-8")
+		ctx.W.Write([]byte(r))
+	case *htm:
+		ctx.SetHeader("Content-Type", "text/html; charset=utf-8")
+		ctx.W.WriteHeader(r.status)
+		ctx.W.Write([]byte(r.html))
+	case *render:
+		ctx.SetHeader("Content-Type", "text/html; charset=utf-8")
+		r.template.Execute(ctx.W, r.data)
+	case *content:
+		size, err := r.content.Seek(0, io.SeekEnd)
+		if err != nil {
+			ctx.json(&HTTPError{500, err.Error()}, 500)
+			return
+		}
+		_, err = r.content.Seek(0, io.SeekStart)
+		if err != nil {
+			ctx.json(&HTTPError{500, err.Error()}, 500)
+			return
+		}
+		var isText bool
+		switch strings.TrimPrefix(path.Ext(r.name), ".") {
+		case "html", "htm", "xml", "svg", "css", "less", "json", "json5", "map", "js", "jsx", "mjs", "cjs", "ts", "tsx", "md", "mdx", "txt":
+			isText = true
+		}
+		if size > 1024 && isText {
+			ctx.EnableGzip()
+		}
+		http.ServeContent(ctx.W, ctx.R, r.name, r.motime, r.content)
+
+		c, ok := r.content.(io.Closer)
+		if ok {
+			c.Close()
+		}
+	case *static:
+		filepath := path.Join(r.root, utils.CleanPath(ctx.R.URL.Path))
+		fi, err := os.Stat(filepath)
+		if err == nil && fi.IsDir() {
+			filepath = path.Join(filepath, "index.html")
+			fi, err = os.Stat(filepath)
+		}
+		if err != nil && os.IsNotExist(err) && r.fallback != "" {
+			filepath = path.Join(r.root, utils.CleanPath(r.fallback))
+			fi, err = os.Stat(filepath)
+		}
+		if err != nil {
+			if os.IsNotExist(err) {
+				ctx.json(&HTTPError{404, "file not found"}, 404)
+			} else {
+				ctx.json(&HTTPError{500, err.Error()}, 500)
+			}
+			return
+		}
+		ctx.end(File(filepath))
+	default:
+		f, err := utils.ToNumber(r)
+		if err == nil {
+			ctx.SetHeader("Content-Type", "text/plain; charset=utf-8")
+			ctx.W.WriteHeader(200)
+			fmt.Fprintf(ctx.W, "%f", f)
+			return
+		}
+		ctx.json(r, 200)
+	}
+}
+
+func (ctx *Context) json(v interface{}, status int) {
+	e, ok := v.(*HTTPError)
+	if ok && e.Status >= 500 && !ctx.debug {
+		e.Message = http.StatusText(500)
+	}
+
+	buf := bytes.NewBuffer(nil)
+	err := json.NewEncoder(buf).Encode(v)
+	ctx.SetHeader("Content-Type", "application/json; charset=utf-8")
+	if err != nil {
+		ctx.W.WriteHeader(500)
+		ctx.W.Write([]byte(`{"error":{"status":500,"message":"bad json"}}`))
+		return
+	}
+	if buf.Len() > 1024 {
+		ctx.EnableGzip()
+	}
+	ctx.W.WriteHeader(status)
+	io.Copy(ctx.W, buf)
 }

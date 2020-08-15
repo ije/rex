@@ -13,71 +13,63 @@ import (
 
 // Header is REX middleware to set http header
 func Header(key string, value string) Handle {
-	return func(ctx *Context) {
+	return func(ctx *Context) interface{} {
 		if key != "" {
 			ctx.SetHeader(key, value)
 		}
-		ctx.Next()
+		return Next()
 	}
 }
 
-// SendError returns a SendError middleware.
-func SendError() Handle {
-	return func(ctx *Context) {
-		ctx.sendError = true
-		ctx.Next()
-	}
-}
-
-// JSONError returns a JSONError middleware to pass error as json.
-func JSONError() Handle {
-	return func(ctx *Context) {
-		ctx.errorType = "json"
-		ctx.Next()
+// Debug returns a Debug middleware.
+func Debug() Handle {
+	return func(ctx *Context) interface{} {
+		ctx.debug = true
+		return Next()
 	}
 }
 
 // ErrorLogger returns a ErrorLogger middleware to sets the error logger.
 func ErrorLogger(logger Logger) Handle {
-	return func(ctx *Context) {
+	return func(ctx *Context) interface{} {
 		if logger != nil {
 			ctx.logger = logger
 		}
-		ctx.Next()
+		return Next()
 	}
 }
 
 // AccessLogger returns a AccessLogger middleware to sets the access logger.
 func AccessLogger(logger Logger) Handle {
-	return func(ctx *Context) {
+	return func(ctx *Context) interface{} {
 		ctx.accessLogger = logger
-		ctx.Next()
+		return Next()
 	}
 }
 
 // SIDStore returns a SIDStore middleware to sets sid store for session.
 func SIDStore(sidStore session.SIDStore) Handle {
-	return func(ctx *Context) {
+	return func(ctx *Context) interface{} {
 		if sidStore != nil {
 			ctx.sidStore = sidStore
 		}
-		ctx.Next()
+		return Next()
 	}
 }
 
 // SessionPool returns a SessionPool middleware to set the session pool.
 func SessionPool(pool session.Pool) Handle {
-	return func(ctx *Context) {
+	return func(ctx *Context) interface{} {
 		if pool != nil {
 			ctx.sessionPool = pool
 		}
-		ctx.Next()
+		return Next()
 	}
 }
 
 // Cors returns a Cors middleware to handle cors.
 func Cors(cors CORS) Handle {
-	return func(ctx *Context) {
+	return func(ctx *Context) interface{} {
 		if cors.AllowAllOrigins || len(cors.AllowOrigins) > 0 {
 			// always set Vary headers
 			// see https://github.com/rs/cors/issues/10
@@ -85,9 +77,7 @@ func Cors(cors CORS) Handle {
 
 			currentOrigin := ctx.R.Header.Get("Origin")
 			if currentOrigin == "" {
-				// not a cors resquest
-				ctx.Next()
-				return
+				return Next()
 			}
 
 			isPreflight := ctx.R.Method == "OPTIONS"
@@ -107,11 +97,9 @@ func Cors(cors CORS) Handle {
 
 			if !allowCurrent {
 				if isPreflight {
-					ctx.End(http.StatusNoContent)
-				} else {
-					ctx.Next()
+					return Blank(http.StatusNoContent)
 				}
-				return
+				return Next()
 			}
 
 			allowOrigin := "*"
@@ -132,8 +120,7 @@ func Cors(cors CORS) Handle {
 					// invalid preflight request
 					ctx.DeleteHeader("Access-Control-Allow-Origin")
 					ctx.DeleteHeader("Access-Control-Allow-Credentials")
-					ctx.End(http.StatusNoContent)
-					return
+					return Blank(http.StatusNoContent)
 				}
 
 				if len(cors.AllowMethods) > 0 {
@@ -150,21 +137,20 @@ func Cors(cors CORS) Handle {
 				if cors.MaxAge > 0 {
 					ctx.SetHeader("Access-Control-Max-Age", strconv.Itoa(cors.MaxAge))
 				}
-				ctx.End(http.StatusNoContent)
-				return
+				return Blank(http.StatusNoContent)
 			}
 
 			if len(cors.ExposeHeaders) > 0 {
 				ctx.SetHeader("Access-Control-Expose-Headers", strings.Join(cors.ExposeHeaders, ","))
 			}
 		}
-		ctx.Next()
+		return Next()
 	}
 }
 
 // ACL returns a ACL middleware.
 func ACL(permissions ...string) Handle {
-	return func(ctx *Context) {
+	return func(ctx *Context) interface{} {
 		for _, p := range permissions {
 			p = strings.TrimSpace(p)
 			if p != "" {
@@ -174,7 +160,7 @@ func ACL(permissions ...string) Handle {
 				ctx.acl[p] = struct{}{}
 			}
 		}
-		ctx.Next()
+		return Next()
 	}
 }
 
@@ -185,7 +171,7 @@ func BasicAuth(auth func(name string, secret string) (ok bool, err error)) Handl
 
 // BasicAuthWithRealm returns a Basic HTTP Authorization middleware with realm.
 func BasicAuthWithRealm(realm string, auth func(name string, secret string) (ok bool, err error)) Handle {
-	return func(ctx *Context) {
+	return func(ctx *Context) interface{} {
 		value := ctx.R.Header.Get("Authorization")
 		if strings.HasPrefix(value, "Basic ") {
 			authInfo, err := base64.StdEncoding.DecodeString(value[6:])
@@ -193,13 +179,11 @@ func BasicAuthWithRealm(realm string, auth func(name string, secret string) (ok 
 				name, secret := utils.SplitByFirstByte(string(authInfo), ':')
 				ok, err := auth(name, secret)
 				if err != nil {
-					ctx.Error(err.Error(), 500)
-					return
+					return Error(err.Error(), 500)
 				}
 				if ok {
-					ctx.StoreValue("REX.BasicAuthUserName", name)
-					ctx.Next()
-					return
+					ctx.SetValue("__REX.BasicAuthUser", [2]string{name, secret})
+					return Next()
 				}
 			}
 		}
@@ -208,6 +192,6 @@ func BasicAuthWithRealm(realm string, auth func(name string, secret string) (ok 
 			realm = "Authorization Required"
 		}
 		ctx.SetHeader("WWW-Authenticate", fmt.Sprintf(`Basic realm="%s"`, realm))
-		ctx.W.WriteHeader(401)
+		return Blank(401)
 	}
 }

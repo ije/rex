@@ -11,10 +11,10 @@ import (
 
 // A responseWriter is used by rex.Context to construct a HTTP response.
 type responseWriter struct {
-	status    int
-	written   int
-	rawWriter http.ResponseWriter
-	headerOk  bool
+	status     int
+	written    int
+	rawWriter  http.ResponseWriter
+	headerDone bool
 }
 
 // Header returns the header map that will be sent by WriteHeader.
@@ -24,21 +24,21 @@ func (w *responseWriter) Header() http.Header {
 
 // WriteHeader sends a HTTP response header with the provided status code.
 func (w *responseWriter) WriteHeader(status int) {
-	if !w.headerOk {
+	if !w.headerDone {
 		w.status = status
 		w.rawWriter.WriteHeader(status)
-		w.headerOk = true
+		w.headerDone = true
 	}
 }
 
 // Write writes the data to the connection as part of an HTTP reply.
 func (w *responseWriter) Write(p []byte) (n int, err error) {
+	if !w.headerDone {
+		w.headerDone = true
+	}
 	n, err = w.rawWriter.Write(p)
 	if n > 0 {
 		w.written += n
-		if !w.headerOk {
-			w.headerOk = true
-		}
 	}
 	return
 }

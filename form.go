@@ -1,10 +1,10 @@
 package rex
 
 import (
+	"fmt"
 	"mime/multipart"
 	"net/http"
 	"strconv"
-	"strings"
 )
 
 const (
@@ -14,6 +14,26 @@ const (
 // A Form to handle http form
 type Form struct {
 	R *http.Request
+}
+
+// IsNil checks the value for the key whether is nil.
+func (form *Form) IsNil(key string) bool {
+	switch form.R.Method {
+	case "POST", "PUT", "PATCH":
+		if form.R.PostForm == nil {
+			form.R.ParseMultipartForm(defaultMaxMemory)
+		}
+		_, ok := form.R.PostForm[key]
+		if ok {
+			return false
+		}
+	}
+
+	if form.R.Form == nil {
+		form.R.ParseMultipartForm(defaultMaxMemory)
+	}
+	_, ok := form.R.Form[key]
+	return !ok
 }
 
 // Value returns the first value for the named component of the POST,
@@ -31,47 +51,29 @@ func (form *Form) Value(key string) string {
 	return value
 }
 
-// IsNil checks the value for the key whether is nil.
-func (form *Form) IsNil(key string) bool {
-	switch form.R.Method {
-	case "POST", "PUT", "PATCH":
-		if form.R.PostForm == nil {
-			form.R.ParseMultipartForm(defaultMaxMemory)
-		}
-		_, ok := form.R.PostForm[key]
-		return !ok
-	}
-
-	if form.R.Form == nil {
-		form.R.ParseMultipartForm(defaultMaxMemory)
-	}
-	_, ok := form.R.Form[key]
-	return !ok
-}
-
 // Int returns the form value as integer
 func (form *Form) Int(key string) (int64, error) {
-	v := strings.TrimSpace(form.Value(key))
-	if v == "" {
+	value := form.Value(key)
+	if value == "" {
 		return 0, strconv.ErrSyntax
 	}
-	return strconv.ParseInt(v, 10, 64)
+	return strconv.ParseInt(value, 10, 64)
 }
 
 // Float returns the form value as float
 func (form *Form) Float(key string) (float64, error) {
-	v := strings.TrimSpace(form.Value(key))
-	if v == "" {
+	value := form.Value(key)
+	if value == "" {
 		return 0.0, strconv.ErrSyntax
 	}
-	return strconv.ParseFloat(v, 64)
+	return strconv.ParseFloat(value, 64)
 }
 
 // Require requires a value
 func (form *Form) Require(key string) string {
 	value := form.Value(key)
 	if value == "" {
-		panic(&recoverMessage{400, "require form value '" + key + "'"})
+		panic(Error(fmt.Sprintf("require form value '%s'", key), 400))
 	}
 	return value
 }
@@ -80,7 +82,7 @@ func (form *Form) Require(key string) string {
 func (form *Form) RequireInt(key string) int64 {
 	i, err := form.Int(key)
 	if err != nil {
-		panic(&recoverMessage{400, "require form value '" + key + "' as int"})
+		panic(Error(fmt.Sprintf("require form value '%s' as int", key), 400))
 	}
 	return i
 }
@@ -89,7 +91,7 @@ func (form *Form) RequireInt(key string) int64 {
 func (form *Form) RequireFloat(key string) float64 {
 	f, err := form.Float(key)
 	if err != nil {
-		panic(&recoverMessage{400, "require form value '" + key + "' as float"})
+		panic(Error(fmt.Sprintf("require form value '%s' as float", key), 400))
 	}
 	return f
 }

@@ -3,7 +3,6 @@ package rex
 import (
 	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/ije/gox/valid"
 )
@@ -17,7 +16,7 @@ func (m *mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	header.Set("Connection", "keep-alive")
 	header.Set("Server", "rex-serv")
 
-	if m.forceHTTPS && r.TLS == nil && !strings.ContainsRune(r.Host, ':') && !valid.IsIPv4(r.Host) && r.Host != "localhost" {
+	if m.forceHTTPS && r.TLS == nil && r.Host != "localhost" && !valid.IsIPv4(r.Host) {
 		code := 301
 		if r.Method != "GET" {
 			code = 307
@@ -26,5 +25,5 @@ func (m *mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	defaultREST.ServeHTTP(w, r)
+	defaultAPIHanlder.ServeHTTP(w, r)
 }
