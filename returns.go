@@ -8,12 +8,6 @@ import (
 	"time"
 )
 
-type next struct{}
-
-func Next() interface{} {
-	return &next{}
-}
-
 type blankStatus struct {
 	status int
 }

@@ -17,7 +17,7 @@ func Header(key string, value string) Handle {
 		if key != "" {
 			ctx.SetHeader(key, value)
 		}
-		return Next()
+		return nil
 	}
 }
 
@@ -25,7 +25,7 @@ func Header(key string, value string) Handle {
 func Debug() Handle {
 	return func(ctx *Context) interface{} {
 		ctx.debug = true
-		return Next()
+		return nil
 	}
 }
 
@@ -35,7 +35,7 @@ func ErrorLogger(logger Logger) Handle {
 		if logger != nil {
 			ctx.logger = logger
 		}
-		return Next()
+		return nil
 	}
 }
 
@@ -43,7 +43,7 @@ func ErrorLogger(logger Logger) Handle {
 func AccessLogger(logger Logger) Handle {
 	return func(ctx *Context) interface{} {
 		ctx.accessLogger = logger
-		return Next()
+		return nil
 	}
 }
 
@@ -53,7 +53,7 @@ func SIDStore(sidStore session.SIDStore) Handle {
 		if sidStore != nil {
 			ctx.sidStore = sidStore
 		}
-		return Next()
+		return nil
 	}
 }
 
@@ -63,7 +63,7 @@ func SessionPool(pool session.Pool) Handle {
 		if pool != nil {
 			ctx.sessionPool = pool
 		}
-		return Next()
+		return nil
 	}
 }
 
@@ -77,7 +77,7 @@ func Cors(cors CORS) Handle {
 
 			currentOrigin := ctx.R.Header.Get("Origin")
 			if currentOrigin == "" {
-				return Next()
+				return nil
 			}
 
 			isPreflight := ctx.R.Method == "OPTIONS"
@@ -99,7 +99,7 @@ func Cors(cors CORS) Handle {
 				if isPreflight {
 					return Blank(http.StatusNoContent)
 				}
-				return Next()
+				return nil
 			}
 
 			allowOrigin := "*"
@@ -144,7 +144,7 @@ func Cors(cors CORS) Handle {
 				ctx.SetHeader("Access-Control-Expose-Headers", strings.Join(cors.ExposeHeaders, ","))
 			}
 		}
-		return Next()
+		return nil
 	}
 }
 
@@ -160,7 +160,7 @@ func ACL(permissions ...string) Handle {
 				ctx.acl[p] = struct{}{}
 			}
 		}
-		return Next()
+		return nil
 	}
 }
 
@@ -183,7 +183,7 @@ func BasicAuthWithRealm(realm string, auth func(name string, secret string) (ok 
 				}
 				if ok {
 					ctx.SetValue("__REX.BasicAuthUser", [2]string{name, secret})
-					return Next()
+					return nil
 				}
 			}
 		}

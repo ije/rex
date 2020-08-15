@@ -121,8 +121,7 @@ func (a *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	for _, handle := range a.middlewares {
 		ctx.W, ctx.R, ctx.Form = wr, r, form
 		v := handle(ctx)
-		_, ok := v.(*next)
-		if !ok {
+		if v != nil {
 			ctx.end(v)
 			return
 		}
@@ -169,8 +168,7 @@ func (a *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		ctx.W, ctx.R, ctx.Form = wr, r, form
 		v := handle(ctx)
-		_, ok := v.(*next)
-		if !ok {
+		if v != nil {
 			ctx.end(v)
 			return
 		}
