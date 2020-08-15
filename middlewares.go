@@ -97,7 +97,7 @@ func Cors(cors CORS) Handle {
 
 			if !allowCurrent {
 				if isPreflight {
-					return Blank(http.StatusNoContent)
+					return http.StatusNoContent
 				}
 				return nil
 			}
@@ -120,7 +120,7 @@ func Cors(cors CORS) Handle {
 					// invalid preflight request
 					ctx.DeleteHeader("Access-Control-Allow-Origin")
 					ctx.DeleteHeader("Access-Control-Allow-Credentials")
-					return Blank(http.StatusNoContent)
+					return http.StatusNoContent
 				}
 
 				if len(cors.AllowMethods) > 0 {
@@ -137,7 +137,7 @@ func Cors(cors CORS) Handle {
 				if cors.MaxAge > 0 {
 					ctx.SetHeader("Access-Control-Max-Age", strconv.Itoa(cors.MaxAge))
 				}
-				return Blank(http.StatusNoContent)
+				return http.StatusNoContent
 			}
 
 			if len(cors.ExposeHeaders) > 0 {
@@ -192,6 +192,6 @@ func BasicAuthWithRealm(realm string, auth func(name string, secret string) (ok 
 			realm = "Authorization Required"
 		}
 		ctx.SetHeader("WWW-Authenticate", fmt.Sprintf(`Basic realm="%s"`, realm))
-		return Blank(401)
+		return 401
 	}
 }

@@ -178,14 +178,12 @@ func (ctx *Context) end(v interface{}) {
 	case int:
 		statusText := http.StatusText(r)
 		if statusText != "" {
-			ctx.json(&HTTPError{r, statusText}, r)
+			ctx.W.WriteHeader(r)
 			return
 		}
 		ctx.SetHeader("Content-Type", "text/plain; charset=utf-8")
 		ctx.W.WriteHeader(200)
 		fmt.Fprintf(ctx.W, "%d", r)
-	case *blankStatus:
-		ctx.W.WriteHeader(r.status)
 	case *redirect:
 		http.Redirect(ctx.W, ctx.R, r.url, r.status)
 	case error:
@@ -255,9 +253,9 @@ func (ctx *Context) end(v interface{}) {
 			ctx.SetHeader("Content-Type", "text/plain; charset=utf-8")
 			ctx.W.WriteHeader(200)
 			fmt.Fprintf(ctx.W, "%f", f)
-			return
+		} else {
+			ctx.json(r, 200)
 		}
-		ctx.json(r, 200)
 	}
 }
 
