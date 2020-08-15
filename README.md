@@ -32,7 +32,7 @@ func main() {
         if !ok {
             return rex.Error(404, "post not found")
         }
-	    return post
+        return post
     })
 
     // POST http://localhost/add-post {"title": "Hello World"}
