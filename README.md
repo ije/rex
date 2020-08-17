@@ -30,7 +30,7 @@ func main() {
     rex.Query("post", func(ctx *rex.Context) interface{} {
         post, ok := posts.Load(ctx.Form.RequireInt("id"))
         if !ok {
-            return rex.Error(404, "post not found")
+            return rex.Error("post not found", 404)
         }
         return post
     })
@@ -38,13 +38,14 @@ func main() {
     // POST http://localhost/add-post {"title": "Hello World"}
     rex.Mutation("add-post", func(ctx *rex.Context) interface{} {
         var id int
-        posts.Range(func(k, v interface) {
-            id++
-        })
-        post := map[string]interface{}{
-            id: id + 1,
-            title: ctx.Form.Value("title"),
-        }
+		posts.Range(func(k, v interface{}) bool {
+			id++
+			return true
+		})
+		post := map[string]interface{}{
+			"id":    id + 1,
+			"title": ctx.Form.Value("title"),
+		}
         posts.Store(id, post)
         return post
     })
