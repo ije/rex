@@ -26,6 +26,11 @@ import (
 var posts sync.Map
 
 func main() {
+    // GET http://localhost/
+    rex.Query("*", func(ctx *rex.Context) interface{} {
+        return rex.HTML("<h1>Hello World</h1>")
+    })
+
     // GET http://localhost/post?id=123
     rex.Query("post", func(ctx *rex.Context) interface{} {
         post, ok := posts.Load(ctx.Form.RequireInt("id"))
