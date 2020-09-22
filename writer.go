@@ -2,7 +2,6 @@ package rex
 
 import (
 	"bufio"
-	"compress/gzip"
 	"fmt"
 	"io"
 	"net"
@@ -11,36 +10,11 @@ import (
 
 // A responseWriter is used by rex.Context to construct a HTTP response.
 type responseWriter struct {
-	status     int
-	written    int
-	rawWriter  http.ResponseWriter
-	headerDone bool
-}
-
-// Header returns the header map that will be sent by WriteHeader.
-func (w *responseWriter) Header() http.Header {
-	return w.rawWriter.Header()
-}
-
-// WriteHeader sends a HTTP response header with the provided status code.
-func (w *responseWriter) WriteHeader(status int) {
-	if !w.headerDone {
-		w.status = status
-		w.rawWriter.WriteHeader(status)
-		w.headerDone = true
-	}
-}
-
-// Write writes the data to the connection as part of an HTTP reply.
-func (w *responseWriter) Write(p []byte) (n int, err error) {
-	if !w.headerDone {
-		w.headerDone = true
-	}
-	n, err = w.rawWriter.Write(p)
-	if n > 0 {
-		w.written += n
-	}
-	return
+	status      int
+	written     int
+	compression io.WriteCloser
+	rawWriter   http.ResponseWriter
+	headerSent  bool
 }
 
 // Hijack lets the caller take over the connection.
@@ -53,42 +27,39 @@ func (w *responseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	return nil, nil, fmt.Errorf("The raw response writer does not implement the http.Hijacker")
 }
 
-// A gzipResponseWriter is used by rex.Context to construct a HTTP response with gzip compress.
-type gzipResponseWriter struct {
-	gzipWriter io.WriteCloser
-	rawWriter  http.ResponseWriter
-}
-
-func newGzipWriter(w http.ResponseWriter) *gzipResponseWriter {
-	gzipWriter, _ := gzip.NewWriterLevel(w, gzip.BestSpeed)
-	return &gzipResponseWriter{gzipWriter, w}
-}
-
 // Header returns the header map that will be sent by WriteHeader.
-func (w *gzipResponseWriter) Header() http.Header {
+func (w *responseWriter) Header() http.Header {
 	return w.rawWriter.Header()
 }
 
 // WriteHeader sends a HTTP response header with the provided status code.
-func (w *gzipResponseWriter) WriteHeader(status int) {
-	w.rawWriter.WriteHeader(status)
+func (w *responseWriter) WriteHeader(status int) {
+	if !w.headerSent {
+		w.status = status
+		w.rawWriter.WriteHeader(status)
+		w.headerSent = true
+	}
 }
 
 // Write writes the data to the connection as part of an HTTP reply.
-func (w *gzipResponseWriter) Write(p []byte) (int, error) {
-	return w.gzipWriter.Write(p)
-}
-
-// Hijack lets the caller take over the connection.
-func (w *gzipResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
-	h, ok := w.rawWriter.(http.Hijacker)
-	if ok {
-		return h.Hijack()
+func (w *responseWriter) Write(p []byte) (n int, err error) {
+	if !w.headerSent {
+		w.headerSent = true
 	}
-
-	return nil, nil, fmt.Errorf("The raw response writer does not implement the http.Hijacker")
+	var wr io.Writer = w.rawWriter
+	if w.compression != nil {
+		wr = w.compression
+	}
+	n, err = wr.Write(p)
+	if n > 0 {
+		w.written += n
+	}
+	return
 }
 
-func (w *gzipResponseWriter) Close() error {
-	return w.gzipWriter.Close()
+func (w *responseWriter) Close() error {
+	if w.compression != nil {
+		return w.compression.Close()
+	}
+	return nil
 }

@@ -2,6 +2,7 @@ package rex
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/andybalholm/brotli"
 	"github.com/ije/gox/utils"
 	"github.com/ije/rex/session"
 )
@@ -157,16 +159,36 @@ func (ctx *Context) RemoteIP() string {
 	return ip
 }
 
-// EnableGzip enables the gzip compress
-func (ctx *Context) EnableGzip() {
-	if strings.Contains(ctx.R.Header.Get("Accept-Encoding"), "gzip") {
+// EnableCompression enables the compression method based on the Accept-Encoding header
+func (ctx *Context) EnableCompression() {
+	var encoding string
+	for _, p := range strings.Split(ctx.R.Header.Get("Accept-Encoding"), ",") {
+		name, _ := utils.SplitByFirstByte(p, ';')
+		switch strings.ToLower(strings.TrimSpace(name)) {
+		case "br":
+			encoding = "br"
+		case "gzip":
+			if encoding == "" {
+				encoding = "gzip"
+			}
+		}
+	}
+	if encoding != "" {
 		w, ok := ctx.W.(*responseWriter)
-		if ok && !w.headerDone {
-			_, ok = w.rawWriter.(*gzipResponseWriter)
-			if !ok {
-				// w.Header().Set("Vary", "Accept-Encoding")
-				w.Header().Set("Content-Encoding", "gzip")
-				w.rawWriter = newGzipWriter(w.rawWriter)
+		if ok && !w.headerSent {
+			h := w.Header()
+			if h.Get("Vary") == "" {
+				h.Set("Vary", "Accept-Encoding")
+			}
+			if h.Get("Content-Length") != "" {
+				h.Del("Content-Length")
+			}
+			h.Set("Content-Encoding", encoding)
+			switch encoding {
+			case "br":
+				w.compression = brotli.NewWriter(w.rawWriter)
+			case "gzip":
+				w.compression = gzip.NewWriter(w.rawWriter)
 			}
 		}
 	}
@@ -198,6 +220,9 @@ func (ctx *Context) end(v interface{}) {
 		if ctx.W.Header().Get("Content-Type") == "" {
 			ctx.SetHeader("Content-Type", "text/plain; charset=utf-8")
 		}
+		if len(r) > 1024 {
+			ctx.EnableCompression()
+		}
 		ctx.W.Write([]byte(r))
 	case *html:
 		ctx.SetHeader("Content-Type", "text/html; charset=utf-8")
@@ -223,7 +248,7 @@ func (ctx *Context) end(v interface{}) {
 			isText = true
 		}
 		if size > 1024 && isText {
-			ctx.EnableGzip()
+			ctx.EnableCompression()
 		}
 		http.ServeContent(ctx.W, ctx.R, r.name, r.motime, r.content)
 
@@ -278,7 +303,7 @@ func (ctx *Context) json(v interface{}, status int) {
 		return
 	}
 	if buf.Len() > 1024 {
-		ctx.EnableGzip()
+		ctx.EnableCompression()
 	}
 	ctx.W.WriteHeader(status)
 	io.Copy(ctx.W, buf)

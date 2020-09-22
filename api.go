@@ -71,10 +71,7 @@ func (a *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		logger:      &log.Logger{},
 	}
 	defer func() {
-		gzw, ok := wr.rawWriter.(*gzipResponseWriter)
-		if ok {
-			gzw.Close()
-		}
+		wr.Close()
 
 		if ctx.accessLogger != nil && r.Method != "OPTIONS" {
 			ref := r.Referer()
