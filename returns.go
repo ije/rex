@@ -28,13 +28,17 @@ func Redirect(url string, status int) interface{} {
 	return &redirect{status, url}
 }
 
-type htm struct {
-	status int
-	html   string
+type html struct {
+	status  int
+	content string
 }
 
-func HTML(html string, status int) interface{} {
-	return &htm{status, html}
+func HTML(content string, status ...int) interface{} {
+	code := 200
+	if len(status) > 0 && status[0] >= 100 {
+		code = status[0]
+	}
+	return &html{code, content}
 }
 
 // A Template interface contains the Execute method.

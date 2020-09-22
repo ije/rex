@@ -199,10 +199,10 @@ func (ctx *Context) end(v interface{}) {
 			ctx.SetHeader("Content-Type", "text/plain; charset=utf-8")
 		}
 		ctx.W.Write([]byte(r))
-	case *htm:
+	case *html:
 		ctx.SetHeader("Content-Type", "text/html; charset=utf-8")
 		ctx.W.WriteHeader(r.status)
-		ctx.W.Write([]byte(r.html))
+		ctx.W.Write([]byte(r.content))
 	case *render:
 		ctx.SetHeader("Content-Type", "text/html; charset=utf-8")
 		r.template.Execute(ctx.W, r.data)
@@ -252,11 +252,11 @@ func (ctx *Context) end(v interface{}) {
 		}
 		ctx.end(File(filepath))
 	default:
-		f, err := utils.ToNumber(r)
+		_, err := utils.ToNumber(r)
 		if err == nil {
 			ctx.SetHeader("Content-Type", "text/plain; charset=utf-8")
 			ctx.W.WriteHeader(200)
-			fmt.Fprintf(ctx.W, "%f", f)
+			fmt.Fprintf(ctx.W, "%v", r)
 		} else {
 			ctx.json(r, 200)
 		}
