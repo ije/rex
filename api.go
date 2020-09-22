@@ -68,7 +68,6 @@ func (a *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Form:        form,
 		sidStore:    defaultSIDStore,
 		sessionPool: defaultSessionPool,
-		debug:       false,
 		logger:      &log.Logger{},
 	}
 	defer func() {

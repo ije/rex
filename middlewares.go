@@ -21,14 +21,6 @@ func Header(key string, value string) Handle {
 	}
 }
 
-// Debug returns a Debug middleware.
-func Debug() Handle {
-	return func(ctx *Context) interface{} {
-		ctx.debug = true
-		return nil
-	}
-}
-
 // ErrorLogger returns a ErrorLogger middleware to sets the error logger.
 func ErrorLogger(logger Logger) Handle {
 	return func(ctx *Context) interface{} {

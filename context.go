@@ -39,7 +39,6 @@ type Context struct {
 	sidStore     session.SIDStore
 	logger       Logger
 	accessLogger Logger
-	debug        bool
 }
 
 // Value returns the value stored in the values for a key, or nil if no
@@ -191,9 +190,14 @@ func (ctx *Context) end(v interface{}) {
 	case *HTTPError:
 		ctx.json(r, r.Status)
 	case []byte:
+		if ctx.W.Header().Get("Content-Type") == "" {
+			ctx.SetHeader("Content-Type", "application/octet-stream")
+		}
 		ctx.W.Write(r)
 	case string:
-		ctx.SetHeader("Content-Type", "text/plain; charset=utf-8")
+		if ctx.W.Header().Get("Content-Type") == "" {
+			ctx.SetHeader("Content-Type", "text/plain; charset=utf-8")
+		}
 		ctx.W.Write([]byte(r))
 	case *htm:
 		ctx.SetHeader("Content-Type", "text/html; charset=utf-8")
@@ -215,7 +219,7 @@ func (ctx *Context) end(v interface{}) {
 		}
 		var isText bool
 		switch strings.TrimPrefix(path.Ext(r.name), ".") {
-		case "html", "htm", "xml", "svg", "css", "less", "json", "json5", "map", "js", "jsx", "mjs", "cjs", "ts", "tsx", "md", "mdx", "txt":
+		case "html", "htm", "xml", "svg", "css", "less", "sass", "scss", "json", "json5", "map", "js", "jsx", "mjs", "cjs", "ts", "tsx", "md", "mdx", "txt":
 			isText = true
 		}
 		if size > 1024 && isText {
@@ -261,7 +265,7 @@ func (ctx *Context) end(v interface{}) {
 
 func (ctx *Context) json(v interface{}, status int) {
 	e, ok := v.(*HTTPError)
-	if ok && e.Status >= 500 && !ctx.debug {
+	if ok && e.Status >= 500 {
 		e.Message = http.StatusText(500)
 	}
 
