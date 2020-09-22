@@ -231,7 +231,7 @@ func (ctx *Context) end(v interface{}) {
 		if ok {
 			c.Close()
 		}
-	case *static:
+	case *fs:
 		filepath := path.Join(r.root, utils.CleanPath(ctx.R.URL.Path))
 		fi, err := os.Stat(filepath)
 		if err == nil && fi.IsDir() {
