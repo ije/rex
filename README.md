@@ -9,11 +9,11 @@
 
 ## Installing
 ```bash
-go get github.com/ije/rex
+go get -u github.com/ije/rex
 ```
 
 
-## Usage
+## Example
 
 ```go
 package main
