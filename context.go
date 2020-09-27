@@ -226,11 +226,23 @@ func (ctx *Context) end(v interface{}) {
 		ctx.W.Write([]byte(r))
 	case *html:
 		ctx.SetHeader("Content-Type", "text/html; charset=utf-8")
+		if len(r.content) > 1024 {
+			ctx.EnableCompression()
+		}
 		ctx.W.WriteHeader(r.status)
 		ctx.W.Write([]byte(r.content))
 	case *render:
+		buf := bytes.NewBuffer(nil)
+		err := r.template.Execute(buf, r.data)
+		if err != nil {
+			ctx.json(&HTTPError{500, err.Error()}, 500)
+			return
+		}
 		ctx.SetHeader("Content-Type", "text/html; charset=utf-8")
-		r.template.Execute(ctx.W, r.data)
+		if buf.Len() > 1024 {
+			ctx.EnableCompression()
+		}
+		io.Copy(ctx.W, buf)
 	case *content:
 		size, err := r.content.Seek(0, io.SeekEnd)
 		if err != nil {
@@ -247,7 +259,7 @@ func (ctx *Context) end(v interface{}) {
 		case "html", "htm", "xml", "svg", "css", "less", "sass", "scss", "json", "json5", "map", "js", "jsx", "mjs", "cjs", "ts", "tsx", "md", "mdx", "txt":
 			isText = true
 		}
-		if size > 1024 && isText {
+		if isText && size > 1024 {
 			ctx.EnableCompression()
 		}
 		http.ServeContent(ctx.W, ctx.R, r.name, r.motime, r.content)
