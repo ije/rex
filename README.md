@@ -6,12 +6,10 @@
 
 **REX** provides a query/mutation style API server in [Golang](https://golang.org/), noREST.
 
-
 ## Installing
 ```bash
 go get -u github.com/ije/rex
 ```
-
 
 ## Example
 
@@ -26,7 +24,7 @@ import (
 var posts sync.Map
 
 func main() {
-    // GET http://localhost/
+    // GET http://localhost/*
     rex.Query("*", func(ctx *rex.Context) interface{} {
         return rex.HTML("<h1>Hello World</h1>")
     })
