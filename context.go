@@ -197,12 +197,13 @@ func (ctx *Context) EnableCompression() {
 func (ctx *Context) end(v interface{}) {
 	switch r := v.(type) {
 	case int:
+		ctx.SetHeader("Content-Type", "text/plain; charset=utf-8")
 		statusText := http.StatusText(r)
 		if statusText != "" {
 			ctx.W.WriteHeader(r)
+			ctx.W.Write([]byte(statusText))
 			return
 		}
-		ctx.SetHeader("Content-Type", "text/plain; charset=utf-8")
 		ctx.W.WriteHeader(200)
 		fmt.Fprintf(ctx.W, "%d", r)
 	case *redirect:
@@ -216,6 +217,11 @@ func (ctx *Context) end(v interface{}) {
 			ctx.SetHeader("Content-Type", "application/octet-stream")
 		}
 		ctx.W.Write(r)
+	case io.Reader:
+		if ctx.W.Header().Get("Content-Type") == "" {
+			ctx.SetHeader("Content-Type", "application/octet-stream")
+		}
+		io.Copy(ctx.W, r)
 	case string:
 		if ctx.W.Header().Get("Content-Type") == "" {
 			ctx.SetHeader("Content-Type", "text/plain; charset=utf-8")
@@ -243,6 +249,24 @@ func (ctx *Context) end(v interface{}) {
 			ctx.EnableCompression()
 		}
 		io.Copy(ctx.W, buf)
+	case *typedContent:
+		if r.contentType != "" {
+			ctx.SetHeader("Content-Type", r.contentType)
+			if len(r.content) > 1024 {
+				shouldCompress := strings.HasPrefix(r.contentType, "text/")
+				if !shouldCompress {
+					ct, _ := utils.SplitByFirstByte(r.contentType, ';')
+					switch strings.TrimSpace(ct) {
+					case "application/javascript", "application/typescript", "application/json", "application/xml", "image/svg+xml":
+						shouldCompress = true
+					}
+				}
+				if shouldCompress {
+					ctx.EnableCompression()
+				}
+			}
+		}
+		ctx.W.Write([]byte(r.content))
 	case *content:
 		size, err := r.content.Seek(0, io.SeekEnd)
 		if err != nil {

@@ -64,6 +64,16 @@ func RenderHTML(html string, data interface{}) interface{} {
 	return &render{template.Must(template.New("").Parse(html)), data}
 }
 
+type typedContent struct {
+	content     []byte
+	contentType string
+}
+
+// TypedContent replies to the request with a typed content.
+func TypedContent(content []byte, contentType string) interface{} {
+	return &typedContent{content, contentType}
+}
+
 type content struct {
 	name    string
 	motime  time.Time
