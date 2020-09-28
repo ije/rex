@@ -54,9 +54,9 @@ func (ctx *Context) SetValue(key string, value interface{}) {
 	ctx.values.Store(key, value)
 }
 
-// BasicAuthUser returns the BasicAuthed username and secret
-func (ctx *Context) BasicAuthUser() (string, string) {
-	val, ok := ctx.values.Load("__REX.BasicAuthUserName")
+// BasicUser returns the BasicAuth username and secret
+func (ctx *Context) BasicUser() (string, string) {
+	val, ok := ctx.values.Load("__REX__.BasicAuth")
 	if ok {
 		if a, ok := val.([2]string); ok {
 			return a[0], a[1]
