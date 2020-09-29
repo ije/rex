@@ -8,15 +8,10 @@ import (
 	"time"
 )
 
-// HTTPError defines the http error.
-type HTTPError struct {
+// Error defines the error with status.
+type Error struct {
 	Status  int    `json:"status"`
 	Message string `json:"message"`
-}
-
-// Error replies to the request with a non-specific HTTP error message and status code.
-func Error(message string, status int) interface{} {
-	return &HTTPError{status, message}
 }
 
 type redirect struct {
@@ -38,7 +33,7 @@ type html struct {
 // HTML replies to the request with a html content.
 func HTML(content string, status ...int) interface{} {
 	code := 200
-	if len(status) > 0 && status[0] >= 100 {
+	if len(status) > 0 && status[0] > 0 {
 		code = status[0]
 	}
 	return &html{code, content}
@@ -64,16 +59,6 @@ func RenderHTML(html string, data interface{}) interface{} {
 	return &render{template.Must(template.New("").Parse(html)), data}
 }
 
-type typedContent struct {
-	content     []byte
-	contentType string
-}
-
-// TypedContent replies to the request with a typed content.
-func TypedContent(content []byte, contentType string) interface{} {
-	return &typedContent{content, contentType}
-}
-
 type content struct {
 	name    string
 	motime  time.Time
@@ -90,17 +75,17 @@ func File(name string) interface{} {
 	fi, err := os.Stat(name)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return Error("file not found", 404)
+			return &Error{404, "file not found"}
 		}
-		return Error(err.Error(), 500)
+		return &Error{500, err.Error()}
 	}
 	if fi.IsDir() {
-		return Error("is a directory", 400)
+		return &Error{400, "is a directory"}
 	}
 
 	file, err := os.Open(name)
 	if err != nil {
-		return Error(err.Error(), 500)
+		return &Error{500, err.Error()}
 	}
 
 	return &content{path.Base(name), fi.ModTime(), file}

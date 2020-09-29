@@ -171,7 +171,7 @@ func BasicAuthWithRealm(realm string, auth func(name string, secret string) (ok 
 				name, secret := utils.SplitByFirstByte(string(authInfo), ':')
 				ok, err := auth(name, secret)
 				if err != nil {
-					return Error(err.Error(), 500)
+					return &Error{500, err.Error()}
 				}
 				if ok {
 					ctx.SetValue("__REX__.BasicAuth", [2]string{name, secret})

@@ -57,6 +57,11 @@ func (a *APIHandler) Mutation(endpoint string, handles ...Handle) {
 	}
 }
 
+type recoverError struct {
+	status  int
+	message string
+}
+
 // ServeHTTP implements the http Handler.
 func (a *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	startTime := time.Now()
@@ -96,8 +101,8 @@ func (a *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}()
 	defer func() {
 		if v := recover(); v != nil {
-			if err, ok := v.(*HTTPError); ok {
-				ctx.end(err)
+			if err, ok := v.(*recoverError); ok {
+				ctx.end(&Error{err.status, err.message})
 				return
 			}
 
@@ -110,7 +115,7 @@ func (a *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				fmt.Fprint(buf, "\t", strings.TrimSpace(runtime.FuncForPC(pc).Name()), " ", file, ":", line, "\n")
 			}
 
-			ctx.end(Error(fmt.Sprintf("[panic] %v\n%s", v, buf.String()), 500))
+			ctx.end(fmt.Errorf("[panic] %v\n%s", v, buf.String()))
 		}
 	}()
 
@@ -129,7 +134,7 @@ func (a *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	} else if r.Method == "POST" {
 		apiHandles = a.mutations
 	} else {
-		ctx.end(Error(http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed))
+		ctx.end(&Error{http.StatusMethodNotAllowed, http.StatusText(http.StatusMethodNotAllowed)})
 		return
 	}
 
@@ -143,7 +148,7 @@ func (a *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		handles, ok = apiHandles["*"]
 	}
 	if !ok {
-		ctx.end(Error("endpoint not found", 404))
+		ctx.end(&Error{404, "endpoint not found"})
 	}
 
 	for _, handle := range handles {
@@ -158,7 +163,7 @@ func (a *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			if !isGranted {
-				ctx.end(Error(http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized))
+				ctx.end(&Error{http.StatusUnauthorized, http.StatusText(http.StatusUnauthorized)})
 				return
 			}
 		}

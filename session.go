@@ -18,7 +18,7 @@ func (s *Session) SID() string {
 func (s *Session) Has(key string) bool {
 	ok, err := s.Session.Has(key)
 	if err != nil {
-		panic(Error(err.Error(), 500))
+		panic(&recoverError{500, err.Error()})
 	}
 	return ok
 }
@@ -27,7 +27,7 @@ func (s *Session) Has(key string) bool {
 func (s *Session) Get(key string) []byte {
 	value, err := s.Session.Get(key)
 	if err != nil {
-		panic(Error(err.Error(), 500))
+		panic(&recoverError{500, err.Error()})
 	}
 	return value
 }
@@ -36,7 +36,7 @@ func (s *Session) Get(key string) []byte {
 func (s *Session) Set(key string, value []byte) {
 	err := s.Session.Set(key, value)
 	if err != nil {
-		panic(Error(err.Error(), 500))
+		panic(&recoverError{500, err.Error()})
 	}
 }
 
@@ -44,7 +44,7 @@ func (s *Session) Set(key string, value []byte) {
 func (s *Session) Delete(key string) {
 	err := s.Session.Delete(key)
 	if err != nil {
-		panic(Error(err.Error(), 500))
+		panic(&recoverError{500, err.Error()})
 	}
 }
 
@@ -52,6 +52,6 @@ func (s *Session) Delete(key string) {
 func (s *Session) Flush() {
 	err := s.Session.Flush()
 	if err != nil {
-		panic(Error(err.Error(), 500))
+		panic(&recoverError{500, err.Error()})
 	}
 }

@@ -78,14 +78,14 @@ func (ctx *Context) SetACLUser(user ACLUser) {
 // Session returns the session if it is undefined then create a new one.
 func (ctx *Context) Session() *Session {
 	if ctx.sessionPool == nil {
-		panic(Error("session pool is nil", 500))
+		panic(&recoverError{500, "session pool is nil"})
 	}
 
 	if ctx.session == nil {
 		sid := ctx.sidStore.Get(ctx.R)
 		sess, err := ctx.sessionPool.GetSession(sid)
 		if err != nil {
-			panic(Error(err.Error(), 500))
+			panic(&recoverError{500, err.Error()})
 		}
 
 		ctx.session = &Session{sess}
@@ -209,8 +209,14 @@ func (ctx *Context) end(v interface{}) {
 	case *redirect:
 		http.Redirect(ctx.W, ctx.R, r.url, r.status)
 	case error:
-		ctx.json(&HTTPError{500, r.Error()}, 500)
-	case *HTTPError:
+		if ctx.logger != nil {
+			ctx.logger.Printf("[error] %s", r.Error())
+		}
+		ctx.json(&Error{500, http.StatusText(500)}, 500)
+	case *Error:
+		if r.Status >= 500 && ctx.logger != nil {
+			ctx.logger.Printf("[error] %s", r.Message)
+		}
 		ctx.json(r, r.Status)
 	case []byte:
 		if ctx.W.Header().Get("Content-Type") == "" {
@@ -241,7 +247,7 @@ func (ctx *Context) end(v interface{}) {
 		buf := bytes.NewBuffer(nil)
 		err := r.template.Execute(buf, r.data)
 		if err != nil {
-			ctx.json(&HTTPError{500, err.Error()}, 500)
+			ctx.json(&Error{500, err.Error()}, 500)
 			return
 		}
 		ctx.SetHeader("Content-Type", "text/html; charset=utf-8")
@@ -249,33 +255,15 @@ func (ctx *Context) end(v interface{}) {
 			ctx.EnableCompression()
 		}
 		io.Copy(ctx.W, buf)
-	case *typedContent:
-		if r.contentType != "" {
-			ctx.SetHeader("Content-Type", r.contentType)
-			if len(r.content) > 1024 {
-				shouldCompress := strings.HasPrefix(r.contentType, "text/")
-				if !shouldCompress {
-					ct, _ := utils.SplitByFirstByte(r.contentType, ';')
-					switch strings.TrimSpace(ct) {
-					case "application/javascript", "application/typescript", "application/json", "application/xml", "image/svg+xml":
-						shouldCompress = true
-					}
-				}
-				if shouldCompress {
-					ctx.EnableCompression()
-				}
-			}
-		}
-		ctx.W.Write([]byte(r.content))
 	case *content:
 		size, err := r.content.Seek(0, io.SeekEnd)
 		if err != nil {
-			ctx.json(&HTTPError{500, err.Error()}, 500)
+			ctx.json(&Error{500, err.Error()}, 500)
 			return
 		}
 		_, err = r.content.Seek(0, io.SeekStart)
 		if err != nil {
-			ctx.json(&HTTPError{500, err.Error()}, 500)
+			ctx.json(&Error{500, err.Error()}, 500)
 			return
 		}
 		var isText bool
@@ -305,9 +293,9 @@ func (ctx *Context) end(v interface{}) {
 		}
 		if err != nil {
 			if os.IsNotExist(err) {
-				ctx.json(&HTTPError{404, "file not found"}, 404)
+				ctx.json(&Error{404, "file not found"}, 404)
 			} else {
-				ctx.json(&HTTPError{500, err.Error()}, 500)
+				ctx.json(&Error{500, err.Error()}, 500)
 			}
 			return
 		}
@@ -325,11 +313,6 @@ func (ctx *Context) end(v interface{}) {
 }
 
 func (ctx *Context) json(v interface{}, status int) {
-	e, ok := v.(*HTTPError)
-	if ok && e.Status >= 500 {
-		e.Message = http.StatusText(500)
-	}
-
 	buf := bytes.NewBuffer(nil)
 	err := json.NewEncoder(buf).Encode(v)
 	ctx.SetHeader("Content-Type", "application/json; charset=utf-8")

@@ -73,7 +73,7 @@ func (form *Form) Float(key string) (float64, error) {
 func (form *Form) Require(key string) string {
 	value := form.Value(key)
 	if value == "" {
-		panic(Error(fmt.Sprintf("require form value '%s'", key), 400))
+		panic(&recoverError{400, fmt.Sprintf("require form value '%s'", key)})
 	}
 	return value
 }
@@ -82,7 +82,7 @@ func (form *Form) Require(key string) string {
 func (form *Form) RequireInt(key string) int64 {
 	i, err := form.Int(key)
 	if err != nil {
-		panic(Error(fmt.Sprintf("require form value '%s' as int", key), 400))
+		panic(&recoverError{400, fmt.Sprintf("require form value '%s' as int", key)})
 	}
 	return i
 }
@@ -91,7 +91,7 @@ func (form *Form) RequireInt(key string) int64 {
 func (form *Form) RequireFloat(key string) float64 {
 	f, err := form.Float(key)
 	if err != nil {
-		panic(Error(fmt.Sprintf("require form value '%s' as float", key), 400))
+		panic(&recoverError{400, fmt.Sprintf("require form value '%s' as float", key)})
 	}
 	return f
 }
