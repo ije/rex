@@ -165,8 +165,8 @@ func (ctx *Context) EnableCompression() {
 	for _, p := range strings.Split(ctx.R.Header.Get("Accept-Encoding"), ",") {
 		name, _ := utils.SplitByFirstByte(p, ';')
 		switch strings.ToLower(strings.TrimSpace(name)) {
-		// case "br":
-		// 	encoding = "br"
+		case "br":
+			encoding = "br"
 		case "gzip":
 			if encoding == "" {
 				encoding = "gzip"
