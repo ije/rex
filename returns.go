@@ -98,7 +98,7 @@ type fs struct {
 	fallback string
 }
 
-// FS replies to the request with the contents of the file system rooted at root.
-func FS(root string, fallback string) interface{} {
+// Static replies to the request with the contents of the file system rooted at root.
+func Static(root string, fallback string) interface{} {
 	return &fs{root, fallback}
 }
