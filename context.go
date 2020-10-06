@@ -236,13 +236,13 @@ func (ctx *Context) end(v interface{}) {
 			ctx.EnableCompression()
 		}
 		ctx.W.Write([]byte(r))
-	case *html:
-		ctx.SetHeader("Content-Type", "text/html; charset=utf-8")
-		if len(r.content) > 1024 {
+	case *TypedContent:
+		ctx.SetHeader("Content-Type", r.ContentType)
+		if len(r.Content) > 1024 {
 			ctx.EnableCompression()
 		}
-		ctx.W.WriteHeader(r.status)
-		ctx.W.Write([]byte(r.content))
+		ctx.W.WriteHeader(r.Status)
+		ctx.W.Write(r.Content)
 	case *render:
 		buf := bytes.NewBuffer(nil)
 		err := r.template.Execute(buf, r.data)

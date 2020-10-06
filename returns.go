@@ -25,18 +25,20 @@ func Redirect(url string, status int) interface{} {
 	return &redirect{status, url}
 }
 
-type html struct {
-	status  int
-	content string
+// TypedContent replies to the request with a typed content,
+type TypedContent struct {
+	Status      int
+	Content     []byte
+	ContentType string
 }
 
 // HTML replies to the request with a html content.
-func HTML(content string, status ...int) interface{} {
+func HTML(content string, status ...int) *TypedContent {
 	code := 200
 	if len(status) > 0 && status[0] > 0 {
 		code = status[0]
 	}
-	return &html{code, content}
+	return &TypedContent{code, []byte(content), "text/html; charset=utf-8"}
 }
 
 // A Template interface contains the Execute method.
