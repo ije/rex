@@ -7,6 +7,7 @@
 **REX** provides a query/mutation style API server in [Golang](https://golang.org/), noREST.
 
 ## Installing
+
 ```bash
 go get -u github.com/ije/rex
 ```
