@@ -173,6 +173,7 @@ func (ctx *Context) end(v interface{}, args ...int) {
 	if len(args) > 0 {
 		status = args[0]
 	}
+
 	switch r := v.(type) {
 	case *redirecting:
 		http.Redirect(ctx.W, ctx.R, r.url, r.status)
@@ -208,16 +209,10 @@ func (ctx *Context) end(v interface{}, args ...int) {
 		io.Copy(ctx.W, r)
 
 	case *contentful:
-		compressable := true
+		compressable := false
 		switch strings.TrimPrefix(path.Ext(r.name), ".") {
-		case "html", "htm", "xml", "svg":
-		case "css", "less", "sass", "scss":
-		case "json", "json5", "map":
-		case "js", "jsx", "mjs", "cjs", "ts", "tsx":
-		case "md", "mdx", "yaml", "txt":
-		case "wasm":
-		default:
-			compressable = false
+		case "html", "htm", "xml", "svg", "css", "less", "sass", "scss", "json", "json5", "map", "js", "jsx", "mjs", "cjs", "ts", "tsx", "md", "mdx", "yaml", "txt", "wasm":
+			compressable = true
 		}
 		size, err := r.content.Seek(0, io.SeekEnd)
 		if err != nil {
@@ -231,9 +226,6 @@ func (ctx *Context) end(v interface{}, args ...int) {
 		}
 		if compressable && size > 1024 {
 			ctx.EnableCompression()
-		}
-		if status >= 100 {
-			ctx.W.WriteHeader(status)
 		}
 		http.ServeContent(ctx.W, ctx.R, r.name, r.mtime, r.content)
 		c, ok := r.content.(io.Closer)
@@ -287,19 +279,20 @@ func (ctx *Context) end(v interface{}, args ...int) {
 				ctx.W.WriteHeader(status)
 			}
 			fmt.Fprintf(ctx.W, "%v", r)
-		} else {
-			switch e := r.(type) {
-			case *Error:
-				if e.Status >= 500 && ctx.logger != nil {
-					ctx.logger.Printf("[error] %s", e.Message)
-				}
-			case Error:
-				if e.Status >= 500 && ctx.logger != nil {
-					ctx.logger.Printf("[error] %s", e.Message)
-				}
-			}
-			ctx.json(r, status)
+			return
 		}
+
+		switch e := r.(type) {
+		case *Error:
+			if e.Status >= 500 && ctx.logger != nil {
+				ctx.logger.Printf("[error] %s", e.Message)
+			}
+		case Error:
+			if e.Status >= 500 && ctx.logger != nil {
+				ctx.logger.Printf("[error] %s", e.Message)
+			}
+		}
+		ctx.json(r, status)
 	}
 }
 
