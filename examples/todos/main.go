@@ -71,7 +71,7 @@ func main() {
 			data["user"] = aclUser.(*user).name
 			data["todos"] = todos[aclUser.(*user).name]
 		}
-		return rex.HTML(200, indexHTML, data)
+		return rex.HTML(indexHTML, data)
 	})
 
 	rex.Mutation("add-todo", rex.ACL("add"), func(ctx *rex.Context) interface{} {
