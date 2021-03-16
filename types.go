@@ -81,16 +81,25 @@ func Redirect(url string, status int) interface{} {
 	return &redirecting{status, url}
 }
 
+type statusPlayload struct {
+	status  int
+	payload interface{}
+}
+
+// Status replies to the request using the payload in the status.
+func Status(status int, payload interface{}) *statusPlayload {
+	return &statusPlayload{status, payload}
+}
+
 type contentful struct {
 	name    string
-	status  int
 	mtime   time.Time
 	content io.ReadSeeker
 }
 
 // Content replies to the request using the content in the provided ReadSeeker.
 func Content(name string, mtime time.Time, r io.ReadSeeker) *contentful {
-	return &contentful{name, 200, mtime, r}
+	return &contentful{name, mtime, r}
 }
 
 // File replies to the request using the file content.
@@ -111,11 +120,11 @@ func File(name string) *contentful {
 		panic(&recoverError{500, err.Error()})
 	}
 
-	return &contentful{path.Base(name), 200, fi.ModTime(), file}
+	return &contentful{path.Base(name), fi.ModTime(), file}
 }
 
 // HTML replies to the request with a html content.
-func HTML(status int, html string, data interface{}) *contentful {
+func HTML(html string, data interface{}) *contentful {
 	if data == nil {
 		return &contentful{
 			name:    "index.html",
@@ -133,7 +142,6 @@ func HTML(status int, html string, data interface{}) *contentful {
 	}
 	return &contentful{
 		name:    "index.html",
-		status:  status,
 		mtime:   time.Now(),
 		content: bytes.NewReader(buf.Bytes()),
 	}

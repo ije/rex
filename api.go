@@ -102,7 +102,7 @@ func (a *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		if v := recover(); v != nil {
 			if err, ok := v.(*recoverError); ok {
-				ctx.end(&Error{err.status, err.message})
+				ctx.json(&Error{err.status, err.message}, err.status)
 				return
 			}
 
@@ -115,7 +115,10 @@ func (a *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				fmt.Fprint(buf, "\t", strings.TrimSpace(runtime.FuncForPC(pc).Name()), " ", file, ":", line, "\n")
 			}
 
-			ctx.end(fmt.Errorf("[panic] %v\n%s", v, buf.String()))
+			if ctx.logger != nil {
+				ctx.logger.Printf("[panic] %v\n%s", v, buf.String())
+			}
+			ctx.json(&Error{500, http.StatusText(500)}, 500)
 		}
 	}()
 
@@ -126,7 +129,11 @@ func (a *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "POST":
 		apiHandles = a.mutations
 	default:
-		ctx.end(&Error{http.StatusMethodNotAllowed, http.StatusText(http.StatusMethodNotAllowed)})
+		ctx.json(
+			&Error{http.StatusMethodNotAllowed, http.StatusText(http.StatusMethodNotAllowed)},
+			http.StatusMethodNotAllowed,
+		)
+		return
 	}
 
 	path := r.URL.Path
@@ -147,7 +154,8 @@ func (a *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		handles, ok = apiHandles["*"]
 	}
 	if !ok {
-		ctx.end(&Error{404, "not found"})
+		ctx.json(&Error{404, "not found"}, 404)
+		return
 	}
 
 	for _, handle := range a.middlewares {
@@ -171,7 +179,10 @@ func (a *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			if !isGranted {
-				ctx.end(&Error{http.StatusUnauthorized, http.StatusText(http.StatusUnauthorized)})
+				ctx.json(
+					&Error{http.StatusUnauthorized, http.StatusText(http.StatusUnauthorized)},
+					http.StatusUnauthorized,
+				)
 				return
 			}
 		}

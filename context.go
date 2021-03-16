@@ -168,22 +168,14 @@ func (ctx *Context) EnableCompression() {
 	}
 }
 
-func (ctx *Context) end(v interface{}) {
+func (ctx *Context) end(v interface{}, args ...int) {
+	status := 0
+	if len(args) > 0 {
+		status = args[0]
+	}
 	switch r := v.(type) {
 	case *redirecting:
 		http.Redirect(ctx.W, ctx.R, r.url, r.status)
-
-	case []byte:
-		if ctx.W.Header().Get("Content-Type") == "" {
-			ctx.SetHeader("Content-Type", "application/octet-stream")
-		}
-		ctx.W.Write(r)
-
-	case io.Reader:
-		if ctx.W.Header().Get("Content-Type") == "" {
-			ctx.SetHeader("Content-Type", "application/octet-stream")
-		}
-		io.Copy(ctx.W, r)
 
 	case string:
 		if ctx.W.Header().Get("Content-Type") == "" {
@@ -192,7 +184,28 @@ func (ctx *Context) end(v interface{}) {
 		if len(r) > 1024 {
 			ctx.EnableCompression()
 		}
+		if status >= 100 {
+			ctx.W.WriteHeader(status)
+		}
 		ctx.W.Write([]byte(r))
+
+	case []byte:
+		if ctx.W.Header().Get("Content-Type") == "" {
+			ctx.SetHeader("Content-Type", "application/octet-stream")
+		}
+		if status >= 100 {
+			ctx.W.WriteHeader(status)
+		}
+		ctx.W.Write(r)
+
+	case io.Reader:
+		if ctx.W.Header().Get("Content-Type") == "" {
+			ctx.SetHeader("Content-Type", "application/octet-stream")
+		}
+		if status >= 100 {
+			ctx.W.WriteHeader(status)
+		}
+		io.Copy(ctx.W, r)
 
 	case *contentful:
 		compressable := true
@@ -219,20 +232,24 @@ func (ctx *Context) end(v interface{}) {
 		if compressable && size > 1024 {
 			ctx.EnableCompression()
 		}
-
-		if r.status >= 100 {
-			ctx.W.WriteHeader(r.status)
+		if status >= 100 {
+			ctx.W.WriteHeader(status)
 		}
-
 		http.ServeContent(ctx.W, ctx.R, r.name, r.mtime, r.content)
-
 		c, ok := r.content.(io.Closer)
 		if ok {
 			c.Close()
 		}
 
+	case *statusPlayload:
+		if status >= 100 {
+			ctx.end(r.payload, status)
+		} else {
+			ctx.end(r.payload, r.status)
+		}
+
 	case *fs:
-		filepath := path.Join(r.root, utils.CleanPath(ctx.R.URL.Path))
+		filepath := path.Join(r.root, strings.Join(ctx.URL.segments, "/"))
 		fi, err := os.Stat(filepath)
 		if err == nil && fi.IsDir() {
 			filepath = path.Join(filepath, "index.html")
@@ -244,7 +261,7 @@ func (ctx *Context) end(v interface{}) {
 		}
 		if err != nil {
 			if os.IsNotExist(err) {
-				ctx.json(&Error{404, "file not found"}, 404)
+				ctx.json(&Error{404, "not found"}, 404)
 			} else {
 				ctx.json(&Error{500, err.Error()}, 500)
 			}
@@ -256,13 +273,19 @@ func (ctx *Context) end(v interface{}) {
 		if ctx.logger != nil {
 			ctx.logger.Printf("[error] %s", r.Error())
 		}
-		ctx.json(&Error{500, http.StatusText(500)}, 500)
+		if status >= 100 {
+			ctx.json(&Error{status, r.Error()}, status)
+		} else {
+			ctx.json(&Error{500, http.StatusText(500)}, 500)
+		}
 
 	default:
 		_, err := utils.ToNumber(r)
 		if err == nil {
 			ctx.SetHeader("Content-Type", "text/plain; charset=utf-8")
-			ctx.W.WriteHeader(200)
+			if status >= 100 {
+				ctx.W.WriteHeader(status)
+			}
 			fmt.Fprintf(ctx.W, "%v", r)
 		} else {
 			switch e := r.(type) {
@@ -275,7 +298,7 @@ func (ctx *Context) end(v interface{}) {
 					ctx.logger.Printf("[error] %s", e.Message)
 				}
 			}
-			ctx.json(r, 200)
+			ctx.json(r, status)
 		}
 	}
 }
@@ -292,6 +315,8 @@ func (ctx *Context) json(v interface{}, status int) {
 	if buf.Len() > 1024 {
 		ctx.EnableCompression()
 	}
-	ctx.W.WriteHeader(status)
+	if status >= 100 {
+		ctx.W.WriteHeader(status)
+	}
 	io.Copy(ctx.W, buf)
 }
