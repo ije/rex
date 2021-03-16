@@ -11,7 +11,7 @@ const (
 	defaultMaxMemory = 32 << 20 // 32 MB
 )
 
-// A Form to handle http form
+// A Form to handle request form data.
 type Form struct {
 	R *http.Request
 }

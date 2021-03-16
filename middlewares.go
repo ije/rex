@@ -174,7 +174,7 @@ func BasicAuthWithRealm(realm string, auth func(name string, secret string) (ok 
 					return &Error{500, err.Error()}
 				}
 				if ok {
-					ctx.SetValue("__REX__.BasicAuth", [2]string{name, secret})
+					ctx.basicAuthUser = name
 					return nil
 				}
 			}

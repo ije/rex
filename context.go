@@ -10,7 +10,6 @@ import (
 	"os"
 	"path"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/andybalholm/brotli"
@@ -18,51 +17,26 @@ import (
 	"github.com/ije/rex/session"
 )
 
-// A ACLUser interface contains the Permissions method that returns the permission IDs
-type ACLUser interface {
-	Permissions() []string
-}
-
-// A Logger interface contains the Printf method.
-type Logger interface {
-	Printf(format string, v ...interface{})
-}
-
 // A Context to handle http requests.
 type Context struct {
-	W            http.ResponseWriter
-	R            *http.Request
-	Form         *Form
-	values       sync.Map
-	acl          map[string]struct{}
-	aclUser      ACLUser
-	session      *Session
-	sessionPool  session.Pool
-	sidStore     session.SIDStore
-	logger       Logger
-	accessLogger Logger
+	W             http.ResponseWriter
+	R             *http.Request
+	Form          *Form
+	Store         *Store
+	URL           *URL
+	basicAuthUser string
+	acl           map[string]struct{}
+	aclUser       ACLUser
+	session       *Session
+	sessionPool   session.Pool
+	sidStore      session.SIDStore
+	logger        Logger
+	accessLogger  Logger
 }
 
-// Value returns the value stored in the values for a key, or nil if no
-// value is present.
-func (ctx *Context) Value(key string) (interface{}, bool) {
-	return ctx.values.Load(key)
-}
-
-// SetValue sets the value for a key.
-func (ctx *Context) SetValue(key string, value interface{}) {
-	ctx.values.Store(key, value)
-}
-
-// BasicUser returns the BasicAuth username and secret
-func (ctx *Context) BasicUser() (string, string) {
-	val, ok := ctx.values.Load("__REX__.BasicAuth")
-	if ok {
-		if a, ok := val.([2]string); ok {
-			return a[0], a[1]
-		}
-	}
-	return "", ""
+// BasicAuthUser returns the BasicAuth username
+func (ctx *Context) BasicAuthUser() string {
+	return ctx.basicAuthUser
 }
 
 // ACLUser returns the acl user
@@ -196,38 +170,21 @@ func (ctx *Context) EnableCompression() {
 
 func (ctx *Context) end(v interface{}) {
 	switch r := v.(type) {
-	case int:
-		ctx.SetHeader("Content-Type", "text/plain; charset=utf-8")
-		statusText := http.StatusText(r)
-		if statusText != "" {
-			ctx.W.WriteHeader(r)
-			ctx.W.Write([]byte(statusText))
-			return
-		}
-		ctx.W.WriteHeader(200)
-		fmt.Fprintf(ctx.W, "%d", r)
-	case *redirect:
+	case *redirecting:
 		http.Redirect(ctx.W, ctx.R, r.url, r.status)
-	case error:
-		if ctx.logger != nil {
-			ctx.logger.Printf("[error] %s", r.Error())
-		}
-		ctx.json(&Error{500, http.StatusText(500)}, 500)
-	case *Error:
-		if r.Status >= 500 && ctx.logger != nil {
-			ctx.logger.Printf("[error] %s", r.Message)
-		}
-		ctx.json(r, r.Status)
+
 	case []byte:
 		if ctx.W.Header().Get("Content-Type") == "" {
 			ctx.SetHeader("Content-Type", "application/octet-stream")
 		}
 		ctx.W.Write(r)
+
 	case io.Reader:
 		if ctx.W.Header().Get("Content-Type") == "" {
 			ctx.SetHeader("Content-Type", "application/octet-stream")
 		}
 		io.Copy(ctx.W, r)
+
 	case string:
 		if ctx.W.Header().Get("Content-Type") == "" {
 			ctx.SetHeader("Content-Type", "text/plain; charset=utf-8")
@@ -236,26 +193,19 @@ func (ctx *Context) end(v interface{}) {
 			ctx.EnableCompression()
 		}
 		ctx.W.Write([]byte(r))
-	case *TypedContent:
-		ctx.SetHeader("Content-Type", r.ContentType)
-		if len(r.Content) > 1024 {
-			ctx.EnableCompression()
+
+	case *contentful:
+		compressable := true
+		switch strings.TrimPrefix(path.Ext(r.name), ".") {
+		case "html", "htm", "xml", "svg":
+		case "css", "less", "sass", "scss":
+		case "json", "json5", "map":
+		case "js", "jsx", "mjs", "cjs", "ts", "tsx":
+		case "md", "mdx", "yaml", "txt":
+		case "wasm":
+		default:
+			compressable = false
 		}
-		ctx.W.WriteHeader(r.Status)
-		ctx.W.Write(r.Content)
-	case *render:
-		buf := bytes.NewBuffer(nil)
-		err := r.template.Execute(buf, r.data)
-		if err != nil {
-			ctx.json(&Error{500, err.Error()}, 500)
-			return
-		}
-		ctx.SetHeader("Content-Type", "text/html; charset=utf-8")
-		if buf.Len() > 1024 {
-			ctx.EnableCompression()
-		}
-		io.Copy(ctx.W, buf)
-	case *content:
 		size, err := r.content.Seek(0, io.SeekEnd)
 		if err != nil {
 			ctx.json(&Error{500, err.Error()}, 500)
@@ -266,20 +216,21 @@ func (ctx *Context) end(v interface{}) {
 			ctx.json(&Error{500, err.Error()}, 500)
 			return
 		}
-		var isText bool
-		switch strings.TrimPrefix(path.Ext(r.name), ".") {
-		case "html", "htm", "xml", "svg", "css", "less", "sass", "scss", "json", "json5", "map", "js", "jsx", "mjs", "cjs", "ts", "tsx", "md", "mdx", "txt":
-			isText = true
-		}
-		if isText && size > 1024 {
+		if compressable && size > 1024 {
 			ctx.EnableCompression()
 		}
-		http.ServeContent(ctx.W, ctx.R, r.name, r.motime, r.content)
+
+		if r.status >= 100 {
+			ctx.W.WriteHeader(r.status)
+		}
+
+		http.ServeContent(ctx.W, ctx.R, r.name, r.mtime, r.content)
 
 		c, ok := r.content.(io.Closer)
 		if ok {
 			c.Close()
 		}
+
 	case *fs:
 		filepath := path.Join(r.root, utils.CleanPath(ctx.R.URL.Path))
 		fi, err := os.Stat(filepath)
@@ -300,6 +251,13 @@ func (ctx *Context) end(v interface{}) {
 			return
 		}
 		ctx.end(File(filepath))
+
+	case error:
+		if ctx.logger != nil {
+			ctx.logger.Printf("[error] %s", r.Error())
+		}
+		ctx.json(&Error{500, http.StatusText(500)}, 500)
+
 	default:
 		_, err := utils.ToNumber(r)
 		if err == nil {
@@ -307,6 +265,16 @@ func (ctx *Context) end(v interface{}) {
 			ctx.W.WriteHeader(200)
 			fmt.Fprintf(ctx.W, "%v", r)
 		} else {
+			switch e := r.(type) {
+			case *Error:
+				if e.Status >= 500 && ctx.logger != nil {
+					ctx.logger.Printf("[error] %s", e.Message)
+				}
+			case Error:
+				if e.Status >= 500 && ctx.logger != nil {
+					ctx.logger.Printf("[error] %s", e.Message)
+				}
+			}
 			ctx.json(r, 200)
 		}
 	}

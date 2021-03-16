@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ije/gox/log"
+	"github.com/ije/gox/utils"
 )
 
 // Handle defines the API handle
@@ -57,24 +58,22 @@ func (a *APIHandler) Mutation(endpoint string, handles ...Handle) {
 	}
 }
 
-type recoverError struct {
-	status  int
-	message string
-}
-
 // ServeHTTP implements the http Handler.
 func (a *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	startTime := time.Now()
 	wr := &responseWriter{status: 200, rawWriter: w}
 	form := &Form{r}
+	store := &Store{}
 	ctx := &Context{
 		W:           wr,
 		R:           r,
 		Form:        form,
+		Store:       store,
 		sidStore:    defaultSIDStore,
 		sessionPool: defaultSessionPool,
 		logger:      &log.Logger{},
 	}
+
 	defer func() {
 		wr.Close()
 
@@ -99,6 +98,7 @@ func (a *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			)
 		}
 	}()
+
 	defer func() {
 		if v := recover(); v != nil {
 			if err, ok := v.(*recoverError); ok {
@@ -119,36 +119,44 @@ func (a *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
+	var apiHandles map[string][]Handle
+	switch r.Method {
+	case "GET":
+		apiHandles = a.queries
+	case "POST":
+		apiHandles = a.mutations
+	default:
+		ctx.end(&Error{http.StatusMethodNotAllowed, http.StatusText(http.StatusMethodNotAllowed)})
+	}
+
+	path := r.URL.Path
+	if a.Prefix != "" {
+		path = strings.TrimPrefix(path, "/"+strings.Trim(a.Prefix, "/"))
+	}
+	url := &URL{
+		segments: strings.Split(utils.CleanPath(path), "/")[1:],
+		URL:      r.URL,
+	}
+
+	var handles []Handle
+	var ok bool
+	if len(url.segments) > 0 {
+		handles, ok = apiHandles[url.segments[0]]
+	}
+	if !ok {
+		handles, ok = apiHandles["*"]
+	}
+	if !ok {
+		ctx.end(&Error{404, "not found"})
+	}
+
 	for _, handle := range a.middlewares {
-		ctx.W, ctx.R, ctx.Form = wr, r, form
+		ctx.W, ctx.R, ctx.URL, ctx.Form, ctx.Store = wr, r, url, form, store
 		v := handle(ctx)
 		if v != nil {
 			ctx.end(v)
 			return
 		}
-	}
-
-	var apiHandles map[string][]Handle
-	if r.Method == "GET" {
-		apiHandles = a.queries
-	} else if r.Method == "POST" {
-		apiHandles = a.mutations
-	} else {
-		ctx.end(&Error{http.StatusMethodNotAllowed, http.StatusText(http.StatusMethodNotAllowed)})
-		return
-	}
-
-	path := r.URL.Path
-	if a.Prefix != "" {
-		path = strings.TrimPrefix(path, "/"+strings.TrimLeft(a.Prefix, "/"))
-	}
-
-	handles, ok := apiHandles[strings.Trim(path, "/")]
-	if !ok {
-		handles, ok = apiHandles["*"]
-	}
-	if !ok {
-		ctx.end(&Error{404, "endpoint not found"})
 	}
 
 	for _, handle := range handles {
@@ -167,7 +175,8 @@ func (a *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		ctx.W, ctx.R, ctx.Form = wr, r, form
+
+		ctx.W, ctx.R, ctx.URL, ctx.Form, ctx.Store = wr, r, url, form, store
 		v := handle(ctx)
 		if v != nil {
 			ctx.end(v)
