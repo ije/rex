@@ -17,52 +17,33 @@ go get -u github.com/ije/rex
 package main
 
 import (
-    "sync"
     "github.com/ije/rex"
 )
 
-var posts sync.Map
-
 func main() {
-    // GET http://localhost/*
-    rex.QueryFallback(func(ctx *rex.Context) interface{} {
-        return rex.HTML("<h1>404 - page not found</h1>")
+    // GET /*
+    rex.Query("*", func(ctx *rex.Context) interface{} {
+        return rex.HTML(
+            200,
+            "<h1>My Blog</h1>{{range .}}{{.Title}}{{end}}",
+            blogs.All(),
+        )
     })
 
-     // GET http://localhost/
-    rex.QueryIndex(func(ctx *rex.Context) interface{} {
-        return rex.HTML("<h1>Hello World</h1>")
-    })
-
-    // GET http://localhost/post?id=123
-    rex.Query("post", func(ctx *rex.Context) interface{} {
-        post, ok := posts.Load(ctx.Form.RequireInt("id"))
+    // GET /post/123 => Blog JSON
+    rex.Query("blog", func(ctx *rex.Context) interface{} {
+        blog, ok := blogs.Load(ctx.URL.RequireIntSegment(1))
         if !ok {
-            return rex.Error(404, "post not found")
+            return &rex.Error{404, "blog not found"}
         }
-        return post
+        return blog
     })
 
-    // POST http://localhost/add-post {"title": "Hello World"}
-    rex.Mutation("add-post", func(ctx *rex.Context) interface{} {
-        var id int
-        posts.Range(func(k, v interface{}) bool {
-            id++
-            return true
-        })
-        id = id + 1
-        post := map[string]interface{}{
-            "id":    id,
-            "title": ctx.Form.Value("title"),
-        }
-        posts.Store(id, post)
-        return post
-    })
-
-    // POST http://localhost/remove-post {"id": 123}
-    rex.Mutation("remove-post", func(ctx *rex.Context) interface{} {
-        posts.Delete(ctx.Form.RequireInt("id"))
-        return nil
+    // POST /add-blog {"title": "Hello World"} => Blog JSON
+    rex.Mutation("add-blog", func(ctx *rex.Context) interface{} {
+        blog := NewBlog(ctx.Form.Value("title"))
+        blogs.Store(blog)
+        return blog
     })
 
     rex.Start(8080)
