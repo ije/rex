@@ -6,7 +6,7 @@ import (
 
 func main() {
 	rex.Query("*", func(ctx *rex.Context) interface{} {
-		return rex.Static("./www", "e404.html")
+		return rex.FS("./www", "e404.html")
 	})
 
 	rex.Start(8080)
