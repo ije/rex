@@ -2,27 +2,35 @@ package rex
 
 import (
 	"fmt"
-	"net/url"
 	"strconv"
+	"strings"
 )
 
-// A Form to handle request url.
-type URL struct {
+// A Form to handle request path.
+type Path struct {
 	segments []string
-	*url.URL
+}
+
+func (path *Path) String() string {
+	return "/" + strings.Join(path.segments, "/")
+}
+
+// Len returns the size of the path segments
+func (path *Path) Len() int {
+	return len(path.segments)
 }
 
 // Segment returns the path segment by the index
-func (url *URL) Segment(index int) string {
-	if index >= 0 && index < len(url.segments) {
-		return url.segments[index]
+func (path *Path) Segment(index int) string {
+	if index >= 0 && index < len(path.segments) {
+		return path.segments[index]
 	}
 	return ""
 }
 
 // IntSegment returns the path segment as int by the index
-func (url *URL) IntSegment(index int) (int64, error) {
-	value := url.Segment(index)
+func (path *Path) IntSegment(index int) (int64, error) {
+	value := path.Segment(index)
 	if value == "" {
 		return 0, strconv.ErrSyntax
 	}
@@ -30,8 +38,8 @@ func (url *URL) IntSegment(index int) (int64, error) {
 }
 
 // FloatSegment returns the path segment as float by the index
-func (url *URL) FloatSegment(index int) (float64, error) {
-	value := url.Segment(index)
+func (path *Path) FloatSegment(index int) (float64, error) {
+	value := path.Segment(index)
 	if value == "" {
 		return 0.0, strconv.ErrSyntax
 	}
@@ -39,8 +47,8 @@ func (url *URL) FloatSegment(index int) (float64, error) {
 }
 
 // RequireSegment requires a path segment by the index
-func (url *URL) RequireSegment(index int) string {
-	value := url.Segment(index)
+func (path *Path) RequireSegment(index int) string {
+	value := path.Segment(index)
 	if value == "" {
 		panic(&recoverError{400, fmt.Sprintf("require path segment[%d]", index)})
 	}
@@ -48,8 +56,8 @@ func (url *URL) RequireSegment(index int) string {
 }
 
 // RequireIntSegment requires a path segment as int by the index
-func (url *URL) RequireIntSegment(index int) int64 {
-	i, err := url.IntSegment(index)
+func (path *Path) RequireIntSegment(index int) int64 {
+	i, err := path.IntSegment(index)
 	if err != nil {
 		panic(&recoverError{400, fmt.Sprintf("require path segment[%d] as int", index)})
 	}
@@ -57,8 +65,8 @@ func (url *URL) RequireIntSegment(index int) int64 {
 }
 
 // RequireFloatSegment requires a path segment as float by the index
-func (url *URL) RequireFloatSegment(index int) float64 {
-	f, err := url.FloatSegment(index)
+func (path *Path) RequireFloatSegment(index int) float64 {
+	f, err := path.FloatSegment(index)
 	if err != nil {
 		panic(&recoverError{400, fmt.Sprintf("require path segment[%d] as float", index)})
 	}

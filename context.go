@@ -21,9 +21,9 @@ import (
 type Context struct {
 	W             http.ResponseWriter
 	R             *http.Request
+	Path          *Path
 	Form          *Form
 	Store         *Store
-	URL           *URL
 	basicAuthUser string
 	acl           map[string]struct{}
 	aclUser       ACLUser
@@ -241,7 +241,7 @@ func (ctx *Context) end(v interface{}, args ...int) {
 		}
 
 	case *fs:
-		filepath := path.Join(r.root, strings.Join(ctx.URL.segments, "/"))
+		filepath := path.Join(r.root, strings.Join(ctx.Path.segments, "/"))
 		fi, err := os.Stat(filepath)
 		if err == nil && fi.IsDir() {
 			filepath = path.Join(filepath, "index.html")

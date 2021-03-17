@@ -18,8 +18,7 @@ type Form struct {
 
 // IsNil checks the value for the key whether is nil.
 func (form *Form) IsNil(key string) bool {
-	switch form.R.Method {
-	case "POST", "PUT", "PATCH":
+	if form.R.Method == "POST" {
 		if form.R.PostForm == nil {
 			form.R.ParseMultipartForm(defaultMaxMemory)
 		}
@@ -28,7 +27,6 @@ func (form *Form) IsNil(key string) bool {
 			return false
 		}
 	}
-
 	if form.R.Form == nil {
 		form.R.ParseMultipartForm(defaultMaxMemory)
 	}
@@ -41,8 +39,7 @@ func (form *Form) IsNil(key string) bool {
 // the named component of the request url query.
 func (form *Form) Value(key string) string {
 	var value string
-	switch form.R.Method {
-	case "POST", "PUT", "PATCH":
+	if form.R.Method == "POST" {
 		value = form.R.PostFormValue(key)
 	}
 	if value == "" {

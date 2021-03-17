@@ -136,19 +136,18 @@ func (a *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	path := r.URL.Path
+	pathname := r.URL.Path
 	if a.Prefix != "" {
-		path = strings.TrimPrefix(path, "/"+strings.Trim(a.Prefix, "/"))
+		pathname = strings.TrimPrefix(pathname, "/"+strings.Trim(a.Prefix, "/"))
 	}
-	url := &URL{
-		segments: strings.Split(utils.CleanPath(path), "/")[1:],
-		URL:      r.URL,
+	path := &Path{
+		segments: strings.Split(utils.CleanPath(pathname), "/")[1:],
 	}
 
 	var handles []Handle
 	var ok bool
-	if len(url.segments) > 0 {
-		handles, ok = apiHandles[url.segments[0]]
+	if len(path.segments) > 0 {
+		handles, ok = apiHandles[path.segments[0]]
 	}
 	if !ok {
 		handles, ok = apiHandles["*"]
@@ -159,7 +158,7 @@ func (a *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for _, handle := range a.middlewares {
-		ctx.W, ctx.R, ctx.URL, ctx.Form, ctx.Store = wr, r, url, form, store
+		ctx.W, ctx.R, ctx.Path, ctx.Form, ctx.Store = wr, r, path, form, store
 		v := handle(ctx)
 		if v != nil {
 			ctx.end(v)
@@ -180,14 +179,14 @@ func (a *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 			if !isGranted {
 				ctx.json(
-					&Error{http.StatusUnauthorized, http.StatusText(http.StatusUnauthorized)},
-					http.StatusUnauthorized,
+					&Error{http.StatusForbidden, http.StatusText(http.StatusForbidden)},
+					http.StatusForbidden,
 				)
 				return
 			}
 		}
 
-		ctx.W, ctx.R, ctx.URL, ctx.Form, ctx.Store = wr, r, url, form, store
+		ctx.W, ctx.R, ctx.Path, ctx.Form, ctx.Store = wr, r, path, form, store
 		v := handle(ctx)
 		if v != nil {
 			ctx.end(v)
