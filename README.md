@@ -26,14 +26,14 @@ func main() {
     rex.Query("*", func(ctx *rex.Context) interface{} {
         return rex.HTML(
             200,
-            "<h1>My Blog</h1>{{range .}}{{.Title}}{{end}}",
+            "<h1>My Blog</h1><ul>{{range .}}<li>{{.Title}}</li>{{end}}</ul>",
             blogs.All(),
         )
     })
 
     // GET /post/123 => Blog JSON
     rex.Query("blog", func(ctx *rex.Context) interface{} {
-        blog, ok := blogs.Load(ctx.URL.RequireIntSegment(1))
+        blog, ok := blogs.Get(ctx.Path.RequireIntSegment(1))
         if !ok {
             return &rex.Error{404, "blog not found"}
         }
@@ -43,7 +43,7 @@ func main() {
     // POST /add-blog {"title": "Hello World"} => Blog JSON
     rex.Mutation("add-blog", func(ctx *rex.Context) interface{} {
         blog := NewBlog(ctx.Form.Value("title"))
-        blogs.Store(blog)
+        blogs.Add(blog)
         return blog
     })
 
