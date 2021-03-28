@@ -144,6 +144,15 @@ func (a *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		segments: strings.Split(utils.CleanPath(pathname), "/")[1:],
 	}
 
+	for _, handle := range a.middlewares {
+		ctx.W, ctx.R, ctx.Path, ctx.Form, ctx.Store = wr, r, path, form, store
+		v := handle(ctx)
+		if v != nil {
+			ctx.end(v)
+			return
+		}
+	}
+
 	var handles []Handle
 	var ok bool
 	if len(path.segments) > 0 {
@@ -155,15 +164,6 @@ func (a *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		ctx.json(&Error{404, "not found"}, 404)
 		return
-	}
-
-	for _, handle := range a.middlewares {
-		ctx.W, ctx.R, ctx.Path, ctx.Form, ctx.Store = wr, r, path, form, store
-		v := handle(ctx)
-		if v != nil {
-			ctx.end(v)
-			return
-		}
 	}
 
 	for _, handle := range handles {
