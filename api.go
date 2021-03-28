@@ -36,24 +36,30 @@ func (a *APIHandler) Use(middlewares ...Handle) {
 
 // Query adds a query api
 func (a *APIHandler) Query(endpoint string, handles ...Handle) {
-	if a.queries == nil {
-		a.queries = map[string][]Handle{}
-	}
-	for _, handle := range handles {
-		if handle != nil {
-			a.queries[endpoint] = append(a.queries[endpoint], handle)
+	endpoint = utils.CleanPath(endpoint)[1:]
+	if endpoint != "" {
+		if a.queries == nil {
+			a.queries = map[string][]Handle{}
+		}
+		for _, handle := range handles {
+			if handle != nil {
+				a.queries[endpoint] = append(a.queries[endpoint], handle)
+			}
 		}
 	}
 }
 
 // Mutation adds a mutation api
 func (a *APIHandler) Mutation(endpoint string, handles ...Handle) {
-	if a.mutations == nil {
-		a.mutations = map[string][]Handle{}
-	}
-	for _, handle := range handles {
-		if handle != nil {
-			a.mutations[endpoint] = append(a.mutations[endpoint], handle)
+	endpoint = utils.CleanPath(endpoint)[1:]
+	if endpoint != "" {
+		if a.mutations == nil {
+			a.mutations = map[string][]Handle{}
+		}
+		for _, handle := range handles {
+			if handle != nil {
+				a.mutations[endpoint] = append(a.mutations[endpoint], handle)
+			}
 		}
 	}
 }
@@ -156,7 +162,26 @@ func (a *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var handles []Handle
 	var ok bool
 	if len(path.segments) > 0 {
-		handles, ok = apiHandles[path.segments[0]]
+		handles, ok = apiHandles[strings.Join(path.segments, "/")]
+	}
+	if !ok {
+		for p, a := range apiHandles {
+			ps := strings.Split(p, "/")
+			if len(ps) > 1 && len(ps) == len(path.segments) {
+				matched := true
+				for i, s := range ps {
+					if s != "*" && s != path.segments[i] {
+						matched = false
+						break
+					}
+				}
+				if matched {
+					handles = a
+					ok = true
+					break
+				}
+			}
+		}
 	}
 	if !ok {
 		handles, ok = apiHandles["*"]
