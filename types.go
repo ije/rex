@@ -2,8 +2,10 @@ package rex
 
 import (
 	"bytes"
+	"fmt"
 	"html/template"
 	"io"
+	"net/http"
 	"os"
 	"path"
 	"time"
@@ -63,6 +65,23 @@ type Logger interface {
 type Error struct {
 	Status  int    `json:"status"`
 	Message string `json:"message"`
+}
+
+func Err(status int, v ...string) *Error {
+	var messsage string
+	if len(v) > 0 {
+		args := make([]interface{}, len(v))
+		for i, s := range v {
+			args[i] = s
+		}
+		messsage = fmt.Sprint(args...)
+	} else if status > 100 && status < 600 {
+		messsage = http.StatusText(status)
+	}
+	return &Error{
+		Status:  status,
+		Message: messsage,
+	}
 }
 
 type recoverError struct {
