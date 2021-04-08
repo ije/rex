@@ -216,12 +216,12 @@ func (ctx *Context) end(v interface{}, args ...int) {
 		}
 		size, err := r.content.Seek(0, io.SeekEnd)
 		if err != nil {
-			ctx.json(&Error{500, err.Error()}, 500)
+			ctx.ejson(&Error{500, err.Error()})
 			return
 		}
 		_, err = r.content.Seek(0, io.SeekStart)
 		if err != nil {
-			ctx.json(&Error{500, err.Error()}, 500)
+			ctx.ejson(&Error{500, err.Error()})
 			return
 		}
 		if compressable && size > 1024 {
@@ -253,22 +253,19 @@ func (ctx *Context) end(v interface{}, args ...int) {
 		}
 		if err != nil {
 			if os.IsNotExist(err) {
-				ctx.json(&Error{404, "not found"}, 404)
+				ctx.ejson(&Error{404, "not found"})
 			} else {
-				ctx.json(&Error{500, err.Error()}, 500)
+				ctx.ejson(&Error{500, err.Error()})
 			}
 			return
 		}
 		ctx.end(File(filepath))
 
 	case error:
-		if ctx.logger != nil {
-			ctx.logger.Printf("[error] %s", r.Error())
-		}
 		if status >= 100 {
-			ctx.json(&Error{status, r.Error()}, status)
+			ctx.ejson(&Error{status, r.Error()})
 		} else {
-			ctx.json(&Error{500, http.StatusText(500)}, 500)
+			ctx.ejson(&Error{500, r.Error()})
 		}
 
 	default:
@@ -284,18 +281,24 @@ func (ctx *Context) end(v interface{}, args ...int) {
 
 		switch e := r.(type) {
 		case *Error:
-			status = e.Status
-			if e.Status >= 500 && ctx.logger != nil {
-				ctx.logger.Printf("[error] %s", e.Message)
-			}
+			ctx.ejson(e)
+			return
 		case Error:
-			status = e.Status
-			if e.Status >= 500 && ctx.logger != nil {
-				ctx.logger.Printf("[error] %s", e.Message)
-			}
+			ctx.ejson(&e)
+			return
 		}
+
 		ctx.json(r, status)
 	}
+}
+
+func (ctx *Context) ejson(err *Error) {
+	if err.Status >= 500 && ctx.logger != nil {
+		ctx.logger.Printf("[error] %s", err.Message)
+	}
+	ctx.json(map[string]interface{}{
+		"error": err,
+	}, err.Status)
 }
 
 func (ctx *Context) json(v interface{}, status int) {

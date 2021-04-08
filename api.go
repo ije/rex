@@ -108,7 +108,7 @@ func (a *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		if v := recover(); v != nil {
 			if err, ok := v.(*recoverError); ok {
-				ctx.json(&Error{err.status, err.message}, err.status)
+				ctx.ejson(&Error{err.status, err.message})
 				return
 			}
 
@@ -124,7 +124,7 @@ func (a *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			if ctx.logger != nil {
 				ctx.logger.Printf("[panic] %v\n%s", v, buf.String())
 			}
-			ctx.json(&Error{500, http.StatusText(500)}, 500)
+			ctx.ejson(&Error{500, http.StatusText(500)})
 		}
 	}()
 
@@ -135,10 +135,7 @@ func (a *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "POST":
 		apiHandles = a.mutations
 	default:
-		ctx.json(
-			&Error{http.StatusMethodNotAllowed, http.StatusText(http.StatusMethodNotAllowed)},
-			http.StatusMethodNotAllowed,
-		)
+		ctx.ejson(&Error{http.StatusMethodNotAllowed, http.StatusText(http.StatusMethodNotAllowed)})
 		return
 	}
 
@@ -187,7 +184,7 @@ func (a *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		handles, ok = apiHandles["*"]
 	}
 	if !ok {
-		ctx.json(&Error{404, "not found"}, 404)
+		ctx.ejson(&Error{404, "not found"})
 		return
 	}
 
@@ -203,10 +200,7 @@ func (a *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			if !isGranted {
-				ctx.json(
-					&Error{http.StatusForbidden, http.StatusText(http.StatusForbidden)},
-					http.StatusForbidden,
-				)
+				ctx.ejson(&Error{http.StatusForbidden, http.StatusText(http.StatusForbidden)})
 				return
 			}
 		}
