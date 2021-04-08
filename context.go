@@ -284,10 +284,12 @@ func (ctx *Context) end(v interface{}, args ...int) {
 
 		switch e := r.(type) {
 		case *Error:
+			status = e.Status
 			if e.Status >= 500 && ctx.logger != nil {
 				ctx.logger.Printf("[error] %s", e.Message)
 			}
 		case Error:
+			status = e.Status
 			if e.Status >= 500 && ctx.logger != nil {
 				ctx.logger.Printf("[error] %s", e.Message)
 			}
