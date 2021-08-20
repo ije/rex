@@ -15,6 +15,11 @@ func Default() *APIHandler {
 	return defaultAPIHanlder
 }
 
+// Prefix adds prefix for each api path, like "v2"
+func Prefix(prefix string) *APIHandler {
+	return defaultAPIHanlder.Prefix(prefix)
+}
+
 // Use appends middlewares to current APIS middleware stack.
 func Use(middlewares ...Handle) {
 	defaultAPIHanlder.Use(middlewares...)

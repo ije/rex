@@ -17,12 +17,16 @@ type Handle func(ctx *Context) interface{}
 
 // APIHandler is a query/mutation style API http Handler
 type APIHandler struct {
-	// Prefix to add prefix for each api path, like "v2"
-	Prefix string
-
+	prefix      string
 	middlewares []Handle
 	queries     map[string][]Handle
 	mutations   map[string][]Handle
+}
+
+// Prefix adds prefix for each api path, like "v2"
+func (a *APIHandler) Prefix(prefix string) *APIHandler {
+	a.prefix = prefix
+	return a
 }
 
 // Use appends middlewares to current APIS middleware stack.
@@ -37,14 +41,12 @@ func (a *APIHandler) Use(middlewares ...Handle) {
 // Query adds a query api
 func (a *APIHandler) Query(endpoint string, handles ...Handle) {
 	endpoint = utils.CleanPath(endpoint)[1:]
-	if endpoint != "" {
-		if a.queries == nil {
-			a.queries = map[string][]Handle{}
-		}
-		for _, handle := range handles {
-			if handle != nil {
-				a.queries[endpoint] = append(a.queries[endpoint], handle)
-			}
+	if a.queries == nil {
+		a.queries = map[string][]Handle{}
+	}
+	for _, handle := range handles {
+		if handle != nil {
+			a.queries[endpoint] = append(a.queries[endpoint], handle)
 		}
 	}
 }
@@ -52,14 +54,12 @@ func (a *APIHandler) Query(endpoint string, handles ...Handle) {
 // Mutation adds a mutation api
 func (a *APIHandler) Mutation(endpoint string, handles ...Handle) {
 	endpoint = utils.CleanPath(endpoint)[1:]
-	if endpoint != "" {
-		if a.mutations == nil {
-			a.mutations = map[string][]Handle{}
-		}
-		for _, handle := range handles {
-			if handle != nil {
-				a.mutations[endpoint] = append(a.mutations[endpoint], handle)
-			}
+	if a.mutations == nil {
+		a.mutations = map[string][]Handle{}
+	}
+	for _, handle := range handles {
+		if handle != nil {
+			a.mutations[endpoint] = append(a.mutations[endpoint], handle)
 		}
 	}
 }
@@ -140,8 +140,8 @@ func (a *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pathname := r.URL.Path
-	if a.Prefix != "" {
-		pathname = strings.TrimPrefix(pathname, "/"+strings.Trim(a.Prefix, "/"))
+	if a.prefix != "/" {
+		pathname = strings.TrimPrefix(pathname, a.prefix)
 	}
 	path := &Path{
 		segments: strings.Split(utils.CleanPath(pathname), "/")[1:],

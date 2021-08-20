@@ -110,6 +110,37 @@ func Status(status int, payload interface{}) *statusPlayload {
 	return &statusPlayload{status, payload}
 }
 
+type Tpl interface {
+	Execute(wr io.Writer, data interface{}) error
+}
+
+// HTML replies to the request with a html content.
+func HTML(html string, data interface{}) *contentful {
+	if data == nil {
+		return &contentful{
+			name:    "index.html",
+			mtime:   time.Now(),
+			content: bytes.NewReader([]byte(html)),
+		}
+	}
+
+	t, err := template.New("").Parse(html)
+	if err != nil {
+		panic(&recoverError{500, err.Error()})
+	}
+
+	buf := bytes.NewBuffer(nil)
+	if err := t.Execute(buf, data); err != nil {
+		panic(&recoverError{500, err.Error()})
+	}
+
+	return &contentful{
+		name:    "index.html",
+		mtime:   time.Now(),
+		content: bytes.NewReader(buf.Bytes()),
+	}
+}
+
 type contentful struct {
 	name    string
 	mtime   time.Time
@@ -140,30 +171,6 @@ func File(name string) *contentful {
 	}
 
 	return &contentful{path.Base(name), fi.ModTime(), file}
-}
-
-// HTML replies to the request with a html content.
-func HTML(html string, data interface{}) *contentful {
-	if data == nil {
-		return &contentful{
-			name:    "index.html",
-			mtime:   time.Now(),
-			content: bytes.NewReader([]byte(html)),
-		}
-	}
-	t, err := template.New("").Parse(html)
-	if err != nil {
-		panic(&recoverError{500, err.Error()})
-	}
-	buf := bytes.NewBuffer(nil)
-	if err := t.Execute(buf, data); err != nil {
-		panic(&recoverError{500, err.Error()})
-	}
-	return &contentful{
-		name:    "index.html",
-		mtime:   time.Now(),
-		content: bytes.NewReader(buf.Bytes()),
-	}
 }
 
 type fs struct {
