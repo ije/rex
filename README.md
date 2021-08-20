@@ -32,7 +32,7 @@ func main() {
     })
 
     // GET /post/123 => Blog JSON
-    rex.Query("blog", func(ctx *rex.Context) interface{} {
+    rex.Query("post/*", func(ctx *rex.Context) interface{} {
         blog, ok := blogs.Get(ctx.Path.RequireIntSegment(1))
         if !ok {
             return &rex.Error{404, "blog not found"}
