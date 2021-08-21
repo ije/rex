@@ -25,7 +25,7 @@ type APIHandler struct {
 
 // Prefix adds prefix for each api path, like "v2"
 func (a *APIHandler) Prefix(prefix string) *APIHandler {
-	a.prefix = prefix
+	a.prefix = utils.CleanPath(prefix)
 	return a
 }
 
@@ -40,7 +40,7 @@ func (a *APIHandler) Use(middlewares ...Handle) {
 
 // Query adds a query api
 func (a *APIHandler) Query(endpoint string, handles ...Handle) {
-	endpoint = utils.CleanPath(endpoint)[1:]
+	endpoint = utils.CleanPath(endpoint)
 	if a.queries == nil {
 		a.queries = map[string][]Handle{}
 	}
@@ -53,7 +53,7 @@ func (a *APIHandler) Query(endpoint string, handles ...Handle) {
 
 // Mutation adds a mutation api
 func (a *APIHandler) Mutation(endpoint string, handles ...Handle) {
-	endpoint = utils.CleanPath(endpoint)[1:]
+	endpoint = utils.CleanPath(endpoint)
 	if a.mutations == nil {
 		a.mutations = map[string][]Handle{}
 	}
@@ -139,12 +139,13 @@ func (a *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pathname := r.URL.Path
+	pathname := utils.CleanPath(r.URL.Path)
 	if a.prefix != "/" {
 		pathname = strings.TrimPrefix(pathname, a.prefix)
 	}
 	path := &Path{
-		segments: strings.Split(utils.CleanPath(pathname), "/")[1:],
+		raw:      pathname,
+		segments: strings.Split(pathname[1:], "/"),
 	}
 
 	for _, handle := range a.middlewares {
@@ -159,29 +160,16 @@ func (a *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var handles []Handle
 	var ok bool
 	if len(path.segments) > 0 {
-		handles, ok = apiHandles[strings.Join(path.segments, "/")]
+		handles, ok = apiHandles[pathname]
 	}
 	if !ok {
 		for p, a := range apiHandles {
-			ps := strings.Split(p, "/")
-			if len(ps) > 1 && len(ps) == len(path.segments) {
-				matched := true
-				for i, s := range ps {
-					if s != "*" && s != path.segments[i] {
-						matched = false
-						break
-					}
-				}
-				if matched {
-					handles = a
-					ok = true
-					break
-				}
+			if strings.HasSuffix(p, "/*") && strings.HasPrefix(pathname, p[:len(p)-1]) {
+				handles = a
+				ok = true
+				break
 			}
 		}
-	}
-	if !ok {
-		handles, ok = apiHandles["*"]
 	}
 	if !ok {
 		ctx.ejson(&Error{404, "not found"})

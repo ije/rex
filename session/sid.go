@@ -13,11 +13,15 @@ type SIDStore interface {
 
 // A CookieSIDStore to store sid by http cookie
 type CookieSIDStore struct {
-	CookieName string
+	cookieName string
 }
 
-func (s *CookieSIDStore) cookieName() string {
-	name := strings.TrimSpace(s.CookieName)
+func NewCookieSIDStore(cookieName string) *CookieSIDStore {
+	return &CookieSIDStore{cookieName: strings.TrimSpace(cookieName)}
+}
+
+func (s *CookieSIDStore) CookieName() string {
+	name := strings.TrimSpace(s.cookieName)
 	if name == "" {
 		name = "x-session"
 	}
@@ -26,7 +30,7 @@ func (s *CookieSIDStore) cookieName() string {
 
 // Get return sid by http cookie
 func (s *CookieSIDStore) Get(r *http.Request) string {
-	cookie, err := r.Cookie(s.cookieName())
+	cookie, err := r.Cookie(s.CookieName())
 	if err != nil {
 		return ""
 	}
@@ -36,7 +40,7 @@ func (s *CookieSIDStore) Get(r *http.Request) string {
 // Put sets sid by http cookie
 func (s *CookieSIDStore) Put(w http.ResponseWriter, sid string) {
 	cookie := &http.Cookie{
-		Name:     s.cookieName(),
+		Name:     s.CookieName(),
 		Value:    sid,
 		HttpOnly: true,
 	}

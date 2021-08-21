@@ -107,7 +107,7 @@ func StartAutoTLS(port uint16, hosts ...string) (err error) {
 			AutoTLS: AutoTLSConfig{
 				AcceptTOS: true,
 				Hosts:     hosts,
-				CacheDir:  "./.certs",
+				CacheDir:  "/var/rex/autotls",
 			},
 		},
 	})

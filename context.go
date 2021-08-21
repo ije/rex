@@ -175,7 +175,7 @@ func (ctx *Context) end(v interface{}, args ...int) {
 	}
 
 	switch r := v.(type) {
-	case *redirecting:
+	case *redirect:
 		http.Redirect(ctx.W, ctx.R, r.url, r.status)
 
 	case string:
@@ -241,7 +241,7 @@ func (ctx *Context) end(v interface{}, args ...int) {
 		}
 
 	case *fs:
-		filepath := path.Join(r.root, strings.Join(ctx.Path.segments, "/"))
+		filepath := path.Join(r.root, ctx.Path.String())
 		fi, err := os.Stat(filepath)
 		if err == nil && fi.IsDir() {
 			filepath = path.Join(filepath, "index.html")
@@ -307,7 +307,7 @@ func (ctx *Context) json(v interface{}, status int) {
 	ctx.SetHeader("Content-Type", "application/json; charset=utf-8")
 	if err != nil {
 		ctx.W.WriteHeader(500)
-		ctx.W.Write([]byte(`{"error":{"status":500,"message":"bad json"}}`))
+		ctx.W.Write([]byte(`{"error": {"status": 500, "message": "bad json"}}`))
 		return
 	}
 	if buf.Len() > 1024 {

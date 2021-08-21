@@ -89,7 +89,7 @@ type recoverError struct {
 	message string
 }
 
-type redirecting struct {
+type redirect struct {
 	status int
 	url    string
 }
@@ -97,7 +97,7 @@ type redirecting struct {
 // Redirect replies to the request with a redirect to url,
 // which may be a path relative to the request path.
 func Redirect(url string, status int) interface{} {
-	return &redirecting{status, url}
+	return &redirect{status, url}
 }
 
 type statusPlayload struct {

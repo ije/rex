@@ -8,7 +8,7 @@ import (
 
 var defaultAPIHanlder = &APIHandler{}
 var defaultSessionPool = session.NewMemorySessionPool(time.Hour / 2)
-var defaultSIDStore = &session.CookieSIDStore{}
+var defaultSIDStore = session.NewCookieSIDStore("")
 
 // Default returns the default REST
 func Default() *APIHandler {
