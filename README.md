@@ -18,35 +18,35 @@ go get -u github.com/ije/rex
 package main
 
 import (
-    "github.com/ije/rex"
+  "github.com/ije/rex"
 )
 
 func main() {
-    // GET /*
-    rex.Query("*", func(ctx *rex.Context) interface{} {
-        return rex.HTML(
-            200,
-            "<h1>My Blog</h1><ul>{{range .}}<li>{{.Title}}</li>{{end}}</ul>",
-            blogs.All(),
-        )
-    })
+  // GET /*
+  rex.Query("*", func(ctx *rex.Context) interface{} {
+    return rex.HTML(
+      200,
+      "<h1>My Blog</h1><ul>{{range .}}<li>{{.Title}}</li>{{end}}</ul>",
+      blogs.All(),
+    )
+  })
 
-    // GET /post/123 => Blog JSON
-    rex.Query("post/*", func(ctx *rex.Context) interface{} {
-        blog, ok := blogs.Get(ctx.Path.RequireIntSegment(1))
-        if !ok {
-            return &rex.Error{404, "blog not found"}
-        }
-        return blog
-    })
+  // GET /post/123 => Blog JSON
+  rex.Query("post/*", func(ctx *rex.Context) interface{} {
+    blog, ok := blogs.Get(ctx.Path.RequireSegment(1))
+    if !ok {
+      return &rex.Error{404, "blog not found"}
+    }
+    return blog
+  })
 
-    // POST /add-blog {"title": "Hello World"} => Blog JSON
-    rex.Mutation("add-blog", func(ctx *rex.Context) interface{} {
-        blog := NewBlog(ctx.Form.Value("title"))
-        blogs.Add(blog)
-        return blog
-    })
+  // POST /add-blog {"title": "Hello World"} => Blog JSON
+  rex.Mutation("add-blog", func(ctx *rex.Context) interface{} {
+    blog := NewBlog(ctx.Form.Value("title"))
+    blogs.Add(blog)
+    return blog
+  })
 
-    rex.Start(8080)
+  rex.Start(8080)
 }
 ```
