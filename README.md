@@ -25,7 +25,6 @@ func main() {
   // GET /*
   rex.Query("*", func(ctx *rex.Context) interface{} {
     return rex.HTML(
-      200,
       "<h1>My Blog</h1><ul>{{range .}}<li>{{.Title}}</li>{{end}}</ul>",
       blogs.All(),
     )
@@ -47,6 +46,7 @@ func main() {
     return blog
   })
 
+  // Starts the server
   rex.Start(8080)
 }
 ```
