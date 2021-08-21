@@ -80,28 +80,26 @@ func Serve(config ServerConfig) chan error {
 }
 
 // Start starts a REX server.
-func Start(port uint16) (err error) {
-	err = <-Serve(ServerConfig{
+func Start(port uint16) chan error {
+	return Serve(ServerConfig{
 		Port: port,
 	})
-	return
 }
 
 // StartTLS starts a REX server with TLS.
-func StartTLS(port uint16, certFile string, keyFile string) (err error) {
-	err = <-Serve(ServerConfig{
+func StartTLS(port uint16, certFile string, keyFile string) chan error {
+	return Serve(ServerConfig{
 		TLS: TLSConfig{
 			Port:     port,
 			CertFile: certFile,
 			KeyFile:  keyFile,
 		},
 	})
-	return
 }
 
 // StartAutoTLS starts a REX server with autocert powered by Let's Encrypto SSL
-func StartAutoTLS(port uint16, hosts ...string) (err error) {
-	err = <-Serve(ServerConfig{
+func StartAutoTLS(port uint16, hosts ...string) chan error {
+	return Serve(ServerConfig{
 		TLS: TLSConfig{
 			Port: port,
 			AutoTLS: AutoTLSConfig{
@@ -111,5 +109,4 @@ func StartAutoTLS(port uint16, hosts ...string) (err error) {
 			},
 		},
 	})
-	return
 }

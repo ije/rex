@@ -9,5 +9,5 @@ func main() {
 		return rex.FS("./www", "e404.html")
 	})
 
-	rex.Start(8080)
+	<-rex.Start(8080)
 }

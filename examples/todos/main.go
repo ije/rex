@@ -108,5 +108,5 @@ func main() {
 		return rex.Redirect("/", 301)
 	})
 
-	rex.Start(8080)
+	<-rex.Start(8080)
 }
