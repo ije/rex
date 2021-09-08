@@ -187,3 +187,11 @@ func BasicAuthWithRealm(realm string, auth func(name string, secret string) (ok 
 		return 401
 	}
 }
+
+// AutoCompress is REX middleware to enable compress by content type and client `Accept-Encoding`
+func AutoCompress() Handle {
+	return func(ctx *Context) interface{} {
+		ctx.autoCompress = true
+		return nil
+	}
+}

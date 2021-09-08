@@ -30,6 +30,7 @@ type Context struct {
 	session       *Session
 	sessionPool   session.Pool
 	sidStore      session.SIDStore
+	autoCompress  bool
 	logger        Logger
 	accessLogger  Logger
 }
@@ -182,8 +183,10 @@ func (ctx *Context) end(v interface{}, args ...int) {
 		if ctx.W.Header().Get("Content-Type") == "" {
 			ctx.SetHeader("Content-Type", "text/plain; charset=utf-8")
 		}
-		if len(r) > 1024 {
-			ctx.EnableCompression()
+		if ctx.autoCompress {
+			if len(r) > 1024 {
+				ctx.EnableCompression()
+			}
 		}
 		if status >= 100 {
 			ctx.W.WriteHeader(status)
@@ -209,23 +212,27 @@ func (ctx *Context) end(v interface{}, args ...int) {
 		io.Copy(ctx.W, r)
 
 	case *contentful:
-		compressable := false
-		switch strings.TrimPrefix(path.Ext(r.name), ".") {
-		case "html", "htm", "xml", "svg", "css", "less", "sass", "scss", "json", "json5", "map", "js", "jsx", "mjs", "cjs", "ts", "tsx", "md", "mdx", "yaml", "txt", "wasm":
-			compressable = true
-		}
-		size, err := r.content.Seek(0, io.SeekEnd)
-		if err != nil {
-			ctx.ejson(&Error{500, err.Error()})
-			return
-		}
-		_, err = r.content.Seek(0, io.SeekStart)
-		if err != nil {
-			ctx.ejson(&Error{500, err.Error()})
-			return
-		}
-		if compressable && size > 1024 {
-			ctx.EnableCompression()
+		if ctx.autoCompress {
+			compressable := false
+			switch strings.TrimPrefix(path.Ext(r.name), ".") {
+			case "html", "htm", "xml", "svg", "css", "less", "sass", "scss", "json", "json5", "map", "js", "jsx", "mjs", "cjs", "ts", "tsx", "md", "mdx", "yaml", "txt", "wasm":
+				compressable = true
+			}
+			if compressable {
+				size, err := r.content.Seek(0, io.SeekEnd)
+				if err != nil {
+					ctx.ejson(&Error{500, err.Error()})
+					return
+				}
+				_, err = r.content.Seek(0, io.SeekStart)
+				if err != nil {
+					ctx.ejson(&Error{500, err.Error()})
+					return
+				}
+				if size > 1024 {
+					ctx.EnableCompression()
+				}
+			}
 		}
 		http.ServeContent(ctx.W, ctx.R, r.name, r.mtime, r.content)
 		c, ok := r.content.(io.Closer)
@@ -310,8 +317,10 @@ func (ctx *Context) json(v interface{}, status int) {
 		ctx.W.Write([]byte(`{"error": {"status": 500, "message": "bad json"}}`))
 		return
 	}
-	if buf.Len() > 1024 {
-		ctx.EnableCompression()
+	if ctx.autoCompress {
+		if buf.Len() > 1024 {
+			ctx.EnableCompression()
+		}
 	}
 	if status >= 100 {
 		ctx.W.WriteHeader(status)
