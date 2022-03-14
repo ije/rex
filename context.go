@@ -252,11 +252,11 @@ func (ctx *Context) end(v interface{}, args ...int) {
 		fi, err := os.Stat(filepath)
 		if err == nil && fi.IsDir() {
 			filepath = path.Join(filepath, "index.html")
-			fi, err = os.Stat(filepath)
+			_, err = os.Stat(filepath)
 		}
 		if err != nil && os.IsNotExist(err) && r.fallback != "" {
 			filepath = path.Join(r.root, utils.CleanPath(r.fallback))
-			fi, err = os.Stat(filepath)
+			_, err = os.Stat(filepath)
 		}
 		if err != nil {
 			if os.IsNotExist(err) {

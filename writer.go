@@ -24,7 +24,7 @@ func (w *responseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 		return h.Hijack()
 	}
 
-	return nil, nil, fmt.Errorf("The raw response writer does not implement the http.Hijacker")
+	return nil, nil, fmt.Errorf("the raw response writer does not implement the http.Hijacker")
 }
 
 // Header returns the header map that will be sent by WriteHeader.
