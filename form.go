@@ -16,22 +16,22 @@ type Form struct {
 	R *http.Request
 }
 
-// IsNil checks the value for the key whether is nil.
-func (form *Form) IsNil(key string) bool {
+// Has checks the value for the key whether exists.
+func (form *Form) Has(key string) bool {
 	if form.R.Method == "POST" {
 		if form.R.PostForm == nil {
 			form.R.ParseMultipartForm(defaultMaxMemory)
 		}
 		_, ok := form.R.PostForm[key]
 		if ok {
-			return false
+			return true
 		}
 	}
 	if form.R.Form == nil {
 		form.R.ParseMultipartForm(defaultMaxMemory)
 	}
 	_, ok := form.R.Form[key]
-	return !ok
+	return ok
 }
 
 // Value returns the first value for the named component of the POST,
