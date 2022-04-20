@@ -98,10 +98,13 @@ func Cors(cors CORS) Handle {
 			if !allowAll {
 				allowOrigin = strings.Join(cors.AllowOrigins, ",")
 			}
-			ctx.SetHeader("Access-Control-Allow-Origin", allowOrigin)
 			if cors.AllowCredentials {
+				if allowOrigin == "*" {
+					allowOrigin = currentOrigin
+				}
 				ctx.SetHeader("Access-Control-Allow-Credentials", "true")
 			}
+			ctx.SetHeader("Access-Control-Allow-Origin", allowOrigin)
 
 			if isPreflight {
 				ctx.SetHeader("Vary", "Access-Control-Request-Method")
