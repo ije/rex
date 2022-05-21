@@ -18,10 +18,18 @@ go get -u github.com/ije/rex
 package main
 
 import (
+  "log"
   "github.com/ije/rex"
 )
 
 func main() {
+  // use middlewares
+  rex.Use(
+    rex.Logger(log.Default()),
+    rex.Cors(rex.CorsAllowAll()),
+    rex.Compress(),
+  )
+
   // GET /*
   rex.Query("*", func(ctx *rex.Context) interface{} {
     return rex.HTML(
