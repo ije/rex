@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"html/template"
 
 	"github.com/ije/rex"
@@ -112,5 +113,6 @@ func main() {
 		return rex.Redirect("/", 301)
 	})
 
+	fmt.Println("Server running on http://localhost:8080")
 	<-rex.Start(8080)
 }
