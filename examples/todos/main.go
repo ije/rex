@@ -1,6 +1,8 @@
 package main
 
 import (
+	"html/template"
+
 	"github.com/ije/rex"
 )
 
@@ -39,6 +41,8 @@ const indexHTML = `
 </html>
 `
 
+var indexTpl = template.Must(template.New("index.html").Parse(indexHTML))
+
 type user struct {
 	name        string
 	permissions []string
@@ -73,7 +77,7 @@ func main() {
 			data["user"] = aclUser.(*user).name
 			data["todos"] = todos
 		}
-		return rex.HTML(indexHTML, data)
+		return rex.Render(indexTpl, data)
 	})
 
 	rex.Mutation("add-todo", rex.ACL("add"), func(ctx *rex.Context) interface{} {
