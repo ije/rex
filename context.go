@@ -17,6 +17,16 @@ import (
 	"github.com/ije/rex/session"
 )
 
+// A ACLUser interface contains the Permissions method that returns the permission IDs
+type ACLUser interface {
+	Permissions() []string
+}
+
+// A Logger interface contains the Printf method.
+type Logger interface {
+	Printf(format string, v ...interface{})
+}
+
 // A Context to handle http requests.
 type Context struct {
 	W             http.ResponseWriter
@@ -219,12 +229,12 @@ Re:
 			if compressable {
 				size, err := r.content.Seek(0, io.SeekEnd)
 				if err != nil {
-					ctx.ejson(&Error{500, err.Error()})
+					ctx.error(&Error{500, err.Error()})
 					return
 				}
 				_, err = r.content.Seek(0, io.SeekStart)
 				if err != nil {
-					ctx.ejson(&Error{500, err.Error()})
+					ctx.error(&Error{500, err.Error()})
 					return
 				}
 				if size > 1024 {
@@ -256,9 +266,9 @@ Re:
 		}
 		if err != nil {
 			if os.IsNotExist(err) {
-				ctx.ejson(&Error{404, "not found"})
+				ctx.error(&Error{404, "not found"})
 			} else {
-				ctx.ejson(&Error{500, err.Error()})
+				ctx.error(&Error{500, err.Error()})
 			}
 			return
 		}
@@ -267,9 +277,9 @@ Re:
 
 	case error:
 		if status >= 100 {
-			ctx.ejson(&Error{status, r.Error()})
+			ctx.error(&Error{status, r.Error()})
 		} else {
-			ctx.ejson(&Error{500, r.Error()})
+			ctx.error(&Error{500, r.Error()})
 		}
 
 	default:
@@ -283,24 +293,15 @@ Re:
 
 		switch e := r.(type) {
 		case *Error:
-			ctx.ejson(e)
+			ctx.error(e)
 			return
 		case Error:
-			ctx.ejson(&e)
+			ctx.error(&e)
 			return
 		}
 
 		ctx.json(r, status)
 	}
-}
-
-func (ctx *Context) ejson(err *Error) {
-	if err.Status >= 500 && ctx.logger != nil {
-		ctx.logger.Printf("[error] %s", err.Message)
-	}
-	ctx.json(map[string]interface{}{
-		"error": err,
-	}, err.Status)
 }
 
 func (ctx *Context) json(v interface{}, status int) {
@@ -319,4 +320,13 @@ func (ctx *Context) json(v interface{}, status int) {
 	}
 	ctx.W.WriteHeader(status)
 	io.Copy(ctx.W, buf)
+}
+
+func (ctx *Context) error(err *Error) {
+	if err.Status >= 500 && ctx.logger != nil {
+		ctx.logger.Printf("[error] %s", err.Message)
+	}
+	ctx.json(map[string]interface{}{
+		"error": err,
+	}, err.Status)
 }

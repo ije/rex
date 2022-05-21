@@ -108,7 +108,7 @@ func (a *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		if v := recover(); v != nil {
 			if err, ok := v.(*recoverError); ok {
-				ctx.ejson(&Error{err.status, err.message})
+				ctx.error(&Error{err.status, err.message})
 				return
 			}
 
@@ -124,7 +124,7 @@ func (a *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			if ctx.logger != nil {
 				ctx.logger.Printf("[panic] %v\n%s", v, buf.String())
 			}
-			ctx.ejson(&Error{500, http.StatusText(500)})
+			ctx.error(&Error{500, http.StatusText(500)})
 		}
 	}()
 
@@ -135,7 +135,7 @@ func (a *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "POST":
 		apiHandles = a.mutations
 	default:
-		ctx.ejson(&Error{http.StatusMethodNotAllowed, http.StatusText(http.StatusMethodNotAllowed)})
+		ctx.error(&Error{http.StatusMethodNotAllowed, http.StatusText(http.StatusMethodNotAllowed)})
 		return
 	}
 
@@ -173,7 +173,7 @@ func (a *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !ok {
-		ctx.ejson(&Error{404, "endpoint not found"})
+		ctx.error(&Error{404, "endpoint not found"})
 		return
 	}
 
@@ -189,7 +189,7 @@ func (a *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			if !isGranted {
-				ctx.ejson(&Error{http.StatusForbidden, http.StatusText(http.StatusForbidden)})
+				ctx.error(&Error{http.StatusForbidden, http.StatusText(http.StatusForbidden)})
 				return
 			}
 		}
