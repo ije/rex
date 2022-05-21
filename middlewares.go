@@ -118,14 +118,14 @@ func BasicAuthWithRealm(realm string, auth func(name string, secret string) (ok 
 			realm = "Authorization Required"
 		}
 		ctx.SetHeader("WWW-Authenticate", fmt.Sprintf(`Basic realm="%s"`, realm))
-		return 401
+		return Status(401, "")
 	}
 }
 
-// AutoCompress is REX middleware to enable compress by content type and client `Accept-Encoding`
-func AutoCompress() Handle {
+// Compression is REX middleware to enable compress by content type and client `Accept-Encoding`
+func Compression() Handle {
 	return func(ctx *Context) interface{} {
-		ctx.autoCompress = true
+		ctx.compression = true
 		return nil
 	}
 }

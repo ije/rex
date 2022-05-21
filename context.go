@@ -30,7 +30,7 @@ type Context struct {
 	session       *Session
 	sessionPool   session.Pool
 	sidStore      session.SIDStore
-	autoCompress  bool
+	compression   bool
 	logger        Logger
 	accessLogger  Logger
 }
@@ -152,8 +152,11 @@ func (ctx *Context) EnableCompression() {
 		w, ok := ctx.W.(*responseWriter)
 		if ok && !w.headerSent {
 			h := w.Header()
-			if h.Get("Vary") == "" {
+			vary := h.Get("Vary")
+			if vary == "" {
 				h.Set("Vary", "Accept-Encoding")
+			} else if !strings.Contains(vary, "Accept-Encoding") {
+				h.Set("Vary", fmt.Sprintf("%s, Accept-Encoding", vary))
 			}
 			if h.Get("Content-Length") != "" {
 				h.Del("Content-Length")
@@ -184,7 +187,7 @@ Re:
 		if ctx.W.Header().Get("Content-Type") == "" {
 			ctx.SetHeader("Content-Type", "text/plain; charset=utf-8")
 		}
-		if ctx.autoCompress {
+		if ctx.compression {
 			if len(r) > 1024 {
 				ctx.EnableCompression()
 			}
@@ -207,7 +210,7 @@ Re:
 		io.Copy(ctx.W, r)
 
 	case *contentful:
-		if ctx.autoCompress {
+		if ctx.compression {
 			compressable := false
 			switch strings.TrimPrefix(path.Ext(r.name), ".") {
 			case "html", "htm", "xml", "svg", "css", "less", "sass", "scss", "json", "json5", "map", "js", "jsx", "mjs", "cjs", "ts", "mts", "tsx", "md", "mdx", "yaml", "txt", "wasm":
@@ -309,7 +312,7 @@ func (ctx *Context) json(v interface{}, status int) {
 		ctx.W.Write([]byte(`{"error": {"status": 500, "message": "bad json"}}`))
 		return
 	}
-	if ctx.autoCompress {
+	if ctx.compression {
 		if buf.Len() > 1024 {
 			ctx.EnableCompression()
 		}
