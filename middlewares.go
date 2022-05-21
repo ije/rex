@@ -4,11 +4,11 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/ije/gox/utils"
 	"github.com/ije/rex/session"
+	"github.com/rs/cors"
 )
 
 // Header is REX middleware to set http header
@@ -59,84 +59,18 @@ func SessionPool(pool session.Pool) Handle {
 	}
 }
 
-// Cors returns a Cors middleware to handle cors.
-func Cors(cors CORS) Handle {
+// Cors returns a Cors middleware to handle CORS.
+func Cors(cors *cors.Cors) Handle {
 	return func(ctx *Context) interface{} {
-		if cors.AllowAllOrigins || len(cors.AllowOrigins) > 0 {
-			// always set Vary headers
-			// see https://github.com/rs/cors/issues/10
-			ctx.SetHeader("Vary", "Origin")
-
-			currentOrigin := ctx.R.Header.Get("Origin")
-			if currentOrigin == "" {
-				return nil
-			}
-
-			isPreflight := ctx.R.Method == "OPTIONS"
-			allowAll := cors.AllowAllOrigins
-			allowCurrent := allowAll
-			if !allowAll {
-				for _, origin := range cors.AllowOrigins {
-					if origin == "*" {
-						allowAll = true
-						allowCurrent = true
-						break
-					} else if origin == currentOrigin {
-						allowCurrent = true
-					}
-				}
-			}
-
-			if !allowCurrent {
-				if isPreflight {
-					return http.StatusNoContent
-				}
-				return nil
-			}
-
-			allowOrigin := "*"
-			if !allowAll {
-				allowOrigin = strings.Join(cors.AllowOrigins, ",")
-			}
-			ctx.SetHeader("Access-Control-Allow-Origin", allowOrigin)
-			if cors.AllowCredentials {
-				ctx.SetHeader("Access-Control-Allow-Credentials", "true")
-			}
-
-			if isPreflight {
-				ctx.SetHeader("Vary", "Access-Control-Request-Method")
-				ctx.SetHeader("Vary", "Access-Control-Request-Headers")
-
-				reqMethod := ctx.R.Header.Get("Access-Control-Request-Method")
-				if reqMethod == "" {
-					// invalid preflight request
-					ctx.DeleteHeader("Access-Control-Allow-Origin")
-					ctx.DeleteHeader("Access-Control-Allow-Credentials")
-					return http.StatusNoContent
-				}
-
-				if len(cors.AllowMethods) > 0 {
-					ctx.SetHeader("Access-Control-Allow-Methods", strings.Join(cors.AllowMethods, ","))
-				}
-				if len(cors.AllowHeaders) > 0 {
-					ctx.SetHeader("Access-Control-Allow-Headers", strings.Join(cors.AllowHeaders, ","))
-				} else {
-					reqHeaders := ctx.R.Header.Get("Access-Control-Request-Headers")
-					if reqHeaders != "" {
-						ctx.SetHeader("Access-Control-Allow-Headers", reqHeaders)
-					}
-				}
-				if cors.MaxAge > 0 {
-					ctx.SetHeader("Access-Control-Max-Age", strconv.Itoa(cors.MaxAge))
-				}
-				return http.StatusNoContent
-			}
-
-			if len(cors.ExposeHeaders) > 0 {
-				ctx.SetHeader("Access-Control-Expose-Headers", strings.Join(cors.ExposeHeaders, ","))
-			}
+		optionPassthrough := false
+		h := func(w http.ResponseWriter, r *http.Request) {
+			optionPassthrough = true
 		}
-		return nil
+		cors.ServeHTTP(ctx.W, ctx.R, h)
+		if optionPassthrough {
+			return nil // next
+		}
+		return h // end
 	}
 }
 
