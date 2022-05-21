@@ -28,7 +28,7 @@ func (ms *MemorySession) Has(key string) (ok bool, err error) {
 
 func (ms *MemorySession) Get(key string) (value []byte, err error) {
 	ms.lock.RLock()
-	value, _ = ms.store[key]
+	value = ms.store[key]
 	ms.lock.RUnlock()
 
 	return
@@ -123,9 +123,9 @@ func (pool *MemorySessionPool) Destroy(sid string) error {
 }
 
 func (pool *MemorySessionPool) gcLoop() {
-	t := time.Tick(pool.lifetime)
+	t := time.NewTicker(pool.lifetime)
 	for {
-		<-t
+		<-t.C
 		pool.gc()
 	}
 }
