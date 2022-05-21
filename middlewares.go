@@ -59,8 +59,8 @@ func SessionPool(pool session.Pool) Handle {
 	}
 }
 
-// CorsOptions is a configuration container to setup the CORS middleware.
-type CorsOptions struct {
+// CORS is a configuration container to setup the CORS middleware.
+type CORS struct {
 	// AllowedOrigins is a list of origins a cross-domain request can be executed from.
 	// If the special "*" value is present in the list, all origins will be allowed.
 	// An origin may contain a wildcard (*) to replace 0 or more characters
@@ -103,9 +103,27 @@ type CorsOptions struct {
 	Debug bool
 }
 
+// CorsAllowAll create a new Cors handler with permissive configuration allowing all
+// origins with all standard methods with any header and credentials.
+func CorsAllowAll() CORS {
+	return CORS{
+		AllowedOrigins: []string{"*"},
+		AllowedMethods: []string{
+			http.MethodHead,
+			http.MethodGet,
+			http.MethodPost,
+			http.MethodPut,
+			http.MethodPatch,
+			http.MethodDelete,
+		},
+		AllowedHeaders:   []string{"*"},
+		AllowCredentials: false,
+	}
+}
+
 // Cors returns a Cors middleware to handle CORS.
-func Cors(options CorsOptions) Handle {
-	cors := cors.New(cors.Options(options))
+func Cors(c CORS) Handle {
+	cors := cors.New(cors.Options(c))
 	return func(ctx *Context) interface{} {
 		optionPassthrough := false
 		h := func(w http.ResponseWriter, r *http.Request) {
