@@ -6,31 +6,31 @@ import (
 	"github.com/ije/rex/session"
 )
 
-var defaultAPIHanlder = &APIHandler{}
+var defaultHanlder = &Handler{}
 var defaultSessionPool = session.NewMemorySessionPool(time.Hour / 2)
 var defaultSIDStore = session.NewCookieSIDStore("")
 
 // Default returns the default REST
-func Default() *APIHandler {
-	return defaultAPIHanlder
+func Default() *Handler {
+	return defaultHanlder
 }
 
 // Prefix adds prefix for each api path, like "v2"
-func Prefix(prefix string) *APIHandler {
-	return defaultAPIHanlder.Prefix(prefix)
+func Prefix(prefix string) *Handler {
+	return defaultHanlder.Prefix(prefix)
 }
 
 // Use appends middlewares to current APIS middleware stack.
 func Use(middlewares ...Handle) {
-	defaultAPIHanlder.Use(middlewares...)
+	defaultHanlder.Use(middlewares...)
 }
 
 // Query adds a query api
 func Query(endpoint string, handles ...Handle) {
-	defaultAPIHanlder.Query(endpoint, handles...)
+	defaultHanlder.Query(endpoint, handles...)
 }
 
 // Mutation adds a mutation api
 func Mutation(endpoint string, handles ...Handle) {
-	defaultAPIHanlder.Mutation(endpoint, handles...)
+	defaultHanlder.Mutation(endpoint, handles...)
 }

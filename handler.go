@@ -15,8 +15,8 @@ import (
 // Handle defines the API handle
 type Handle func(ctx *Context) interface{}
 
-// APIHandler is a query/mutation style API http Handler
-type APIHandler struct {
+// Handler is a query/mutation style API http Handler
+type Handler struct {
 	prefix      string
 	middlewares []Handle
 	queries     map[string][]Handle
@@ -24,13 +24,13 @@ type APIHandler struct {
 }
 
 // Prefix adds prefix for each api path, like "v2"
-func (a *APIHandler) Prefix(prefix string) *APIHandler {
+func (a *Handler) Prefix(prefix string) *Handler {
 	a.prefix = utils.CleanPath(prefix)
 	return a
 }
 
 // Use appends middlewares to current APIS middleware stack.
-func (a *APIHandler) Use(middlewares ...Handle) {
+func (a *Handler) Use(middlewares ...Handle) {
 	for _, handle := range middlewares {
 		if handle != nil {
 			a.middlewares = append(a.middlewares, handle)
@@ -39,7 +39,7 @@ func (a *APIHandler) Use(middlewares ...Handle) {
 }
 
 // Query adds a query api
-func (a *APIHandler) Query(endpoint string, handles ...Handle) {
+func (a *Handler) Query(endpoint string, handles ...Handle) {
 	endpoint = utils.CleanPath(endpoint)
 	if a.queries == nil {
 		a.queries = map[string][]Handle{}
@@ -52,7 +52,7 @@ func (a *APIHandler) Query(endpoint string, handles ...Handle) {
 }
 
 // Mutation adds a mutation api
-func (a *APIHandler) Mutation(endpoint string, handles ...Handle) {
+func (a *Handler) Mutation(endpoint string, handles ...Handle) {
 	endpoint = utils.CleanPath(endpoint)
 	if a.mutations == nil {
 		a.mutations = map[string][]Handle{}
@@ -65,7 +65,7 @@ func (a *APIHandler) Mutation(endpoint string, handles ...Handle) {
 }
 
 // ServeHTTP implements the http Handler.
-func (a *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (a *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	startTime := time.Now()
 	wr := &responseWriter{status: 200, rawWriter: w}
 	form := &Form{r}
@@ -171,8 +171,9 @@ func (a *APIHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+
 	if !ok {
-		ctx.ejson(&Error{404, "not found"})
+		ctx.ejson(&Error{404, "endpoint not found"})
 		return
 	}
 
