@@ -169,13 +169,14 @@ func (ctx *Context) EnableCompression() {
 	}
 }
 
-func (ctx *Context) end(v interface{}, args ...int) {
-	status := 0
-	if len(args) > 0 {
-		status = args[0]
-	}
+func (ctx *Context) end(v interface{}) {
+	status := 200
 
+Re:
 	switch r := v.(type) {
+	case http.Handler:
+		r.ServeHTTP(ctx.W, ctx.R)
+
 	case *redirect:
 		http.Redirect(ctx.W, ctx.R, r.url, r.status)
 
@@ -188,34 +189,28 @@ func (ctx *Context) end(v interface{}, args ...int) {
 				ctx.EnableCompression()
 			}
 		}
-		if status >= 100 {
-			ctx.W.WriteHeader(status)
-		}
+		ctx.W.WriteHeader(status)
 		ctx.W.Write([]byte(r))
 
 	case []byte:
 		if ctx.W.Header().Get("Content-Type") == "" {
 			ctx.SetHeader("Content-Type", "application/octet-stream")
 		}
-		if status >= 100 {
-			ctx.W.WriteHeader(status)
-		}
+		ctx.W.WriteHeader(status)
 		ctx.W.Write(r)
 
 	case io.Reader:
 		if ctx.W.Header().Get("Content-Type") == "" {
 			ctx.SetHeader("Content-Type", "application/octet-stream")
 		}
-		if status >= 100 {
-			ctx.W.WriteHeader(status)
-		}
+		ctx.W.WriteHeader(status)
 		io.Copy(ctx.W, r)
 
 	case *contentful:
 		if ctx.autoCompress {
 			compressable := false
 			switch strings.TrimPrefix(path.Ext(r.name), ".") {
-			case "html", "htm", "xml", "svg", "css", "less", "sass", "scss", "json", "json5", "map", "js", "jsx", "mjs", "cjs", "ts", "tsx", "md", "mdx", "yaml", "txt", "wasm":
+			case "html", "htm", "xml", "svg", "css", "less", "sass", "scss", "json", "json5", "map", "js", "jsx", "mjs", "cjs", "ts", "mts", "tsx", "md", "mdx", "yaml", "txt", "wasm":
 				compressable = true
 			}
 			if compressable {
@@ -241,11 +236,9 @@ func (ctx *Context) end(v interface{}, args ...int) {
 		}
 
 	case *statusPlayload:
-		if status >= 100 {
-			ctx.end(r.payload, status)
-		} else {
-			ctx.end(r.payload, r.status)
-		}
+		v = r.payload
+		status = r.status
+		goto Re
 
 	case *fs:
 		filepath := path.Join(r.root, ctx.Path.String())
@@ -266,7 +259,8 @@ func (ctx *Context) end(v interface{}, args ...int) {
 			}
 			return
 		}
-		ctx.end(File(filepath))
+		v = File(filepath)
+		goto Re
 
 	case error:
 		if status >= 100 {
@@ -279,9 +273,7 @@ func (ctx *Context) end(v interface{}, args ...int) {
 		_, err := utils.ToNumber(r)
 		if err == nil {
 			ctx.SetHeader("Content-Type", "text/plain; charset=utf-8")
-			if status >= 100 {
-				ctx.W.WriteHeader(status)
-			}
+			ctx.W.WriteHeader(status)
 			fmt.Fprintf(ctx.W, "%v", r)
 			return
 		}
@@ -322,8 +314,6 @@ func (ctx *Context) json(v interface{}, status int) {
 			ctx.EnableCompression()
 		}
 	}
-	if status >= 100 {
-		ctx.W.WriteHeader(status)
-	}
+	ctx.W.WriteHeader(status)
 	io.Copy(ctx.W, buf)
 }
