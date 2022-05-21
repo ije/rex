@@ -3,7 +3,6 @@ package rex
 import (
 	"bytes"
 	"fmt"
-	"html/template"
 	"io"
 	"net/http"
 	"os"
@@ -38,17 +37,6 @@ type AutoTLSConfig struct {
 	Hosts     []string       `json:"hosts"`
 	CacheDir  string         `json:"cacheDir"`
 	Cache     autocert.Cache `json:"-"`
-}
-
-// CORS contains options to CORS.
-type CORS struct {
-	AllowAllOrigins  bool
-	AllowOrigins     []string
-	AllowMethods     []string
-	AllowHeaders     []string
-	ExposeHeaders    []string
-	AllowCredentials bool
-	MaxAge           int // in seconds
 }
 
 // A ACLUser interface contains the Permissions method that returns the permission IDs
@@ -110,32 +98,29 @@ func Status(status int, payload interface{}) *statusPlayload {
 	return &statusPlayload{status, payload}
 }
 
-type Tpl interface {
+// HTML replies to the request with a html content.
+func HTML(html string) *contentful {
+	return &contentful{
+		name:    "index.html",
+		mtime:   time.Now(),
+		content: bytes.NewReader([]byte(html)),
+	}
+}
+
+type Template interface {
+	Name() string
 	Execute(wr io.Writer, data interface{}) error
 }
 
-// HTML replies to the request with a html content.
-func HTML(html string, data interface{}) *contentful {
-	if data == nil {
-		return &contentful{
-			name:    "index.html",
-			mtime:   time.Now(),
-			content: bytes.NewReader([]byte(html)),
-		}
-	}
-
-	t, err := template.New("").Parse(html)
-	if err != nil {
-		panic(&recoverError{500, err.Error()})
-	}
-
+// Render renders the template with the given data.
+func Render(t Template, data interface{}) interface{} {
 	buf := bytes.NewBuffer(nil)
 	if err := t.Execute(buf, data); err != nil {
 		panic(&recoverError{500, err.Error()})
 	}
 
 	return &contentful{
-		name:    "index.html",
+		name:    t.Name(),
 		mtime:   time.Now(),
 		content: bytes.NewReader(buf.Bytes()),
 	}
