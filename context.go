@@ -243,10 +243,6 @@ Re:
 			}
 		}
 		http.ServeContent(ctx.W, ctx.R, r.name, r.mtime, r.content)
-		c, ok := r.content.(io.Closer)
-		if ok {
-			c.Close()
-		}
 
 	case *statusPlayload:
 		v = r.payload
