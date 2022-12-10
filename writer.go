@@ -12,14 +12,14 @@ import (
 type responseWriter struct {
 	status      int
 	written     int
-	compression io.WriteCloser
-	rawWriter   http.ResponseWriter
 	headerSent  bool
+	httpWriter  http.ResponseWriter
+	compression io.WriteCloser
 }
 
 // Hijack lets the caller take over the connection.
 func (w *responseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
-	h, ok := w.rawWriter.(http.Hijacker)
+	h, ok := w.httpWriter.(http.Hijacker)
 	if ok {
 		return h.Hijack()
 	}
@@ -29,14 +29,14 @@ func (w *responseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 
 // Header returns the header map that will be sent by WriteHeader.
 func (w *responseWriter) Header() http.Header {
-	return w.rawWriter.Header()
+	return w.httpWriter.Header()
 }
 
 // WriteHeader sends a HTTP response header with the provided status code.
 func (w *responseWriter) WriteHeader(status int) {
 	if !w.headerSent {
 		w.status = status
-		w.rawWriter.WriteHeader(status)
+		w.httpWriter.WriteHeader(status)
 		w.headerSent = true
 	}
 }
@@ -46,7 +46,7 @@ func (w *responseWriter) Write(p []byte) (n int, err error) {
 	if !w.headerSent {
 		w.headerSent = true
 	}
-	var wr io.Writer = w.rawWriter
+	var wr io.Writer = w.httpWriter
 	if w.compression != nil {
 		wr = w.compression
 	}

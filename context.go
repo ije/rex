@@ -174,9 +174,9 @@ func (ctx *Context) EnableCompression() {
 			h.Set("Content-Encoding", encoding)
 			switch encoding {
 			case "br":
-				w.compression = brotli.NewWriterLevel(w.rawWriter, brotli.BestSpeed)
+				w.compression = brotli.NewWriterLevel(w.httpWriter, brotli.BestSpeed)
 			case "gzip":
-				w.compression, _ = gzip.NewWriterLevel(w.rawWriter, gzip.BestSpeed)
+				w.compression, _ = gzip.NewWriterLevel(w.httpWriter, gzip.BestSpeed)
 			}
 		}
 	}
@@ -213,6 +213,11 @@ Re:
 		ctx.W.Write(r)
 
 	case io.Reader:
+		defer func() {
+			if c, ok := r.(io.Closer); ok {
+				c.Close()
+			}
+		}()
 		if ctx.W.Header().Get("Content-Type") == "" {
 			ctx.SetHeader("Content-Type", "application/octet-stream")
 		}
@@ -220,6 +225,11 @@ Re:
 		io.Copy(ctx.W, r)
 
 	case *contentful:
+		defer func() {
+			if c, ok := r.content.(io.Closer); ok {
+				c.Close()
+			}
+		}()
 		if ctx.compression {
 			compressable := false
 			switch strings.TrimPrefix(path.Ext(r.name), ".") {
@@ -243,9 +253,6 @@ Re:
 			}
 		}
 		http.ServeContent(ctx.W, ctx.R, r.name, r.mtime, r.content)
-		if c, ok := r.content.(io.Closer); ok {
-			c.Close()
-		}
 
 	case *statusPlayload:
 		v = r.payload

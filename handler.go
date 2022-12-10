@@ -67,7 +67,7 @@ func (a *Handler) Mutation(endpoint string, handles ...Handle) {
 // ServeHTTP implements the http Handler.
 func (a *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	startTime := time.Now()
-	wr := &responseWriter{status: 200, rawWriter: w}
+	wr := &responseWriter{status: 200, httpWriter: w}
 	form := &Form{r}
 	store := &Store{}
 	ctx := &Context{
