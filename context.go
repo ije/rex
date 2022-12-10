@@ -243,6 +243,9 @@ Re:
 			}
 		}
 		http.ServeContent(ctx.W, ctx.R, r.name, r.mtime, r.content)
+		if c, ok := r.content.(io.Closer); ok {
+			c.Close()
+		}
 
 	case *statusPlayload:
 		v = r.payload
