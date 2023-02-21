@@ -93,6 +93,9 @@ type CORS struct {
 	// AllowCredentials indicates whether the request can include user credentials like
 	// cookies, HTTP authentication or client side SSL certificates.
 	AllowCredentials bool
+	// AllowPrivateNetwork indicates whether to accept cross-origin requests over a
+	// private network.
+	AllowPrivateNetwork bool
 	// OptionsPassthrough instructs preflight to let other potential next handlers to
 	// process the OPTIONS method. Turn this on if your application handles OPTIONS.
 	OptionsPassthrough bool
