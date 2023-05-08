@@ -184,7 +184,7 @@ func (ctx *Context) EnableCompression() {
 func (ctx *Context) end(v interface{}) {
 	status := 200
 
-Re:
+Switch:
 	switch r := v.(type) {
 	case http.Handler:
 		r.ServeHTTP(ctx.W, ctx.R)
@@ -261,7 +261,7 @@ Re:
 	case *statusPlayload:
 		v = r.payload
 		status = r.status
-		goto Re
+		goto Switch
 
 	case *fs:
 		filepath := path.Join(r.root, ctx.Path.String())
@@ -283,7 +283,7 @@ Re:
 			return
 		}
 		v = File(filepath)
-		goto Re
+		goto Switch
 
 	case error:
 		if status >= 100 {

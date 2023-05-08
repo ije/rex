@@ -41,69 +41,76 @@ type AutoTLSConfig struct {
 func Serve(config ServerConfig) chan error {
 	c := make(chan error, 1)
 
-	if config.Port > 0 {
-		go func() {
-			serv := &http.Server{
-				Addr:           fmt.Sprintf(("%s:%d"), config.Host, config.Port),
-				Handler:        &mux{config.TLS.AutoRedirect},
-				ReadTimeout:    time.Duration(config.ReadTimeout) * time.Second,
-				WriteTimeout:   time.Duration(config.WriteTimeout) * time.Second,
-				MaxHeaderBytes: int(config.MaxHeaderBytes),
-			}
-			err := serv.ListenAndServe()
-			if err != nil {
-				c <- fmt.Errorf("rex server shutdown: %v", err)
-			}
-		}()
-	}
+	go serve(&config, c)
 
-	if https := config.TLS; https.AutoTLS.AcceptTOS || (https.CertFile != "" && https.KeyFile != "") {
-		go func() {
-			port := https.Port
-			if port == 0 {
-				port = 443
-			}
-			servs := &http.Server{
-				Addr:           fmt.Sprintf(("%s:%d"), config.Host, port),
-				Handler:        &mux{},
-				ReadTimeout:    time.Duration(config.ReadTimeout) * time.Second,
-				WriteTimeout:   time.Duration(config.WriteTimeout) * time.Second,
-				MaxHeaderBytes: int(config.MaxHeaderBytes),
-			}
-			if https.AutoTLS.AcceptTOS {
-				m := &autocert.Manager{
-					Prompt: autocert.AcceptTOS,
-				}
-				if https.AutoTLS.Cache != nil {
-					m.Cache = https.AutoTLS.Cache
-				} else if cacheDir := https.AutoTLS.CacheDir; cacheDir != "" {
-					fi, err := os.Stat(cacheDir)
-					if err == nil && !fi.IsDir() {
-						c <- fmt.Errorf("AutoTLS: invalid cache dir '%s'", cacheDir)
-						return
-					}
-					if err != nil && os.IsNotExist(err) {
-						err = os.MkdirAll(cacheDir, 0755)
-						if err != nil {
-							c <- fmt.Errorf("[error] AutoTLS: can't create the cache dir '%s'", cacheDir)
-							return
-						}
-					}
-					m.Cache = autocert.DirCache(cacheDir)
-				}
-				if len(https.AutoTLS.Hosts) > 0 {
-					m.HostPolicy = autocert.HostWhitelist(https.AutoTLS.Hosts...)
-				}
-				servs.TLSConfig = m.TLSConfig()
-			}
-			err := servs.ListenAndServeTLS(https.CertFile, https.KeyFile)
-			if err != nil {
-				c <- fmt.Errorf("rex server(https) shutdown: %v", err)
-			}
-		}()
+	if tls := config.TLS; tls.AutoTLS.AcceptTOS || (tls.CertFile != "" && tls.KeyFile != "") {
+		go serveTLS(&config, c)
 	}
 
 	return c
+}
+
+func serve(config *ServerConfig, c chan error) {
+	port := config.Port
+	if port == 0 {
+		port = 80
+	}
+	serv := &http.Server{
+		Addr:           fmt.Sprintf(("%s:%d"), config.Host, port),
+		Handler:        &mux{config.TLS.AutoRedirect},
+		ReadTimeout:    time.Duration(config.ReadTimeout) * time.Second,
+		WriteTimeout:   time.Duration(config.WriteTimeout) * time.Second,
+		MaxHeaderBytes: int(config.MaxHeaderBytes),
+	}
+	err := serv.ListenAndServe()
+	if err != nil {
+		c <- fmt.Errorf("rex server shutdown: %v", err)
+	}
+}
+
+func serveTLS(config *ServerConfig, c chan error) {
+	tls := config.TLS
+	port := tls.Port
+	if port == 0 {
+		port = 443
+	}
+	serv := &http.Server{
+		Addr:           fmt.Sprintf(("%s:%d"), config.Host, port),
+		Handler:        &mux{},
+		ReadTimeout:    time.Duration(config.ReadTimeout) * time.Second,
+		WriteTimeout:   time.Duration(config.WriteTimeout) * time.Second,
+		MaxHeaderBytes: int(config.MaxHeaderBytes),
+	}
+	if tls.AutoTLS.AcceptTOS {
+		m := &autocert.Manager{
+			Prompt: autocert.AcceptTOS,
+		}
+		if tls.AutoTLS.Cache != nil {
+			m.Cache = tls.AutoTLS.Cache
+		} else if cacheDir := tls.AutoTLS.CacheDir; cacheDir != "" {
+			fi, err := os.Stat(cacheDir)
+			if err == nil && !fi.IsDir() {
+				c <- fmt.Errorf("AutoTLS: invalid cache dir '%s'", cacheDir)
+				return
+			}
+			if err != nil && os.IsNotExist(err) {
+				err = os.MkdirAll(cacheDir, 0755)
+				if err != nil {
+					c <- fmt.Errorf("[error] AutoTLS: can't create the cache dir '%s'", cacheDir)
+					return
+				}
+			}
+			m.Cache = autocert.DirCache(cacheDir)
+		}
+		if len(tls.AutoTLS.Hosts) > 0 {
+			m.HostPolicy = autocert.HostWhitelist(tls.AutoTLS.Hosts...)
+		}
+		serv.TLSConfig = m.TLSConfig()
+	}
+	err := serv.ListenAndServeTLS(tls.CertFile, tls.KeyFile)
+	if err != nil {
+		c <- fmt.Errorf("rex server(https) shutdown: %v", err)
+	}
 }
 
 // Start starts a REX server.
@@ -113,8 +120,8 @@ func Start(port uint16) chan error {
 	})
 }
 
-// StartTLS starts a REX server with TLS.
-func StartTLS(port uint16, certFile string, keyFile string) chan error {
+// StartWithTLS starts a REX server with TLS.
+func StartWithTLS(port uint16, certFile string, keyFile string) chan error {
 	return Serve(ServerConfig{
 		TLS: TLSConfig{
 			Port:     port,
@@ -124,8 +131,8 @@ func StartTLS(port uint16, certFile string, keyFile string) chan error {
 	})
 }
 
-// StartAutoTLS starts a REX server with autocert powered by Let's Encrypto SSL
-func StartAutoTLS(port uint16, hosts ...string) chan error {
+// StartWithAutoTLS starts a REX server with autocert powered by Let's Encrypto SSL
+func StartWithAutoTLS(port uint16, hosts ...string) chan error {
 	return Serve(ServerConfig{
 		TLS: TLSConfig{
 			Port: port,
