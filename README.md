@@ -62,10 +62,10 @@ func main() {
   })
 
   // Starts the server
-  rex.Start(8080)
+  <-rex.Start(80)
 
   // Starts the server with https (powered by Let's Encrypt)
-  rex.startWithAutoTLS(443)
+  <-rex.StartWithAutoTLS(443)
 }
 ```
 
