@@ -15,7 +15,7 @@ func (path *Path) String() string {
 	return path.raw
 }
 
-// Len returns the path segments
+// Segments returns the path segments
 func (path *Path) Segments() []string {
 	segments := make([]string, len(path.segments))
 	copy(segments, path.segments)
@@ -24,6 +24,7 @@ func (path *Path) Segments() []string {
 
 // Segment returns the path segment by the index
 func (path *Path) GetSegment(index int) string {
+	index -= 1
 	if index >= 0 && index < len(path.segments) {
 		return path.segments[index]
 	}

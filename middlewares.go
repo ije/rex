@@ -141,18 +141,17 @@ func Cors(c CORS) Handle {
 }
 
 // ACL returns a ACL middleware.
-func ACL(permissions ...string) Handle {
+func ACL(permission string, next Handle) Handle {
 	return func(ctx *Context) interface{} {
-		for _, p := range permissions {
-			p = strings.TrimSpace(p)
-			if p != "" {
-				if ctx.acl == nil {
-					ctx.acl = map[string]struct{}{}
+		if ctx.aclUser != nil {
+			permissions := ctx.aclUser.Permissions()
+			for _, p := range permissions {
+				if p == permission {
+					return next(ctx)
 				}
-				ctx.acl[p] = struct{}{}
 			}
 		}
-		return nil
+		return &Error{403, "Forbidden"}
 	}
 }
 
@@ -193,5 +192,12 @@ func Compression() Handle {
 	return func(ctx *Context) interface{} {
 		ctx.compression = true
 		return nil
+	}
+}
+
+// Static returns a Static middleware handler.
+func Static(root, fallback string) Handle {
+	return func(ctx *Context) interface{} {
+		return FS(root, fallback)
 	}
 }

@@ -17,16 +17,7 @@ type Handle func(ctx *Context) interface{}
 
 // Handler is a query/mutation style API http Handler
 type Handler struct {
-	prefix      string
 	middlewares []Handle
-	queries     map[string][]Handle
-	mutations   map[string][]Handle
-}
-
-// Prefix adds prefix for each api path, like "v2"
-func (a *Handler) Prefix(prefix string) *Handler {
-	a.prefix = utils.CleanPath(prefix)
-	return a
 }
 
 // Use appends middlewares to current APIS middleware stack.
@@ -34,32 +25,6 @@ func (a *Handler) Use(middlewares ...Handle) {
 	for _, handle := range middlewares {
 		if handle != nil {
 			a.middlewares = append(a.middlewares, handle)
-		}
-	}
-}
-
-// Query adds a query api
-func (a *Handler) Query(endpoint string, handles ...Handle) {
-	endpoint = utils.CleanPath(endpoint)
-	if a.queries == nil {
-		a.queries = map[string][]Handle{}
-	}
-	for _, handle := range handles {
-		if handle != nil {
-			a.queries[endpoint] = append(a.queries[endpoint], handle)
-		}
-	}
-}
-
-// Mutation adds a mutation api
-func (a *Handler) Mutation(endpoint string, handles ...Handle) {
-	endpoint = utils.CleanPath(endpoint)
-	if a.mutations == nil {
-		a.mutations = map[string][]Handle{}
-	}
-	for _, handle := range handles {
-		if handle != nil {
-			a.mutations[endpoint] = append(a.mutations[endpoint], handle)
 		}
 	}
 }
@@ -128,21 +93,7 @@ func (a *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	var apiHandles map[string][]Handle
-	switch r.Method {
-	case "GET":
-		apiHandles = a.queries
-	case "POST":
-		apiHandles = a.mutations
-	default:
-		ctx.error(&Error{http.StatusMethodNotAllowed, http.StatusText(http.StatusMethodNotAllowed)})
-		return
-	}
-
 	pathname := utils.CleanPath(r.URL.Path)
-	if a.prefix != "/" {
-		pathname = strings.TrimPrefix(pathname, a.prefix)
-	}
 	path := &Path{
 		raw:      pathname,
 		segments: strings.Split(pathname[1:], "/"),
@@ -157,48 +108,10 @@ func (a *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	var handles []Handle
-	var ok bool
-	if len(path.segments) > 0 {
-		handles, ok = apiHandles[pathname]
-	}
-	if !ok {
-		for p, a := range apiHandles {
-			if strings.HasSuffix(p, "/*") && strings.HasPrefix(pathname, p[:len(p)-1]) {
-				handles = a
-				ok = true
-				break
-			}
-		}
-	}
-
-	if !ok {
-		ctx.error(&Error{404, "endpoint not found"})
+	if r.Method == "GET" {
+		ctx.end(&statusPlayload{404, "Not Found"})
 		return
 	}
 
-	for _, handle := range handles {
-		if len(ctx.acl) > 0 {
-			var isGranted bool
-			if ctx.aclUser != nil {
-				for _, id := range ctx.aclUser.Permissions() {
-					_, isGranted = ctx.acl[id]
-					if isGranted {
-						break
-					}
-				}
-			}
-			if !isGranted {
-				ctx.error(&Error{http.StatusForbidden, http.StatusText(http.StatusForbidden)})
-				return
-			}
-		}
-
-		ctx.W, ctx.R, ctx.Path, ctx.Form, ctx.Store = wr, r, path, form, store
-		v := handle(ctx)
-		if v != nil {
-			ctx.end(v)
-			return
-		}
-	}
+	ctx.end(&statusPlayload{405, "Method Not Allowed"})
 }

@@ -35,7 +35,6 @@ type Context struct {
 	Form          *Form
 	Store         *Store
 	basicAuthUser string
-	acl           map[string]struct{}
 	aclUser       ACLUser
 	session       *Session
 	sessionPool   session.Pool
@@ -205,6 +204,11 @@ Re:
 		ctx.W.WriteHeader(status)
 		ctx.W.Write([]byte(r))
 
+	case bool, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64:
+		ctx.SetHeader("Content-Type", "text/plain; charset=utf-8")
+		ctx.W.WriteHeader(status)
+		fmt.Fprintf(ctx.W, "%v", r)
+
 	case []byte:
 		if ctx.W.Header().Get("Content-Type") == "" {
 			ctx.SetHeader("Content-Type", "application/octet-stream")
@@ -288,24 +292,13 @@ Re:
 			ctx.error(&Error{500, r.Error()})
 		}
 
+	case *Error:
+		ctx.error(r)
+
+	case Error:
+		ctx.error(&r)
+
 	default:
-		_, err := utils.ToNumber(r)
-		if err == nil {
-			ctx.SetHeader("Content-Type", "text/plain; charset=utf-8")
-			ctx.W.WriteHeader(status)
-			fmt.Fprintf(ctx.W, "%v", r)
-			return
-		}
-
-		switch e := r.(type) {
-		case *Error:
-			ctx.error(e)
-			return
-		case Error:
-			ctx.error(&e)
-			return
-		}
-
 		ctx.json(r, status)
 	}
 }

@@ -4,7 +4,7 @@
 [![GoReport](https://goreportcard.com/badge/github.com/ije/rex)](https://goreportcard.com/report/github.com/ije/rex)
 [![MIT](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
 
-**REX** provides a query/mutation style API server in [Golang](https://golang.org/), noREST.
+**REX** is a lightweight, high-performance, and extensible web framework for Go.
 
 ## Installing
 
@@ -31,7 +31,7 @@ func main() {
   )
 
   // GET /*
-  rex.Query("*", func(ctx *rex.Context) interface{} {
+  rex.GET("/*", func(ctx *rex.Context) interface{} {
     return rex.HTML(
       "<h1>My Blog</h1><ul>{{range .}}<li>{{.Title}}</li>{{end}}</ul>",
       blogs.All(),
@@ -39,8 +39,8 @@ func main() {
   })
 
   // GET /post/123 => Blog JSON
-  rex.Query("post/*", func(ctx *rex.Context) interface{} {
-    blog, ok := blogs.Get(ctx.Path.RequireSegment(1))
+  rex.GET("/post/?", func(ctx *rex.Context) interface{} {
+    blog, ok := blogs.Get(ctx.Path.RequireSegment(2))
     if !ok {
       return &rex.Error{404, "blog not found"}
     }
@@ -48,10 +48,16 @@ func main() {
   })
 
   // POST /add-blog {"title": "Hello World"} => Blog JSON
-  rex.Mutation("add-blog", func(ctx *rex.Context) interface{} {
+  rex.POST("/create-blog", func(ctx *rex.Context) interface{} {
     blog := NewBlog(ctx.Form.Value("title"))
-    blogs.Add(blog)
+    blogs.Create(blog)
     return blog
+  })
+
+    // DELETE /add-blog?id=123 => Boolean
+  rex.DELETE("/delete-blog", func(ctx *rex.Context) interface{} {
+    ok := blogs.Delete(ctx.Form.RequireInt("id"))
+    return ok
   })
 
   // Starts the server

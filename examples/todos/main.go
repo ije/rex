@@ -16,7 +16,7 @@ const indexHTML = `
 <body>
     <h1>TODOS</h1>
     {{if .user}}
-        <form method="post" action="/logout"> 
+        <form method="post" action="/logout">
             <p>Welcome back, <strong>{{.user}}</strong>! <input value="Logout" type="submit"></p>
         </form>
         <h2>Todos List:</h2>
@@ -24,7 +24,7 @@ const indexHTML = `
             {{range $index,$todo := .todos}}
             <li>
                 <form style="display:inline-block;" method="post" action="/delete-todo">
-                    {{$todo}} &nbsp; <input name="index" type="hidden" value="{{$index}}"> <input value="x" type="submit">
+                    {{$todo}} &nbsp; <input name="_method" type="hidden" value="DELETE"> <input name="index" type="hidden" value="{{$index}}"> <input value="x" type="submit">
                 </form>
             </li>
             {{end}}
@@ -56,6 +56,15 @@ func (u *user) Permissions() []string {
 func main() {
 	todos := []string{}
 
+	// method override middleware
+	rex.Use(func(ctx *rex.Context) interface{} {
+		if ctx.R.Method == "POST" && ctx.Form.Value("_method") == "DELETE" {
+			ctx.R.Method = "DELETE"
+		}
+		return nil
+	})
+
+	// auth middleware
 	rex.Use(func(ctx *rex.Context) interface{} {
 		if ctx.Session().Has("USER") {
 			name := string(ctx.Session().Get("USER"))
@@ -71,7 +80,7 @@ func main() {
 		return nil
 	})
 
-	rex.Query("*", func(ctx *rex.Context) interface{} {
+	rex.GET("/", func(ctx *rex.Context) interface{} {
 		data := map[string]interface{}{}
 		aclUser := ctx.ACLUser()
 		if aclUser != nil {
@@ -81,13 +90,13 @@ func main() {
 		return rex.Render(indexTpl, data)
 	})
 
-	rex.Mutation("add-todo", rex.ACL("add"), func(ctx *rex.Context) interface{} {
+	rex.POST("/add-todo", rex.ACL("add", func(ctx *rex.Context) interface{} {
 		todo := ctx.Form.Require("todo")
 		todos = append(todos, todo)
 		return rex.Redirect("/", 301)
-	})
+	}))
 
-	rex.Mutation("delete-todo", rex.ACL("remove"), func(ctx *rex.Context) interface{} {
+	rex.DELETE("/delete-todo", rex.ACL("remove", func(ctx *rex.Context) interface{} {
 		index := ctx.Form.RequireInt("index")
 		var newTodos []string
 		for i, todo := range todos {
@@ -97,9 +106,9 @@ func main() {
 		}
 		todos = newTodos
 		return rex.Redirect("/", 301)
-	})
+	}))
 
-	rex.Mutation("login", func(ctx *rex.Context) interface{} {
+	rex.POST("/login", func(ctx *rex.Context) interface{} {
 		user := ctx.Form.Value("user")
 		if user != "admin" && user != "guest" {
 			return rex.Status(403, "invalid user")
@@ -108,7 +117,7 @@ func main() {
 		return rex.Redirect("/", 301)
 	})
 
-	rex.Mutation("logout", func(ctx *rex.Context) interface{} {
+	rex.POST("/logout", func(ctx *rex.Context) interface{} {
 		ctx.Session().Delete("USER")
 		return rex.Redirect("/", 301)
 	})
