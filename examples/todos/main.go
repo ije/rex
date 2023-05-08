@@ -66,8 +66,9 @@ func main() {
 
 	// auth middleware
 	rex.Use(func(ctx *rex.Context) interface{} {
-		if ctx.Session().Has("USER") {
-			name := string(ctx.Session().Get("USER"))
+		value := ctx.Session().Get("USER")
+		if value != nil {
+			name := string(value)
 			permissions := []string{}
 			if name == "admin" {
 				permissions = []string{"add", "remove"}
@@ -93,7 +94,7 @@ func main() {
 	rex.POST("/add-todo", rex.ACL("add", func(ctx *rex.Context) interface{} {
 		todo := ctx.Form.Require("todo")
 		todos = append(todos, todo)
-		return rex.Redirect("/", 301)
+		return rex.Redirect("/", 302)
 	}))
 
 	rex.DELETE("/delete-todo", rex.ACL("remove", func(ctx *rex.Context) interface{} {
@@ -105,7 +106,7 @@ func main() {
 			}
 		}
 		todos = newTodos
-		return rex.Redirect("/", 301)
+		return rex.Redirect("/", 302)
 	}))
 
 	rex.POST("/login", func(ctx *rex.Context) interface{} {
@@ -114,12 +115,12 @@ func main() {
 			return rex.Status(403, "invalid user")
 		}
 		ctx.Session().Set("USER", []byte(user))
-		return rex.Redirect("/", 301)
+		return rex.Redirect("/", 302)
 	})
 
 	rex.POST("/logout", func(ctx *rex.Context) interface{} {
 		ctx.Session().Delete("USER")
-		return rex.Redirect("/", 301)
+		return rex.Redirect("/", 302)
 	})
 
 	fmt.Println("Server running on http://localhost:8080")
