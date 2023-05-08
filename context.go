@@ -29,19 +29,19 @@ type Logger interface {
 
 // A Context to handle http requests.
 type Context struct {
-	W             http.ResponseWriter
-	R             *http.Request
-	Path          *Path
-	Form          *Form
-	Store         *Store
-	basicAuthUser string
-	aclUser       ACLUser
-	session       *Session
-	sessionPool   session.Pool
-	sidStore      session.SIDStore
-	compression   bool
-	logger        Logger
-	accessLogger  Logger
+	W                http.ResponseWriter
+	R                *http.Request
+	Path             *Path
+	Form             *Form
+	Store            *Store
+	basicAuthUser    string
+	aclUser          ACLUser
+	session          *SessionStub
+	sessionPool      session.Pool
+	sessionIdHandler session.IdHandler
+	compression      bool
+	logger           Logger
+	accessLogger     Logger
 }
 
 // BasicAuthUser returns the BasicAuth username
@@ -60,22 +60,22 @@ func (ctx *Context) SetACLUser(user ACLUser) {
 }
 
 // Session returns the session if it is undefined then create a new one.
-func (ctx *Context) Session() *Session {
+func (ctx *Context) Session() *SessionStub {
 	if ctx.sessionPool == nil {
 		panic(&recoverError{500, "session pool is nil"})
 	}
 
 	if ctx.session == nil {
-		sid := ctx.sidStore.Get(ctx.R)
+		sid := ctx.sessionIdHandler.Get(ctx.R)
 		sess, err := ctx.sessionPool.GetSession(sid)
 		if err != nil {
 			panic(&recoverError{500, err.Error()})
 		}
 
-		ctx.session = &Session{sess}
+		ctx.session = &SessionStub{sess}
 
 		if sess.SID() != sid {
-			ctx.sidStore.Put(ctx.W, sess.SID())
+			ctx.sessionIdHandler.Put(ctx.W, sess.SID())
 		}
 	}
 

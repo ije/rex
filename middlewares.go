@@ -39,21 +39,18 @@ func AccessLogger(logger Logger) Handle {
 	}
 }
 
-// SIDStore returns a SIDStore middleware to sets sid store for session.
-func SIDStore(sidStore session.SIDStore) Handle {
-	return func(ctx *Context) interface{} {
-		if sidStore != nil {
-			ctx.sidStore = sidStore
-		}
-		return nil
-	}
+type SessionOptions struct {
+	IdHandler session.IdHandler
+	Pool      session.Pool
 }
 
-// SessionPool returns a SessionPool middleware to set the session pool.
-func SessionPool(pool session.Pool) Handle {
+func Session(opts SessionOptions) Handle {
 	return func(ctx *Context) interface{} {
-		if pool != nil {
-			ctx.sessionPool = pool
+		if opts.IdHandler != nil {
+			ctx.sessionIdHandler = opts.IdHandler
+		}
+		if opts.Pool != nil {
+			ctx.sessionPool = opts.Pool
 		}
 		return nil
 	}

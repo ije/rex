@@ -36,13 +36,13 @@ func (a *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	form := &Form{r}
 	store := &Store{}
 	ctx := &Context{
-		W:           wr,
-		R:           r,
-		Form:        form,
-		Store:       store,
-		sidStore:    defaultSIDStore,
-		sessionPool: defaultSessionPool,
-		logger:      &log.Logger{},
+		W:                wr,
+		R:                r,
+		Form:             form,
+		Store:            store,
+		sessionIdHandler: defaultSessionIdHandler,
+		sessionPool:      defaultSessionPool,
+		logger:           &log.Logger{},
 	}
 
 	defer func() {
