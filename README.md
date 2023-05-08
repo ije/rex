@@ -4,7 +4,7 @@
 [![GoReport](https://goreportcard.com/badge/github.com/ije/rex)](https://goreportcard.com/report/github.com/ije/rex)
 [![MIT](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
 
-**REX** is a lightweight, high-performance, and extensible web framework for Go.
+**REX** is a lightweight, high-performance, and middleware extensible web framework for Go. Used by [esm.sh](https://esm.sh) CDN.
 
 ## Installing
 
@@ -19,6 +19,7 @@ package main
 
 import (
   "log"
+
   "github.com/ije/rex"
 )
 
@@ -62,5 +63,22 @@ func main() {
 
   // Starts the server
   rex.Start(8080)
+
+  // Starts the server with https (powered by Let's Encrypt)
+  rex.startWithAutoTLS(443)
 }
+```
+
+## Middleware
+
+In **REX**, a middleware is a function that receives a `*rex.Context` and returns a `interface{}`. If the returned value is not `nil`, the middleware will stop the next handler and return the value as the response.
+
+```go
+rex.Use(func(ctx *rex.Context) interface{} {
+  // return a html response
+  return rex.HTML("<h1>hello world</h1>")
+
+  // return nil to continue next handler
+  return nil
+})
 ```
