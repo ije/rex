@@ -4,7 +4,7 @@
 [![GoReport](https://goreportcard.com/badge/github.com/ije/rex)](https://goreportcard.com/report/github.com/ije/rex)
 [![MIT](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
 
-**REX** is a lightweight, high-performance, and middleware extensible web framework for Go. Used by [esm.sh](https://esm.sh) CDN.
+**REX** is a lightweight, high-performance, and middleware-extensible web framework for Go. Used by [esm.sh](https://esm.sh) CDN.
 
 ## Installing
 
