@@ -14,10 +14,12 @@ type MemorySession struct {
 	expires time.Time
 }
 
+// SID returns the sid
 func (ms *MemorySession) SID() string {
 	return ms.sid
 }
 
+// Has checks a value exists
 func (ms *MemorySession) Has(key string) (ok bool, err error) {
 	ms.lock.RLock()
 	_, ok = ms.store[key]
@@ -26,6 +28,7 @@ func (ms *MemorySession) Has(key string) (ok bool, err error) {
 	return
 }
 
+// Get returns a session value
 func (ms *MemorySession) Get(key string) (value []byte, err error) {
 	ms.lock.RLock()
 	value = ms.store[key]
@@ -34,6 +37,7 @@ func (ms *MemorySession) Get(key string) (value []byte, err error) {
 	return
 }
 
+// Set sets a session value
 func (ms *MemorySession) Set(key string, value []byte) error {
 	ms.lock.Lock()
 	ms.store[key] = value
@@ -42,6 +46,7 @@ func (ms *MemorySession) Set(key string, value []byte) error {
 	return nil
 }
 
+// Delete removes a session value
 func (ms *MemorySession) Delete(key string) error {
 	ms.lock.Lock()
 	delete(ms.store, key)
@@ -50,6 +55,7 @@ func (ms *MemorySession) Delete(key string) error {
 	return nil
 }
 
+// Flush flushes all session values
 func (ms *MemorySession) Flush() error {
 	ms.lock.Lock()
 	ms.store = map[string][]byte{}
@@ -64,6 +70,7 @@ type MemorySessionPool struct {
 	lifetime time.Duration
 }
 
+// NewMemorySessionPool returns a new MemorySessionPool
 func NewMemorySessionPool(lifetime time.Duration) *MemorySessionPool {
 	pool := &MemorySessionPool{
 		sessions: map[string]*MemorySession{},
@@ -75,6 +82,7 @@ func NewMemorySessionPool(lifetime time.Duration) *MemorySessionPool {
 	return pool
 }
 
+// GetSession returns a session by sid
 func (pool *MemorySessionPool) GetSession(sid string) (session Session, err error) {
 	pool.lock.RLock()
 	ms, ok := pool.sessions[sid]
@@ -114,6 +122,7 @@ func (pool *MemorySessionPool) GetSession(sid string) (session Session, err erro
 	return
 }
 
+// Destroy destroys a session by sid
 func (pool *MemorySessionPool) Destroy(sid string) error {
 	pool.lock.Lock()
 	delete(pool.sessions, sid)

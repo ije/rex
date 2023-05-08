@@ -57,6 +57,7 @@ func (w *responseWriter) Write(p []byte) (n int, err error) {
 	return
 }
 
+// Close closes the underlying connection.
 func (w *responseWriter) Close() error {
 	if w.compression != nil {
 		return w.compression.Close()

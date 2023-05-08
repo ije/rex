@@ -21,6 +21,7 @@ type Error struct {
 	Message string `json:"message"`
 }
 
+// Err returns an error with status.
 func Err(status int, v ...string) *Error {
 	var messsage string
 	if len(v) > 0 {
@@ -68,6 +69,7 @@ func HTML(html string) *contentful {
 	}
 }
 
+// Template is an interface for template.
 type Template interface {
 	Name() string
 	Execute(wr io.Writer, data interface{}) error

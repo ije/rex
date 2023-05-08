@@ -11,6 +11,7 @@ type mux struct {
 	forceHTTPS bool
 }
 
+// ServeHTTP implements http.Handler interface
 func (m *mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	header := w.Header()
 	header.Set("Connection", "keep-alive")

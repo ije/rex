@@ -16,10 +16,12 @@ type CookieSIDStore struct {
 	cookieName string
 }
 
+// NewCookieSIDStore returns a new CookieSIDStore
 func NewCookieSIDStore(cookieName string) *CookieSIDStore {
 	return &CookieSIDStore{cookieName: strings.TrimSpace(cookieName)}
 }
 
+// CookieName returns cookie name
 func (s *CookieSIDStore) CookieName() string {
 	name := strings.TrimSpace(s.cookieName)
 	if name == "" {
