@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 
@@ -193,16 +194,17 @@ Switch:
 		http.Redirect(ctx.W, ctx.R, r.url, r.status)
 
 	case string:
+		data := []byte(r)
 		if ctx.W.Header().Get("Content-Type") == "" {
 			ctx.SetHeader("Content-Type", "text/plain; charset=utf-8")
 		}
-		if ctx.compression {
-			if len(r) > 1024 {
-				ctx.EnableCompression()
-			}
+		if ctx.compression && len(r) > 1024 {
+			ctx.EnableCompression()
+		} else {
+			ctx.SetHeader("Content-Length", strconv.Itoa(len(data)))
 		}
 		ctx.W.WriteHeader(status)
-		ctx.W.Write([]byte(r))
+		ctx.W.Write(data)
 
 	case bool, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64:
 		ctx.SetHeader("Content-Type", "text/plain; charset=utf-8")
@@ -213,6 +215,7 @@ Switch:
 		if ctx.W.Header().Get("Content-Type") == "" {
 			ctx.SetHeader("Content-Type", "application/octet-stream")
 		}
+		ctx.SetHeader("Content-Length", strconv.Itoa(len(r)))
 		ctx.W.WriteHeader(status)
 		ctx.W.Write(r)
 
@@ -222,6 +225,19 @@ Switch:
 				c.Close()
 			}
 		}()
+		if s, ok := r.(io.Seeker); ok {
+			size, err := s.Seek(0, io.SeekEnd)
+			if err != nil {
+				ctx.error(&Error{500, err.Error()})
+				return
+			}
+			_, err = s.Seek(0, io.SeekStart)
+			if err != nil {
+				ctx.error(&Error{500, err.Error()})
+				return
+			}
+			ctx.SetHeader("Content-Length", strconv.FormatInt(size, 10))
+		}
 		if ctx.W.Header().Get("Content-Type") == "" {
 			ctx.SetHeader("Content-Type", "application/octet-stream")
 		}
@@ -312,10 +328,10 @@ func (ctx *Context) json(v interface{}, status int) {
 		ctx.W.Write([]byte(`{"error": {"status": 500, "message": "bad json"}}`))
 		return
 	}
-	if ctx.compression {
-		if buf.Len() > 1024 {
-			ctx.EnableCompression()
-		}
+	if ctx.compression && buf.Len() > 1024 {
+		ctx.EnableCompression()
+	} else {
+		ctx.SetHeader("Content-Length", strconv.Itoa(buf.Len()))
 	}
 	ctx.W.WriteHeader(status)
 	io.Copy(ctx.W, buf)
