@@ -198,7 +198,7 @@ Switch:
 		if ctx.W.Header().Get("Content-Type") == "" {
 			ctx.SetHeader("Content-Type", "text/plain; charset=utf-8")
 		}
-		if ctx.compression && len(r) > 1024 {
+		if ctx.compression && len(data) > 1024 {
 			ctx.EnableCompression()
 		} else {
 			ctx.SetHeader("Content-Length", strconv.Itoa(len(data)))
