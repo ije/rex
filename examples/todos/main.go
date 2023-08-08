@@ -112,7 +112,7 @@ func main() {
 	rex.POST("/login", func(ctx *rex.Context) interface{} {
 		user := ctx.Form.Value("user")
 		if user != "admin" && user != "guest" {
-			return rex.Status(403, "invalid user")
+			return rex.Status(403, rex.HTML("<p>Sorry, you are not allowed to login. <a href=\"/\">Go back</a></p>"))
 		}
 		ctx.Session().Set("USER", []byte(user))
 		return rex.Redirect("/", 302)
