@@ -30,15 +30,25 @@ func match(path string, ctx *Context) bool {
 	return false
 }
 
-func rest(method, path string, handle Handle) Handle {
+func rest(method string, path string, handles []Handle) Handle {
 	if !strings.HasPrefix(path, "/") {
 		panic("path must start with '/'")
+	}
+	if len(handles) == 0 {
+		panic("handles must not be empty")
 	}
 	path = utils.CleanPath(path)
 	return func(ctx *Context) interface{} {
 		if ctx.R.Method == method {
 			if match(path, ctx) {
-				return handle(ctx)
+				w, r, path, form, store := ctx.W, ctx.R, ctx.Path, ctx.Form, ctx.Store
+				for _, handle := range handles {
+					v := handle(ctx)
+					if v != nil {
+						return v
+					}
+					ctx.W, ctx.R, ctx.Path, ctx.Form, ctx.Store = w, r, path, form, store
+				}
 			}
 		}
 		return nil
@@ -46,31 +56,31 @@ func rest(method, path string, handle Handle) Handle {
 }
 
 // HEAD returns a Handle to handle HEAD requests
-func HEAD(path string, handle Handle) {
-	Use(rest("HEAD", path, handle))
+func HEAD(path string, handles ...Handle) {
+	Use(rest("HEAD", path, handles))
 }
 
 // GET returns a Handle to handle GET requests
-func GET(path string, handle Handle) {
-	Use(rest("GET", path, handle))
+func GET(path string, handles ...Handle) {
+	Use(rest("GET", path, handles))
 }
 
 // POST returns a Handle to handle POST requests
-func POST(path string, handle Handle) {
-	Use(rest("POST", path, handle))
+func POST(path string, handles ...Handle) {
+	Use(rest("POST", path, handles))
 }
 
 // PUT returns a Handle to handle PUT requests
-func PUT(path string, handle Handle) {
-	Use(rest("PUT", path, handle))
+func PUT(path string, handles ...Handle) {
+	Use(rest("PUT", path, handles))
 }
 
 // DELETE returns a Handle to handle DELETE requests
-func DELETE(path string, handle Handle) {
-	Use(rest("DELETE", path, handle))
+func DELETE(path string, handles ...Handle) {
+	Use(rest("DELETE", path, handles))
 }
 
 // PATCH returns a Handle to handle PATCH requests
-func PATCH(path string, handle Handle) {
-	Use(rest("PATCH", path, handle))
+func PATCH(path string, handles ...Handle) {
+	Use(rest("PATCH", path, handles))
 }

@@ -138,13 +138,13 @@ func Cors(c CORS) Handle {
 }
 
 // ACL returns a ACL middleware.
-func ACL(permission string, next Handle) Handle {
+func ACL(permission string) Handle {
 	return func(ctx *Context) interface{} {
 		if ctx.aclUser != nil {
 			permissions := ctx.aclUser.Permissions()
 			for _, p := range permissions {
 				if p == permission {
-					return next(ctx)
+					return nil // next
 				}
 			}
 		}

@@ -100,12 +100,12 @@ func (a *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for _, handle := range a.middlewares {
-		ctx.W, ctx.R, ctx.Path, ctx.Form, ctx.Store = wr, r, path, form, store
 		v := handle(ctx)
 		if v != nil {
 			ctx.end(v)
 			return
 		}
+		ctx.W, ctx.R, ctx.Path, ctx.Form, ctx.Store = wr, r, path, form, store
 	}
 
 	if r.Method == "GET" {

@@ -56,7 +56,7 @@ func (u *user) Permissions() []string {
 func main() {
 	todos := []string{}
 
-	// method override middleware
+	// override http methods middleware
 	rex.Use(func(ctx *rex.Context) interface{} {
 		if ctx.R.Method == "POST" && ctx.Form.Value("_method") == "DELETE" {
 			ctx.R.Method = "DELETE"
@@ -91,13 +91,13 @@ func main() {
 		return rex.Render(indexTpl, data)
 	})
 
-	rex.POST("/add-todo", rex.ACL("add", func(ctx *rex.Context) interface{} {
+	rex.POST("/add-todo", rex.ACL("add"), func(ctx *rex.Context) interface{} {
 		todo := ctx.Form.Require("todo")
 		todos = append(todos, todo)
 		return rex.Redirect("/", 302)
-	}))
+	})
 
-	rex.DELETE("/delete-todo", rex.ACL("remove", func(ctx *rex.Context) interface{} {
+	rex.DELETE("/delete-todo", rex.ACL("remove"), func(ctx *rex.Context) interface{} {
 		index := ctx.Form.RequireInt("index")
 		var newTodos []string
 		for i, todo := range todos {
@@ -107,7 +107,7 @@ func main() {
 		}
 		todos = newTodos
 		return rex.Redirect("/", 302)
-	}))
+	})
 
 	rex.POST("/login", func(ctx *rex.Context) interface{} {
 		user := ctx.Form.Value("user")
