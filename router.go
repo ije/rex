@@ -182,20 +182,3 @@ func (a *Router) putParams(ps *Params) {
 		a.paramsPool.Put(ps)
 	}
 }
-
-func chain(handles []Handle) Handle {
-	if len(handles) == 0 {
-		panic("no handle")
-	}
-	return func(ctx *Context) interface{} {
-		w, r, path, form, store := ctx.W, ctx.R, ctx.Path, ctx.Form, ctx.Store
-		for _, handle := range handles {
-			v := handle(ctx)
-			if v != nil {
-				return v
-			}
-			ctx.W, ctx.R, ctx.Path, ctx.Form, ctx.Store = w, r, path, form, store
-		}
-		return nil
-	}
-}

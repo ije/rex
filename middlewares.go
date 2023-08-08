@@ -198,3 +198,21 @@ func Static(root, fallback string) Handle {
 		return FS(root, fallback)
 	}
 }
+
+// Chain returns a middleware handler that executes handlers in a chain.
+func Chain(handles ...Handle) Handle {
+	if len(handles) == 0 {
+		panic("no handles in the chain")
+	}
+	return func(ctx *Context) interface{} {
+		w, r, path, form, store := ctx.W, ctx.R, ctx.Path, ctx.Form, ctx.Store
+		for _, handle := range handles {
+			v := handle(ctx)
+			if v != nil {
+				return v
+			}
+			ctx.W, ctx.R, ctx.Path, ctx.Form, ctx.Store = w, r, path, form, store
+		}
+		return nil
+	}
+}

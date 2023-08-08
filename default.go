@@ -26,30 +26,30 @@ func AddRoute(method string, pattern string, handle Handle) {
 
 // HEAD returns a Handle to handle HEAD requests
 func HEAD(pattern string, handles ...Handle) {
-	AddRoute("HEAD", pattern, chain(handles))
+	AddRoute("HEAD", pattern, Chain(handles...))
 }
 
 // GET returns a Handle to handle GET requests
 func GET(pattern string, handles ...Handle) {
-	AddRoute("GET", pattern, chain(handles))
+	AddRoute("GET", pattern, Chain(handles...))
 }
 
 // POST returns a Handle to handle POST requests
 func POST(pattern string, handles ...Handle) {
-	AddRoute("POST", pattern, chain(handles))
+	AddRoute("POST", pattern, Chain(handles...))
 }
 
 // PUT returns a Handle to handle PUT requests
 func PUT(pattern string, handles ...Handle) {
-	AddRoute("PUT", pattern, chain(handles))
+	AddRoute("PUT", pattern, Chain(handles...))
 }
 
 // PATCH returns a Handle to handle PATCH requests
 func PATCH(pattern string, handles ...Handle) {
-	AddRoute("PATCH", pattern, chain(handles))
+	AddRoute("PATCH", pattern, Chain(handles...))
 }
 
 // DELETE returns a Handle to handle DELETE requests
 func DELETE(pattern string, handles ...Handle) {
-	AddRoute("DELETE", pattern, chain(handles))
+	AddRoute("DELETE", pattern, Chain(handles...))
 }

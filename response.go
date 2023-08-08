@@ -10,6 +10,9 @@ import (
 	"time"
 )
 
+// Response defines the response interface.
+type Response interface{}
+
 type recoverError struct {
 	status  int
 	message string
@@ -22,7 +25,7 @@ type Error struct {
 }
 
 // Err returns an error with status.
-func Err(status int, v ...string) *Error {
+func Err(status int, v ...string) Response {
 	var messsage string
 	if len(v) > 0 {
 		args := make([]interface{}, len(v))
@@ -46,7 +49,7 @@ type redirect struct {
 
 // Redirect replies to the request with a redirect to url,
 // which may be a path relative to the request path.
-func Redirect(url string, status int) interface{} {
+func Redirect(url string, status int) Response {
 	return &redirect{status, url}
 }
 
@@ -56,12 +59,12 @@ type statusPlayload struct {
 }
 
 // Status replies to the request using the payload in the status.
-func Status(status int, payload interface{}) *statusPlayload {
+func Status(status int, payload interface{}) Response {
 	return &statusPlayload{status, payload}
 }
 
 // HTML replies to the request with a html content.
-func HTML(html string) *contentful {
+func HTML(html string) Response {
 	return &contentful{
 		name:    "index.html",
 		mtime:   time.Now(),
@@ -76,7 +79,7 @@ type Template interface {
 }
 
 // Render renders the template with the given data.
-func Render(t Template, data interface{}) interface{} {
+func Render(t Template, data interface{}) Response {
 	buf := bytes.NewBuffer(nil)
 	if err := t.Execute(buf, data); err != nil {
 		panic(&recoverError{500, err.Error()})
@@ -96,12 +99,12 @@ type contentful struct {
 }
 
 // Content replies to the request using the content in the provided ReadSeeker.
-func Content(name string, mtime time.Time, r io.ReadSeeker) *contentful {
+func Content(name string, mtime time.Time, r io.ReadSeeker) Response {
 	return &contentful{name, mtime, r}
 }
 
 // File replies to the request using the file content.
-func File(name string) *contentful {
+func File(name string) Response {
 	fi, err := os.Stat(name)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -127,7 +130,7 @@ type fs struct {
 }
 
 // FS replies to the request with the contents of the file system rooted at root.
-func FS(root string, fallback string) interface{} {
+func FS(root string, fallback string) Response {
 	fi, err := os.Lstat(root)
 	if err != nil {
 		panic(&recoverError{500, err.Error()})
