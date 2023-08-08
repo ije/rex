@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/ije/gox/log"
-	"github.com/ije/gox/utils"
 )
 
 // Handle defines the API handle
@@ -93,10 +92,10 @@ func (a *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	pathname := utils.CleanPath(r.URL.Path)
 	path := &Path{
-		raw:      pathname,
-		segments: strings.Split(pathname[1:], "/"),
+		Params:   Params{},
+		raw:      r.URL.Path,
+		segments: splitPath(r.URL.Path),
 	}
 
 	for _, handle := range a.middlewares {

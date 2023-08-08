@@ -1,41 +1,23 @@
 package rex
 
 import (
-	"fmt"
+	"strings"
+
+	"github.com/ije/gox/utils"
 )
 
 // A Form to handle request path.
 type Path struct {
+	Params   Params
 	raw      string
 	segments []string
 }
 
 // String returns the path as string
 func (path *Path) String() string {
-	return path.raw
+	return "/" + strings.Join(path.segments, "/")
 }
 
-// Segments returns the path segments
-func (path *Path) Segments() []string {
-	segments := make([]string, len(path.segments))
-	copy(segments, path.segments)
-	return segments
-}
-
-// Segment returns the path segment by the index
-func (path *Path) GetSegment(index int) string {
-	index -= 1
-	if index >= 0 && index < len(path.segments) {
-		return path.segments[index]
-	}
-	return ""
-}
-
-// RequireSegment requires a path segment by the index
-func (path *Path) RequireSegment(index int) string {
-	value := path.GetSegment(index)
-	if value == "" {
-		panic(&recoverError{400, fmt.Sprintf("require path segment[%d]", index)})
-	}
-	return value
+func splitPath(path string) []string {
+	return strings.Split(utils.CleanPath(path)[1:], "/")
 }
