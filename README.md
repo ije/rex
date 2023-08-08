@@ -4,7 +4,7 @@
 [![GoReport](https://goreportcard.com/badge/github.com/ije/rex)](https://goreportcard.com/report/github.com/ije/rex)
 [![MIT](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
 
-**REX** is a lightweight, high-performance, and middleware-extensible web framework for Go. Used by [esm.sh](https://esm.sh) CDN.
+**REX** is a lightweight, high-performance, and middleware-extensible web framework in Go. Used by [esm.sh](https://esm.sh) CDN.
 
 ## Installing
 
@@ -31,7 +31,7 @@ func main() {
     rex.Compress(),
   )
 
-  // GET /* => Blogs JSON
+  // GET /* => Blog page in html
   rex.GET("/*", func(ctx *rex.Context) interface{} {
     return rex.Render(
       `<h1>My Blog</h1><ul>{{range .}}<li>{{.Title}}</li>{{end}}</ul>`,
@@ -39,7 +39,7 @@ func main() {
     )
   })
 
-  // GET /post/123 => Blog JSON
+  // GET /post/123 => Blog in JSON
   rex.GET("/post/?", func(ctx *rex.Context) interface{} {
     blog, ok := blogs.Get(ctx.Path.RequireSegment(2))
     if !ok {
@@ -48,14 +48,14 @@ func main() {
     return blog
   })
 
-  // POST /add-blog {"title": "Hello World"} => Blog JSON
+  // POST /add-blog {"title": "Hello World"} => Created Blog in JSON
   rex.POST("/create-blog", func(ctx *rex.Context) interface{} {
     blog := NewBlog(ctx.Form.Value("title"))
     blogs.Create(blog)
     return blog
   })
 
-    // DELETE /add-blog?id=123 => Boolean
+  // DELETE /add-blog?id=123 => "true" if deleted
   rex.DELETE("/delete-blog", func(ctx *rex.Context) interface{} {
     ok := blogs.Delete(ctx.Form.RequireInt("id"))
     return ok
