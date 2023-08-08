@@ -64,7 +64,7 @@ func main() {
   // Starts the server
   <-rex.Start(80)
 
-  // Starts the server with https (powered by Let's Encrypt)
+  // Starts the server with TLS (powered by Let's Encrypt)
   <-rex.StartWithAutoTLS(443)
 }
 ```
@@ -73,7 +73,7 @@ More examples check [examples](./examples)
 
 ## Middleware
 
-In **REX**, a middleware is a function that receives a `*rex.Context` and returns a `interface{}`. If the returned value is not `nil`, the middleware will stop the next handler and return the value as the response.
+In **REX**, a middleware is a function that receives a `*rex.Context` and returns a `interface{}`. If the returned value is not `nil`, the middleware will return the value to the client, or continue to execute the next middleware.
 
 ```go
 rex.Use(func(ctx *rex.Context) interface{} {
@@ -82,5 +82,26 @@ rex.Use(func(ctx *rex.Context) interface{} {
 
   // return nil to continue next handler
   return nil
+})
+```
+
+## Router
+
+**REX** uses [httprouter](https://github.com/julienschmidt/httprouter) as the router, so you can use the same syntax as httprouter to define routes.
+
+```go
+// static route
+rex.GET("/", func(ctx *rex.Context) interface{} {})
+// dynamic route
+rex.GET("/posts/:slug", func(ctx *rex.Context) interface{} {})
+// match all
+rex.GET("/posts/*path", func(ctx *rex.Context) interface{} {})
+```
+
+you can access the path params via `ctx.Path.Params`:
+
+```go
+rex.GET("/posts/:slug", func(ctx *rex.Context) interface{} {
+  return fmt.Sprintf("slug is %s", ctx.Path.Params.Get("slug"))
 })
 ```
