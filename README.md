@@ -31,33 +31,33 @@ func main() {
     rex.Compress(),
   )
 
-  // GET /* => Blog page in html
-  rex.GET("/*", func(ctx *rex.Context) interface{} {
+  // GET / => Post list in HTML
+  rex.GET("/", func(ctx *rex.Context) interface{} {
     return rex.Render(
       `<h1>My Blog</h1><ul>{{range .}}<li>{{.Title}}</li>{{end}}</ul>`,
-      blogs.GetAll(),
+      posts.GetAll(),
     )
   })
 
-  // GET /post/123 => Blog in JSON
-  rex.GET("/post/:id", func(ctx *rex.Context) interface{} {
-    blog, ok := blogs.Get(ctx.Path.Params.Get("id"))
+  // GET /posts/foo-bar => Post in JSON if exists
+  rex.GET("/posts/:slug", func(ctx *rex.Context) interface{} {
+    post, ok := posts.Get(ctx.Path.Params.Get("slug"))
     if !ok {
-      return &rex.Error{404, "blog not found"}
+      return &rex.Error{404, "post not found"}
     }
-    return blog
+    return post
   })
 
-  // POST /add-blog {"title": "Hello World"} => Created Blog in JSON
-  rex.POST("/create-blog", func(ctx *rex.Context) interface{} {
-    blog := NewBlog(ctx.Form.Value("title"))
-    blogs.Create(blog)
-    return blog
+  // POST /posts {"title": "Hello World"} => Created Post in JSON
+  rex.POST("/posts", func(ctx *rex.Context) interface{} {
+    post := Newpost(ctx.Form.Value("title"))
+    posts.Create(post)
+    return post
   })
 
-  // DELETE /add-blog?id=123 => "true" if deleted
-  rex.DELETE("/delete-blog", func(ctx *rex.Context) interface{} {
-    ok := blogs.Delete(ctx.Form.RequireInt("id"))
+  // DELETE /posts/foo-bar => "true" if deleted
+  rex.DELETE("/posts/:slug", func(ctx *rex.Context) interface{} {
+    ok := posts.Delete(ctx.Path.Params.Get("slug"))
     return ok
   })
 
@@ -68,6 +68,8 @@ func main() {
   <-rex.StartWithAutoTLS(443)
 }
 ```
+
+More examples check [examples](./examples)
 
 ## Middleware
 
