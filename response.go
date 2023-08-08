@@ -65,9 +65,8 @@ func Status(status int, payload interface{}) Response {
 
 // HTML replies to the request with a html content.
 func HTML(html string) Response {
-	return &contentful{
+	return &content{
 		name:    "index.html",
-		mtime:   time.Now(),
 		content: bytes.NewReader([]byte(html)),
 	}
 }
@@ -85,22 +84,21 @@ func Render(t Template, data interface{}) Response {
 		panic(&recoverError{500, err.Error()})
 	}
 
-	return &contentful{
+	return &content{
 		name:    t.Name(),
-		mtime:   time.Now(),
 		content: bytes.NewReader(buf.Bytes()),
 	}
 }
 
-type contentful struct {
+type content struct {
 	name    string
 	mtime   time.Time
 	content io.ReadSeeker
 }
 
 // Content replies to the request using the content in the provided ReadSeeker.
-func Content(name string, mtime time.Time, r io.ReadSeeker) Response {
-	return &contentful{name, mtime, r}
+func Content(name string, r io.ReadSeeker) Response {
+	return &content{name, time.Time{}, r}
 }
 
 // File replies to the request using the file content.
@@ -121,7 +119,7 @@ func File(name string) Response {
 		panic(&recoverError{500, err.Error()})
 	}
 
-	return &contentful{path.Base(name), fi.ModTime(), file}
+	return &content{path.Base(name), fi.ModTime(), file}
 }
 
 type fs struct {

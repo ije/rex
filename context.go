@@ -244,7 +244,7 @@ Switch:
 		ctx.W.WriteHeader(status)
 		io.Copy(ctx.W, r)
 
-	case *contentful:
+	case *content:
 		defer func() {
 			if c, ok := r.content.(io.Closer); ok {
 				c.Close()
@@ -272,6 +272,10 @@ Switch:
 				}
 			}
 		}
+		if r.mtime.IsZero() {
+			r.mtime = time.Now()
+			ctx.W.Header().Set("cache-control", "no-cache, no-store, must-revalidate")
+		}
 		http.ServeContent(ctx.W, ctx.R, r.name, r.mtime, r.content)
 
 	case *statusPlayload:
@@ -280,12 +284,7 @@ Switch:
 		goto Switch
 
 	case *fs:
-		var filepath string
-		if v := ctx.Path.Params.Get("file"); v != "" {
-			filepath = path.Join(filepath, v)
-		} else {
-			filepath = path.Join(filepath, ctx.Path.String())
-		}
+		filepath := path.Join(r.root, ctx.Path.String())
 		fi, err := os.Stat(filepath)
 		if err == nil && fi.IsDir() {
 			filepath = path.Join(filepath, "index.html")
