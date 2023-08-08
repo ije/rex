@@ -69,7 +69,7 @@ func main() {
 }
 ```
 
-More examples check [examples](./examples)
+More examples check [examples](./examples).
 
 ## Middleware
 
