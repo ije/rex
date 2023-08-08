@@ -280,7 +280,12 @@ Switch:
 		goto Switch
 
 	case *fs:
-		filepath := path.Join(r.root, ctx.Path.String())
+		var filepath string
+		if v := ctx.Path.Params.Get("file"); v != "" {
+			filepath = path.Join(filepath, v)
+		} else {
+			filepath = path.Join(filepath, ctx.Path.String())
+		}
 		fi, err := os.Stat(filepath)
 		if err == nil && fi.IsDir() {
 			filepath = path.Join(filepath, "index.html")

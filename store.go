@@ -19,11 +19,3 @@ func (s *Store) Get(key string) (interface{}, bool) {
 func (s *Store) Set(key string, value interface{}) {
 	s.values.Store(key, value)
 }
-
-// A Params to store path params.
-type Params map[string]string
-
-// Get returns the value stored in the params for a key.
-func (p Params) Get(key string) string {
-	return p[key]
-}

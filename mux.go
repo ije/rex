@@ -26,5 +26,5 @@ func (m *mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	defaultHanlder.ServeHTTP(w, r)
+	defaultRouter.ServeHTTP(w, r)
 }
