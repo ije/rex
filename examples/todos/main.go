@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"html/template"
 
 	"github.com/ije/rex"
 )
@@ -42,7 +41,7 @@ const indexHTML = `
 </html>
 `
 
-var indexTpl = template.Must(template.New("index.html").Parse(indexHTML))
+var indexTpl = rex.Tpl("html", indexHTML)
 
 type user struct {
 	name        string

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"text/template"
 	"time"
 )
 
@@ -75,6 +76,10 @@ func HTML(html string) Response {
 type Template interface {
 	Name() string
 	Execute(wr io.Writer, data interface{}) error
+}
+
+func Tpl(ttype string, text string) Template {
+	return template.Must(template.New("index." + ttype).Parse(text))
 }
 
 // Render renders the template with the given data.

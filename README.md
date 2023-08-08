@@ -34,7 +34,7 @@ func main() {
   // GET / => Post list in HTML
   rex.GET("/", func(ctx *rex.Context) interface{} {
     return rex.Render(
-      `<h1>My Blog</h1><ul>{{range .}}<li>{{.Title}}</li>{{end}}</ul>`,
+      rex.Tpl("html", "<h1>My Blog</h1><ul>{{range .}}<li>{{.Title}}</li>{{end}}</ul>"),
       posts.GetAll(),
     )
   })

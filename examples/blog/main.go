@@ -7,7 +7,6 @@ import (
 	"os"
 	"regexp"
 	"strings"
-	"text/template"
 
 	"github.com/ije/rex"
 )
@@ -58,8 +57,8 @@ const pageTplRaw = `
 
 var (
 	books   = []Book{}
-	listTpl = template.Must(template.New("index.html").Parse(listTplRaw))
-	pageTpl = template.Must(template.New("page.html").Parse(pageTplRaw))
+	listTpl = rex.Tpl("html", listTplRaw)
+	pageTpl = rex.Tpl("html", pageTplRaw)
 )
 
 func main() {
