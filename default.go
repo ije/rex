@@ -10,11 +10,6 @@ var defaultRouter = &Router{}
 var defaultSessionPool = session.NewMemorySessionPool(time.Hour / 2)
 var defaultSessionIdHandler = session.NewCookieIdHandler("")
 
-// Default returns the default REST
-func Default() *Router {
-	return defaultRouter
-}
-
 // Use appends middlewares to current APIS middleware stack.
 func Use(middlewares ...Handle) {
 	defaultRouter.Use(middlewares...)

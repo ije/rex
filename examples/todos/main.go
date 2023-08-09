@@ -64,21 +64,22 @@ func main() {
 	})
 
 	// auth middleware
-	rex.Use(func(ctx *rex.Context) interface{} {
+	rex.Use(rex.ACLAuth(func(ctx *rex.Context) rex.ACLUser {
 		value := ctx.Session().Get("USER")
-		if value != nil {
-			name := string(value)
-			permissions := []string{}
-			if name == "admin" {
-				permissions = []string{"add", "remove"}
-			}
-			ctx.SetACLUser(&user{
-				name:        name,
-				permissions: permissions,
-			})
+		if value == nil {
+			return nil
 		}
-		return nil
-	})
+		name := string(value)
+		if name == "admin" {
+			return &user{
+				name:        "admin",
+				permissions: []string{"add", "remove"},
+			}
+		}
+		return &user{
+			name: name,
+		}
+	}))
 
 	rex.GET("/", func(ctx *rex.Context) interface{} {
 		data := map[string]interface{}{}

@@ -15,7 +15,7 @@ import (
 func Header(key string, value string) Handle {
 	return func(ctx *Context) interface{} {
 		if key != "" {
-			ctx.SetHeader(key, value)
+			ctx.W.Header().Set(key, value)
 		}
 		return nil
 	}
@@ -179,8 +179,17 @@ func BasicAuthWithRealm(realm string, auth func(name string, secret string) (ok 
 		if realm == "" {
 			realm = "Authorization Required"
 		}
-		ctx.SetHeader("WWW-Authenticate", fmt.Sprintf(`Basic realm="%s"`, realm))
+		ctx.W.Header().Set("WWW-Authenticate", fmt.Sprintf(`Basic realm="%s"`, realm))
 		return Status(401, "")
+	}
+}
+
+// ACLAuth returns a ACL authentication middleware.
+func ACLAuth(auth func(ctx *Context) ACLUser) Handle {
+	return func(ctx *Context) interface{} {
+		user := auth(ctx)
+		ctx.aclUser = user
+		return nil
 	}
 }
 

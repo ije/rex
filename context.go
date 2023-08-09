@@ -55,11 +55,6 @@ func (ctx *Context) ACLUser() ACLUser {
 	return ctx.aclUser
 }
 
-// SetACLUser sets the acl user
-func (ctx *Context) SetACLUser(user ACLUser) {
-	ctx.aclUser = user
-}
-
 // Session returns the session if it is undefined then create a new one.
 func (ctx *Context) Session() *SessionStub {
 	if ctx.sessionPool == nil {
@@ -84,20 +79,21 @@ func (ctx *Context) Session() *SessionStub {
 }
 
 // Cookie returns the cookie by name.
-func (ctx *Context) Cookie(name string) (cookie *http.Cookie, err error) {
-	return ctx.R.Cookie(name)
+func (ctx *Context) Cookie(name string) (cookie *http.Cookie) {
+	cookie, _ = ctx.R.Cookie(name)
+	return
 }
 
 // SetCookie sets a cookie.
-func (ctx *Context) SetCookie(cookie *http.Cookie) {
-	if cookie != nil {
-		ctx.AddHeader("Set-Cookie", cookie.String())
+func (ctx *Context) SetCookie(cookie http.Cookie) {
+	if cookie.Name != "" {
+		ctx.W.Header().Add("Set-Cookie", cookie.String())
 	}
 }
 
 // RemoveCookie removes the cookie.
-func (ctx *Context) RemoveCookie(cookie *http.Cookie) {
-	if cookie != nil {
+func (ctx *Context) RemoveCookie(cookie http.Cookie) {
+	if cookie.Name != "" {
 		cookie.Value = "-"
 		cookie.Expires = time.Unix(0, 0)
 		ctx.SetCookie(cookie)
@@ -106,27 +102,11 @@ func (ctx *Context) RemoveCookie(cookie *http.Cookie) {
 
 // RemoveCookieByName removes the cookie by name.
 func (ctx *Context) RemoveCookieByName(name string) {
-	ctx.SetCookie(&http.Cookie{
+	ctx.SetCookie(http.Cookie{
 		Name:    name,
 		Value:   "-",
 		Expires: time.Unix(0, 0),
 	})
-}
-
-// AddHeader adds the key, value pair to the header of response writer.
-func (ctx *Context) AddHeader(key string, value string) {
-	ctx.W.Header().Add(key, value)
-}
-
-// SetHeader sets the header of response writer entries associated with key to the
-// single element value.
-func (ctx *Context) SetHeader(key string, value string) {
-	ctx.W.Header().Set(key, value)
-}
-
-// DeleteHeader deletes the values associated with key.
-func (ctx *Context) DeleteHeader(key string) {
-	ctx.W.Header().Del(key)
 }
 
 // RemoteIP returns the remote client IP.
@@ -184,6 +164,7 @@ func (ctx *Context) EnableCompression() {
 
 func (ctx *Context) end(v interface{}) {
 	status := 200
+	header := ctx.W.Header()
 
 Switch:
 	switch r := v.(type) {
@@ -195,27 +176,27 @@ Switch:
 
 	case string:
 		data := []byte(r)
-		if ctx.W.Header().Get("Content-Type") == "" {
-			ctx.SetHeader("Content-Type", "text/plain; charset=utf-8")
+		if header.Get("Content-Type") == "" {
+			header.Set("Content-Type", "text/plain; charset=utf-8")
 		}
 		if ctx.compression && len(data) > 1024 {
 			ctx.EnableCompression()
 		} else {
-			ctx.SetHeader("Content-Length", strconv.Itoa(len(data)))
+			header.Set("Content-Length", strconv.Itoa(len(data)))
 		}
 		ctx.W.WriteHeader(status)
 		ctx.W.Write(data)
 
 	case bool, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64:
-		ctx.SetHeader("Content-Type", "text/plain; charset=utf-8")
+		header.Set("Content-Type", "text/plain; charset=utf-8")
 		ctx.W.WriteHeader(status)
 		fmt.Fprintf(ctx.W, "%v", r)
 
 	case []byte:
-		if ctx.W.Header().Get("Content-Type") == "" {
-			ctx.SetHeader("Content-Type", "application/octet-stream")
+		if header.Get("Content-Type") == "" {
+			header.Set("Content-Type", "application/octet-stream")
 		}
-		ctx.SetHeader("Content-Length", strconv.Itoa(len(r)))
+		header.Set("Content-Length", strconv.Itoa(len(r)))
 		ctx.W.WriteHeader(status)
 		ctx.W.Write(r)
 
@@ -236,10 +217,10 @@ Switch:
 				ctx.error(&Error{500, err.Error()})
 				return
 			}
-			ctx.SetHeader("Content-Length", strconv.FormatInt(size, 10))
+			header.Set("Content-Length", strconv.FormatInt(size, 10))
 		}
-		if ctx.W.Header().Get("Content-Type") == "" {
-			ctx.SetHeader("Content-Type", "application/octet-stream")
+		if header.Get("Content-Type") == "" {
+			header.Set("Content-Type", "application/octet-stream")
 		}
 		ctx.W.WriteHeader(status)
 		io.Copy(ctx.W, r)
@@ -274,7 +255,7 @@ Switch:
 		}
 		if r.mtime.IsZero() {
 			r.mtime = time.Now()
-			ctx.W.Header().Set("cache-control", "no-cache, no-store, must-revalidate")
+			header.Set("cache-control", "no-cache, no-store, must-revalidate")
 		}
 		http.ServeContent(ctx.W, ctx.R, r.name, r.mtime, r.content)
 
@@ -326,7 +307,7 @@ Switch:
 func (ctx *Context) json(v interface{}, status int) {
 	buf := bytes.NewBuffer(nil)
 	err := json.NewEncoder(buf).Encode(v)
-	ctx.SetHeader("Content-Type", "application/json; charset=utf-8")
+	ctx.W.Header().Set("Content-Type", "application/json; charset=utf-8")
 	if err != nil {
 		ctx.W.WriteHeader(500)
 		ctx.W.Write([]byte(`{"error": {"status": 500, "message": "bad json"}}`))
@@ -335,7 +316,7 @@ func (ctx *Context) json(v interface{}, status int) {
 	if ctx.compression && buf.Len() > 1024 {
 		ctx.EnableCompression()
 	} else {
-		ctx.SetHeader("Content-Length", strconv.Itoa(buf.Len()))
+		ctx.W.Header().Set("Content-Length", strconv.Itoa(buf.Len()))
 	}
 	ctx.W.WriteHeader(status)
 	io.Copy(ctx.W, buf)
