@@ -102,8 +102,8 @@ type content struct {
 }
 
 // Content replies to the request using the content in the provided ReadSeeker.
-func Content(name string, r io.ReadSeeker) Response {
-	return &content{name, time.Time{}, r}
+func Content(name string, mtime time.Time, r io.ReadSeeker) Response {
+	return &content{name, mtime, r}
 }
 
 // File replies to the request using the file content.
