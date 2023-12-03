@@ -163,7 +163,13 @@ func (ctx *Context) EnableCompression() {
 }
 
 func (ctx *Context) end(v interface{}) {
-	status := 200
+	s := 0
+	status := func() int {
+		if s > 0 {
+			return s
+		}
+		return 200
+	}
 	header := ctx.W.Header()
 
 Switch:
@@ -184,12 +190,12 @@ Switch:
 		} else {
 			header.Set("Content-Length", strconv.Itoa(len(data)))
 		}
-		ctx.W.WriteHeader(status)
+		ctx.W.WriteHeader(status())
 		ctx.W.Write(data)
 
 	case bool, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64:
 		header.Set("Content-Type", "text/plain; charset=utf-8")
-		ctx.W.WriteHeader(status)
+		ctx.W.WriteHeader(status())
 		fmt.Fprintf(ctx.W, "%v", r)
 
 	case []byte:
@@ -197,7 +203,7 @@ Switch:
 			header.Set("Content-Type", "application/octet-stream")
 		}
 		header.Set("Content-Length", strconv.Itoa(len(r)))
-		ctx.W.WriteHeader(status)
+		ctx.W.WriteHeader(status())
 		ctx.W.Write(r)
 
 	case io.Reader:
@@ -222,7 +228,7 @@ Switch:
 		if header.Get("Content-Type") == "" {
 			header.Set("Content-Type", "application/octet-stream")
 		}
-		ctx.W.WriteHeader(status)
+		ctx.W.WriteHeader(status())
 		io.Copy(ctx.W, r)
 
 	case *content:
@@ -260,8 +266,8 @@ Switch:
 		http.ServeContent(ctx.W, ctx.R, r.name, r.mtime, r.content)
 
 	case *statusPlayload:
+		s = r.status
 		v = r.payload
-		status = r.status
 		goto Switch
 
 	case *fs:
@@ -287,8 +293,8 @@ Switch:
 		goto Switch
 
 	case error:
-		if status >= 100 {
-			ctx.error(&Error{status, r.Error()})
+		if s >= 400 {
+			ctx.error(&Error{s, r.Error()})
 		} else {
 			ctx.error(&Error{500, r.Error()})
 		}
@@ -300,7 +306,7 @@ Switch:
 		ctx.error(&r)
 
 	default:
-		ctx.json(r, status)
+		ctx.json(r, status())
 	}
 }
 
