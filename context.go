@@ -177,6 +177,14 @@ Switch:
 	case http.Handler:
 		r.ServeHTTP(ctx.W, ctx.R)
 
+	case *http.Response:
+		for k, v := range r.Header {
+			header[k] = v
+		}
+		ctx.W.WriteHeader(r.StatusCode)
+		io.Copy(ctx.W, r.Body)
+		r.Body.Close()
+
 	case *redirect:
 		http.Redirect(ctx.W, ctx.R, r.url, r.status)
 
