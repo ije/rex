@@ -63,6 +63,8 @@ var (
 )
 
 func main() {
+	rex.Use(rex.Compression())
+
 	rex.GET("/", func(ctx *rex.Context) interface{} {
 		return rex.Render(listTpl, books)
 	})

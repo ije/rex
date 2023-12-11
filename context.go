@@ -124,8 +124,8 @@ func (ctx *Context) RemoteIP() string {
 	return ip
 }
 
-// EnableCompression enables the compression method based on the Accept-Encoding header
-func (ctx *Context) EnableCompression() {
+// SetCompressionWriter set the compression writer based on the Accept-Encoding header
+func (ctx *Context) SetCompressionWriter() {
 	var encoding string
 	for _, p := range strings.Split(ctx.R.Header.Get("Accept-Encoding"), ",") {
 		name, _ := utils.SplitByFirstByte(p, ';')
@@ -162,6 +162,10 @@ func (ctx *Context) EnableCompression() {
 	}
 }
 
+func (ctx *Context) shouldCompress(contentType string, contentSize int) bool {
+	return ctx.compression && contentSize > 1024 && strings.HasPrefix(contentType, "text/") || strings.HasPrefix(contentType, "application/javascript") || strings.HasPrefix(contentType, "application/json") || strings.HasPrefix(contentType, "application/xml") || strings.HasPrefix(contentType, "application/wasm")
+}
+
 func (ctx *Context) end(v interface{}) {
 	s := 0
 	status := func() int {
@@ -194,7 +198,7 @@ Switch:
 			header.Set("Content-Type", "text/plain; charset=utf-8")
 		}
 		if ctx.compression && len(data) > 1024 {
-			ctx.EnableCompression()
+			ctx.SetCompressionWriter()
 		} else {
 			header.Set("Content-Length", strconv.Itoa(len(data)))
 		}
@@ -207,8 +211,11 @@ Switch:
 		fmt.Fprintf(ctx.W, "%v", r)
 
 	case []byte:
-		if header.Get("Content-Type") == "" {
-			header.Set("Content-Type", "application/octet-stream")
+		cType := header.Get("Content-Type")
+		if cType == "" {
+			header.Set("Content-Type", "binary/octet-stream")
+		} else if ctx.shouldCompress(cType, len(r)) {
+			ctx.SetCompressionWriter()
 		}
 		header.Set("Content-Length", strconv.Itoa(len(r)))
 		ctx.W.WriteHeader(status())
@@ -220,8 +227,9 @@ Switch:
 				c.Close()
 			}
 		}()
+		size := 0
 		if s, ok := r.(io.Seeker); ok {
-			size, err := s.Seek(0, io.SeekEnd)
+			n, err := s.Seek(0, io.SeekEnd)
 			if err != nil {
 				ctx.error(&Error{500, err.Error()})
 				return
@@ -231,10 +239,14 @@ Switch:
 				ctx.error(&Error{500, err.Error()})
 				return
 			}
-			header.Set("Content-Length", strconv.FormatInt(size, 10))
+			size = int(n)
+			header.Set("Content-Length", strconv.FormatInt(n, 10))
 		}
-		if header.Get("Content-Type") == "" {
-			header.Set("Content-Type", "application/octet-stream")
+		cType := header.Get("Content-Type")
+		if cType == "" {
+			header.Set("Content-Type", "binary/octet-stream")
+		} else if ctx.shouldCompress(cType, size) {
+			ctx.SetCompressionWriter()
 		}
 		ctx.W.WriteHeader(status())
 		io.Copy(ctx.W, r)
@@ -263,13 +275,15 @@ Switch:
 					return
 				}
 				if size > 1024 {
-					ctx.EnableCompression()
+					ctx.SetCompressionWriter()
 				}
 			}
 		}
 		if r.mtime.IsZero() {
 			r.mtime = time.Now()
-			header.Set("cache-control", "no-cache, no-store, must-revalidate")
+			if header.Get("Cache-Control") == "" {
+				header.Set("Cache-Control", "no-cache, no-store, must-revalidate")
+			}
 		}
 		http.ServeContent(ctx.W, ctx.R, r.name, r.mtime, r.content)
 
@@ -328,7 +342,7 @@ func (ctx *Context) json(v interface{}, status int) {
 		return
 	}
 	if ctx.compression && buf.Len() > 1024 {
-		ctx.EnableCompression()
+		ctx.SetCompressionWriter()
 	} else {
 		ctx.W.Header().Set("Content-Length", strconv.Itoa(buf.Len()))
 	}
