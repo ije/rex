@@ -148,10 +148,8 @@ func (ctx *Context) SetCompressionWriter() {
 			} else if !strings.Contains(vary, "Accept-Encoding") {
 				h.Set("Vary", fmt.Sprintf("%s, Accept-Encoding", vary))
 			}
-			if h.Get("Content-Length") != "" {
-				h.Del("Content-Length")
-			}
 			h.Set("Content-Encoding", encoding)
+			h.Del("Content-Length")
 			switch encoding {
 			case "br":
 				w.compression = brotli.NewWriterLevel(w.httpWriter, brotli.BestSpeed)
@@ -212,12 +210,14 @@ Switch:
 
 	case []byte:
 		cType := header.Get("Content-Type")
+		if ctx.shouldCompress(cType, len(r)) {
+			ctx.SetCompressionWriter()
+		} else {
+			header.Set("Content-Length", strconv.Itoa(len(r)))
+		}
 		if cType == "" {
 			header.Set("Content-Type", "binary/octet-stream")
-		} else if ctx.shouldCompress(cType, len(r)) {
-			ctx.SetCompressionWriter()
 		}
-		header.Set("Content-Length", strconv.Itoa(len(r)))
 		ctx.W.WriteHeader(status())
 		ctx.W.Write(r)
 
@@ -240,13 +240,15 @@ Switch:
 				return
 			}
 			size = int(n)
-			header.Set("Content-Length", strconv.FormatInt(n, 10))
 		}
 		cType := header.Get("Content-Type")
+		if ctx.shouldCompress(cType, size) {
+			ctx.SetCompressionWriter()
+		} else {
+			header.Set("Content-Length", strconv.Itoa(size))
+		}
 		if cType == "" {
 			header.Set("Content-Type", "binary/octet-stream")
-		} else if ctx.shouldCompress(cType, size) {
-			ctx.SetCompressionWriter()
 		}
 		ctx.W.WriteHeader(status())
 		io.Copy(ctx.W, r)
