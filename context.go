@@ -124,8 +124,8 @@ func (ctx *Context) RemoteIP() string {
 	return ip
 }
 
-// EnableCompression enables the compression method based on the Accept-Encoding header
-func (ctx *Context) EnableCompression() {
+// SetCompressionWriter set the compression writer based on the Accept-Encoding header
+func (ctx *Context) SetCompressionWriter() {
 	var encoding string
 	for _, p := range strings.Split(ctx.R.Header.Get("Accept-Encoding"), ",") {
 		name, _ := utils.SplitByFirstByte(p, ';')
@@ -148,10 +148,8 @@ func (ctx *Context) EnableCompression() {
 			} else if !strings.Contains(vary, "Accept-Encoding") {
 				h.Set("Vary", fmt.Sprintf("%s, Accept-Encoding", vary))
 			}
-			if h.Get("Content-Length") != "" {
-				h.Del("Content-Length")
-			}
 			h.Set("Content-Encoding", encoding)
+			h.Del("Content-Length")
 			switch encoding {
 			case "br":
 				w.compression = brotli.NewWriterLevel(w.httpWriter, brotli.BestSpeed)
@@ -162,14 +160,32 @@ func (ctx *Context) EnableCompression() {
 	}
 }
 
+func (ctx *Context) shouldCompress(contentType string, contentSize int) bool {
+	return ctx.compression && contentSize > 1024 && strings.HasPrefix(contentType, "text/") || strings.HasPrefix(contentType, "application/javascript") || strings.HasPrefix(contentType, "application/json") || strings.HasPrefix(contentType, "application/xml") || strings.HasPrefix(contentType, "application/wasm")
+}
+
 func (ctx *Context) end(v interface{}) {
-	status := 200
+	s := 0
+	status := func() int {
+		if s > 0 {
+			return s
+		}
+		return 200
+	}
 	header := ctx.W.Header()
 
 Switch:
 	switch r := v.(type) {
 	case http.Handler:
 		r.ServeHTTP(ctx.W, ctx.R)
+
+	case *http.Response:
+		for k, v := range r.Header {
+			header[k] = v
+		}
+		ctx.W.WriteHeader(r.StatusCode)
+		io.Copy(ctx.W, r.Body)
+		r.Body.Close()
 
 	case *redirect:
 		http.Redirect(ctx.W, ctx.R, r.url, r.status)
@@ -180,24 +196,29 @@ Switch:
 			header.Set("Content-Type", "text/plain; charset=utf-8")
 		}
 		if ctx.compression && len(data) > 1024 {
-			ctx.EnableCompression()
+			ctx.SetCompressionWriter()
 		} else {
 			header.Set("Content-Length", strconv.Itoa(len(data)))
 		}
-		ctx.W.WriteHeader(status)
+		ctx.W.WriteHeader(status())
 		ctx.W.Write(data)
 
 	case bool, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64:
 		header.Set("Content-Type", "text/plain; charset=utf-8")
-		ctx.W.WriteHeader(status)
+		ctx.W.WriteHeader(status())
 		fmt.Fprintf(ctx.W, "%v", r)
 
 	case []byte:
-		if header.Get("Content-Type") == "" {
-			header.Set("Content-Type", "application/octet-stream")
+		cType := header.Get("Content-Type")
+		if ctx.shouldCompress(cType, len(r)) {
+			ctx.SetCompressionWriter()
+		} else {
+			header.Set("Content-Length", strconv.Itoa(len(r)))
 		}
-		header.Set("Content-Length", strconv.Itoa(len(r)))
-		ctx.W.WriteHeader(status)
+		if cType == "" {
+			header.Set("Content-Type", "binary/octet-stream")
+		}
+		ctx.W.WriteHeader(status())
 		ctx.W.Write(r)
 
 	case io.Reader:
@@ -206,8 +227,9 @@ Switch:
 				c.Close()
 			}
 		}()
+		size := 0
 		if s, ok := r.(io.Seeker); ok {
-			size, err := s.Seek(0, io.SeekEnd)
+			n, err := s.Seek(0, io.SeekEnd)
 			if err != nil {
 				ctx.error(&Error{500, err.Error()})
 				return
@@ -217,12 +239,18 @@ Switch:
 				ctx.error(&Error{500, err.Error()})
 				return
 			}
-			header.Set("Content-Length", strconv.FormatInt(size, 10))
+			size = int(n)
 		}
-		if header.Get("Content-Type") == "" {
-			header.Set("Content-Type", "application/octet-stream")
+		cType := header.Get("Content-Type")
+		if ctx.shouldCompress(cType, size) {
+			ctx.SetCompressionWriter()
+		} else {
+			header.Set("Content-Length", strconv.Itoa(size))
 		}
-		ctx.W.WriteHeader(status)
+		if cType == "" {
+			header.Set("Content-Type", "binary/octet-stream")
+		}
+		ctx.W.WriteHeader(status())
 		io.Copy(ctx.W, r)
 
 	case *content:
@@ -249,19 +277,21 @@ Switch:
 					return
 				}
 				if size > 1024 {
-					ctx.EnableCompression()
+					ctx.SetCompressionWriter()
 				}
 			}
 		}
 		if r.mtime.IsZero() {
 			r.mtime = time.Now()
-			header.Set("cache-control", "no-cache, no-store, must-revalidate")
+			if header.Get("Cache-Control") == "" {
+				header.Set("Cache-Control", "no-cache, no-store, must-revalidate")
+			}
 		}
 		http.ServeContent(ctx.W, ctx.R, r.name, r.mtime, r.content)
 
 	case *statusPlayload:
+		s = r.status
 		v = r.payload
-		status = r.status
 		goto Switch
 
 	case *fs:
@@ -287,8 +317,8 @@ Switch:
 		goto Switch
 
 	case error:
-		if status >= 100 {
-			ctx.error(&Error{status, r.Error()})
+		if s >= 400 {
+			ctx.error(&Error{s, r.Error()})
 		} else {
 			ctx.error(&Error{500, r.Error()})
 		}
@@ -300,7 +330,7 @@ Switch:
 		ctx.error(&r)
 
 	default:
-		ctx.json(r, status)
+		ctx.json(r, status())
 	}
 }
 
@@ -314,7 +344,7 @@ func (ctx *Context) json(v interface{}, status int) {
 		return
 	}
 	if ctx.compression && buf.Len() > 1024 {
-		ctx.EnableCompression()
+		ctx.SetCompressionWriter()
 	} else {
 		ctx.W.Header().Set("Content-Length", strconv.Itoa(buf.Len()))
 	}

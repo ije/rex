@@ -27,6 +27,14 @@ func (w *responseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	return nil, nil, fmt.Errorf("the raw response writer does not implement the http.Hijacker")
 }
 
+// Flush sends any buffered data to the client.
+func (w *responseWriter) Flush() {
+	f, ok := w.httpWriter.(http.Flusher)
+	if ok {
+		f.Flush()
+	}
+}
+
 // Header returns the header map that will be sent by WriteHeader.
 func (w *responseWriter) Header() http.Header {
 	return w.httpWriter.Header()

@@ -65,27 +65,39 @@ type CORS struct {
 	// Only one wildcard can be used per origin.
 	// Default value is ["*"]
 	AllowedOrigins []string
-	// AllowOriginFunc is a custom function to validate the origin. It take the origin
-	// as argument and returns true if allowed or false otherwise. If this option is
-	// set, the content of AllowedOrigins is ignored.
+	// AllowOriginFunc is a custom function to validate the origin. It take the
+	// origin as argument and returns true if allowed or false otherwise. If
+	// this option is set, the content of `AllowedOrigins` is ignored.
 	AllowOriginFunc func(origin string) bool
-	// AllowOriginRequestFunc is a custom function to validate the origin. It takes the HTTP Request object and the origin as
-	// argument and returns true if allowed or false otherwise. If this option is set, the content of `AllowedOrigins`
-	// and `AllowOriginFunc` is ignored.
+	// AllowOriginRequestFunc is a custom function to validate the origin. It
+	// takes the HTTP Request object and the origin as argument and returns true
+	// if allowed or false otherwise. If headers are used take the decision,
+	// consider using AllowOriginVaryRequestFunc instead. If this option is set,
+	// the content of `AllowedOrigins`, `AllowOriginFunc` are ignored.
 	AllowOriginRequestFunc func(r *http.Request, origin string) bool
+	// AllowOriginVaryRequestFunc is a custom function to validate the origin.
+	// It takes the HTTP Request object and the origin as argument and returns
+	// true if allowed or false otherwise with a list of headers used to take
+	// that decision if any so they can be added to the Vary header. If this
+	// option is set, the content of `AllowedOrigins`, `AllowOriginFunc` and
+	// `AllowOriginRequestFunc` are ignored.
+	AllowOriginVaryRequestFunc func(r *http.Request, origin string) (bool, []string)
 	// AllowedMethods is a list of methods the client is allowed to use with
 	// cross-domain requests. Default value is simple methods (HEAD, GET and POST).
 	AllowedMethods []string
 	// AllowedHeaders is list of non simple headers the client is allowed to use with
 	// cross-domain requests.
 	// If the special "*" value is present in the list, all headers will be allowed.
-	// Default value is [] but "Origin" is always appended to the list.
+	// Default value is [].
 	AllowedHeaders []string
 	// ExposedHeaders indicates which headers are safe to expose to the API of a CORS
 	// API specification
 	ExposedHeaders []string
 	// MaxAge indicates how long (in seconds) the results of a preflight request
-	// can be cached
+	// can be cached. Default value is 0, which stands for no
+	// Access-Control-Max-Age header to be sent back, resulting in browsers
+	// using their default value (5s by spec). If you need to force a 0 max-age,
+	// set `MaxAge` to a negative value (ie: -1).
 	MaxAge int
 	// AllowCredentials indicates whether the request can include user credentials like
 	// cookies, HTTP authentication or client side SSL certificates.
@@ -101,6 +113,8 @@ type CORS struct {
 	OptionsSuccessStatus int
 	// Debugging flag adds additional output to debug server side CORS issues
 	Debug bool
+	// Adds a custom logger, implies Debug is true
+	Logger Logger
 }
 
 // CorsAllowAll create a new Cors handler with permissive configuration allowing all
@@ -123,7 +137,22 @@ func CorsAllowAll() CORS {
 
 // Cors returns a Cors middleware to handle CORS.
 func Cors(c CORS) Handle {
-	cors := cors.New(cors.Options(c))
+	cors := cors.New(cors.Options{
+		AllowedOrigins:             c.AllowedOrigins,
+		AllowOriginFunc:            c.AllowOriginFunc,
+		AllowOriginRequestFunc:     c.AllowOriginRequestFunc,
+		AllowOriginVaryRequestFunc: c.AllowOriginVaryRequestFunc,
+		AllowedMethods:             c.AllowedMethods,
+		AllowedHeaders:             c.AllowedHeaders,
+		ExposedHeaders:             c.ExposedHeaders,
+		MaxAge:                     c.MaxAge,
+		AllowCredentials:           c.AllowCredentials,
+		AllowPrivateNetwork:        c.AllowPrivateNetwork,
+		OptionsPassthrough:         c.OptionsPassthrough,
+		OptionsSuccessStatus:       c.OptionsSuccessStatus,
+		Debug:                      c.Debug,
+		Logger:                     c.Logger,
+	})
 	return func(ctx *Context) interface{} {
 		optionPassthrough := false
 		h := func(w http.ResponseWriter, r *http.Request) {

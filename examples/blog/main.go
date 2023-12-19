@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"regexp"
@@ -62,8 +63,14 @@ var (
 )
 
 func main() {
+	rex.Use(rex.Compression())
+
 	rex.GET("/", func(ctx *rex.Context) interface{} {
 		return rex.Render(listTpl, books)
+	})
+
+	rex.GET("/boom", func(ctx *rex.Context) interface{} {
+		return errors.New("boom")
 	})
 
 	rex.GET("/p/:slug", func(ctx *rex.Context) interface{} {
