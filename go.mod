@@ -6,7 +6,7 @@ require (
 	github.com/andybalholm/brotli v1.0.6
 	github.com/ije/gox v0.6.1
 	github.com/rs/cors v1.10.1
-	golang.org/x/crypto v0.16.0
+	golang.org/x/crypto v0.17.0
 )
 
 require (
