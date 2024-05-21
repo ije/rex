@@ -116,7 +116,7 @@ func (a *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	defer func() {
 		if v := recover(); v != nil {
-			if err, ok := v.(*recoverError); ok {
+			if err, ok := v.(*invalid); ok {
 				ctx.error(&Error{err.status, err.message})
 				return
 			}

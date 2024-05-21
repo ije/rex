@@ -58,14 +58,14 @@ func (ctx *Context) ACLUser() ACLUser {
 // Session returns the session if it is undefined then create a new one.
 func (ctx *Context) Session() *SessionStub {
 	if ctx.sessionPool == nil {
-		panic(&recoverError{500, "session pool is nil"})
+		panic(&invalid{500, "session pool is nil"})
 	}
 
 	if ctx.session == nil {
 		sid := ctx.sessionIdHandler.Get(ctx.R)
 		sess, err := ctx.sessionPool.GetSession(sid)
 		if err != nil {
-			panic(&recoverError{500, err.Error()})
+			panic(&invalid{500, err.Error()})
 		}
 
 		ctx.session = &SessionStub{sess}

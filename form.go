@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"mime/multipart"
 	"net/http"
-	"strconv"
 )
 
 const (
@@ -18,82 +17,49 @@ type Form struct {
 
 // Has checks the value for the key whether exists.
 func (form *Form) Has(key string) bool {
-	if form.R.Method == "POST" {
-		if form.R.PostForm == nil {
-			form.R.ParseMultipartForm(defaultMaxMemory)
+	r := form.R
+	if m := r.Method; m == "POST" || m == "PUT" || m == "PATCH" {
+		if r.PostForm == nil {
+			r.ParseMultipartForm(defaultMaxMemory)
 		}
-		_, ok := form.R.PostForm[key]
+		_, ok := r.PostForm[key]
 		if ok {
 			return true
 		}
 	}
-	if form.R.Form == nil {
-		form.R.ParseMultipartForm(defaultMaxMemory)
+	if r.Form == nil {
+		r.ParseMultipartForm(defaultMaxMemory)
 	}
-	_, ok := form.R.Form[key]
+	_, ok := r.Form[key]
 	return ok
 }
 
-// Value returns the first value for the named component of the POST,
-// PATCH, or PUT request body, or returns the first value for
-// the named component of the request url query.
+// Value returns the value for the key.
 func (form *Form) Value(key string) string {
-	var value string
-	if form.R.Method == "POST" {
-		value = form.R.PostFormValue(key)
+	r := form.R
+	if m := r.Method; m == "POST" || m == "PUT" || m == "PATCH" {
+		if r.PostForm == nil {
+			r.ParseMultipartForm(defaultMaxMemory)
+		}
+		if vs, ok := r.PostForm[key]; ok {
+			if len(vs) > 0 {
+				return vs[0]
+			}
+			return ""
+		}
 	}
-	if value == "" {
-		value = form.R.FormValue(key)
-	}
-	return value
-}
-
-// Int returns the form value as integer
-func (form *Form) Int(key string) (int64, error) {
-	value := form.Value(key)
-	if value == "" {
-		return 0, strconv.ErrSyntax
-	}
-	return strconv.ParseInt(value, 10, 64)
-}
-
-// Float returns the form value as float
-func (form *Form) Float(key string) (float64, error) {
-	value := form.Value(key)
-	if value == "" {
-		return 0.0, strconv.ErrSyntax
-	}
-	return strconv.ParseFloat(value, 64)
-}
-
-// Require requires a value
-func (form *Form) Require(key string) string {
-	value := form.Value(key)
-	if value == "" {
-		panic(&recoverError{400, fmt.Sprintf("require form value '%s'", key)})
-	}
-	return value
-}
-
-// RequireInt requires a value as int
-func (form *Form) RequireInt(key string) int64 {
-	i, err := form.Int(key)
-	if err != nil {
-		panic(&recoverError{400, fmt.Sprintf("require form value '%s' as int", key)})
-	}
-	return i
-}
-
-// RequireFloat requires a value as float
-func (form *Form) RequireFloat(key string) float64 {
-	f, err := form.Float(key)
-	if err != nil {
-		panic(&recoverError{400, fmt.Sprintf("require form value '%s' as float", key)})
-	}
-	return f
+	return r.FormValue(key)
 }
 
 // File returns the first file for the provided form key.
 func (form *Form) File(key string) (multipart.File, *multipart.FileHeader, error) {
 	return form.R.FormFile(key)
+}
+
+// Require returns the value for the key, if the value is empty, it will panic.
+func (form *Form) Require(key string) string {
+	if !form.Has(key) {
+		panic(&invalid{400, fmt.Sprintf("require form field '%s'", key)})
+	}
+	return form.Value(key)
 }

@@ -14,7 +14,7 @@ import (
 // Response defines the response interface.
 type Response interface{}
 
-type recoverError struct {
+type invalid struct {
 	status  int
 	message string
 }
@@ -86,7 +86,7 @@ func Tpl(ttype string, text string) Template {
 func Render(t Template, data interface{}) Response {
 	buf := bytes.NewBuffer(nil)
 	if err := t.Execute(buf, data); err != nil {
-		panic(&recoverError{500, err.Error()})
+		panic(&invalid{500, err.Error()})
 	}
 
 	return &content{
@@ -111,17 +111,17 @@ func File(name string) Response {
 	fi, err := os.Stat(name)
 	if err != nil {
 		if os.IsNotExist(err) {
-			panic(&recoverError{404, "file not found"})
+			panic(&invalid{404, "file not found"})
 		}
-		panic(&recoverError{500, err.Error()})
+		panic(&invalid{500, err.Error()})
 	}
 	if fi.IsDir() {
-		panic(&recoverError{400, "is a directory"})
+		panic(&invalid{400, "is a directory"})
 	}
 
 	file, err := os.Open(name)
 	if err != nil {
-		panic(&recoverError{500, err.Error()})
+		panic(&invalid{500, err.Error()})
 	}
 
 	return &content{path.Base(name), fi.ModTime(), file}
@@ -136,10 +136,10 @@ type fs struct {
 func FS(root string, fallback string) Response {
 	fi, err := os.Lstat(root)
 	if err != nil {
-		panic(&recoverError{500, err.Error()})
+		panic(&invalid{500, err.Error()})
 	}
 	if !fi.IsDir() {
-		panic(&recoverError{500, "FS root is not a directory"})
+		panic(&invalid{500, "FS root is not a directory"})
 	}
 	return &fs{root, fallback}
 }

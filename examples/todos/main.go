@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/ije/rex"
 )
@@ -98,7 +99,10 @@ func main() {
 	})
 
 	rex.DELETE("/delete-todo", rex.ACL("remove"), func(ctx *rex.Context) interface{} {
-		index := ctx.Form.RequireInt("index")
+		index, err := strconv.ParseInt(ctx.Form.Require("index"), 10, 64)
+		if err != nil {
+			return err
+		}
 		var newTodos []string
 		for i, todo := range todos {
 			if i != int(index) {
