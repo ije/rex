@@ -51,6 +51,12 @@ type redirect struct {
 // Redirect replies to the request with a redirect to url,
 // which may be a path relative to the request path.
 func Redirect(url string, status int) Response {
+	if url == "" {
+		url = "/"
+	}
+	if status < 300 || status >= 400 {
+		status = 302
+	}
 	return &redirect{status, url}
 }
 

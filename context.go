@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/andybalholm/brotli"
 	"github.com/ije/gox/utils"
@@ -188,7 +189,8 @@ Switch:
 		r.Body.Close()
 
 	case *redirect:
-		http.Redirect(ctx.W, ctx.R, r.url, r.status)
+		header.Set("Location", hexEscapeNonASCII(r.url))
+		ctx.W.WriteHeader(r.status)
 
 	case string:
 		data := []byte(r)
@@ -359,4 +361,34 @@ func (ctx *Context) error(err *Error) {
 	ctx.json(map[string]interface{}{
 		"error": err,
 	}, err.Status)
+}
+
+func hexEscapeNonASCII(s string) string {
+	newLen := 0
+	for i := 0; i < len(s); i++ {
+		if s[i] >= utf8.RuneSelf {
+			newLen += 3
+		} else {
+			newLen++
+		}
+	}
+	if newLen == len(s) {
+		return s
+	}
+	b := make([]byte, 0, newLen)
+	var pos int
+	for i := 0; i < len(s); i++ {
+		if s[i] >= utf8.RuneSelf {
+			if pos < i {
+				b = append(b, s[pos:i]...)
+			}
+			b = append(b, '%')
+			b = strconv.AppendInt(b, int64(s[i]), 16)
+			pos = i + 1
+		}
+	}
+	if pos < len(s) {
+		b = append(b, s[pos:]...)
+	}
+	return string(b)
 }
