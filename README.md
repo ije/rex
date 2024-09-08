@@ -31,6 +31,7 @@ func main() {
     rex.Compress(),
   )
 
+  // match "GET /" route
   rex.GET("/{$}", func(ctx *rex.Context) interface{} {
     return rex.Render(
       rex.Tpl("html", "<h1>My Blog</h1><ul>{{range .}}<li>{{.Title}}</li>{{end}}</ul>"),
@@ -38,6 +39,7 @@ func main() {
     )
   })
 
+  // match "GET /posts/:id" route
   rex.GET("/posts/{id}", func(ctx *rex.Context) interface{} {
     post, ok := posts.Get(ctx.PathValue("id"))
     if !ok {
@@ -46,10 +48,12 @@ func main() {
     return post
   })
 
+  // match "POST /posts" route
   rex.POST("/posts", func(ctx *rex.Context) interface{} {
     return posts.Add(ctx.FormValue("title"), ctx.FormValue("author"), ctx.FormValue("content"))
   })
 
+  // match "DELETE /posts/:id" route
   rex.DELETE("/posts/{id}", func(ctx *rex.Context) interface{} {
     ok := posts.Delete(ctx.PathValue("id"))
     return ok
