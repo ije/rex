@@ -33,7 +33,7 @@ func main() {
   // match "GET /" route
   rex.GET("/{$}", func(ctx *rex.Context) interface{} {
     return rex.Render(
-      rex.Tpl("html", "<h1>My Blog</h1><ul>{{range .}}<li>{{.Title}}</li>{{end}}</ul>"),
+      rex.Tpl("<h1>My Blog</h1><ul>{{range .}}<li>{{.Title}}</li>{{end}}</ul>"),
       posts.List(),
     )
   })
