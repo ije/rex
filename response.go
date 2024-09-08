@@ -27,6 +27,9 @@ type Error struct {
 
 // Err returns an error with status.
 func Err(status int, v ...string) Response {
+	if status < 400 || status >= 600 {
+		panic("invalid status code")
+	}
 	var messsage string
 	if len(v) > 0 {
 		args := make([]interface{}, len(v))
@@ -34,7 +37,7 @@ func Err(status int, v ...string) Response {
 			args[i] = s
 		}
 		messsage = fmt.Sprint(args...)
-	} else if status > 100 && status < 600 {
+	} else {
 		messsage = http.StatusText(status)
 	}
 	return &Error{

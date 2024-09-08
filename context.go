@@ -327,7 +327,7 @@ Switch:
 		goto Switch
 
 	case error:
-		if s >= 400 {
+		if s >= 400 && s < 600 {
 			ctx.respondWithError(&Error{s, r.Error()})
 		} else {
 			ctx.respondWithError(&Error{500, r.Error()})
