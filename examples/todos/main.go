@@ -37,13 +37,13 @@ const indexHTML = `
             <input name="user" type="text">
             <input value="Login" type="submit">
         </form>
-				<p>Try to login with <strong onclick="document.querySelector('input[name=user]').value='admin';" style="cursor:pointer;">admin</strong> or <strong onclick="document.querySelector('input[name=user]').value='guest';" style="cursor:pointer;">guest</strong>.</p>
+        <p>Try to login with <strong onclick="document.querySelector('input[name=user]').value='admin';" style="cursor:pointer;">admin</strong> or <strong onclick="document.querySelector('input[name=user]').value='guest';" style="cursor:pointer;">guest</strong>.</p>
     {{end}}
 </body>
 </html>
 `
 
-var indexTpl = rex.Tpl("html", indexHTML)
+var indexTpl = rex.Tpl(indexHTML)
 
 type user struct {
 	name  string

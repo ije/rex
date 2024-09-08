@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"errors"
 	"fmt"
 	"os"
 	"regexp"
@@ -57,9 +56,9 @@ const pageTplRaw = `
 `
 
 var (
-	books   = []Book{}
-	listTpl = rex.Tpl("html", listTplRaw)
-	pageTpl = rex.Tpl("html", pageTplRaw)
+	books   = map[string]Book{}
+	listTpl = rex.Tpl(listTplRaw)
+	pageTpl = rex.Tpl(pageTplRaw)
 )
 
 func main() {
@@ -69,23 +68,12 @@ func main() {
 		return rex.Render(listTpl, books)
 	})
 
-	rex.GET("/boom", func(ctx *rex.Context) interface{} {
-		return errors.New("boom")
-	})
-
 	rex.GET("/p/{slug}", func(ctx *rex.Context) interface{} {
-		var book *Book
 		slug := ctx.PathValue("slug")
-		for _, b := range books {
-			if b.Slug == slug {
-				book = &b
-				break
-			}
+		if book, ok := books[slug]; ok {
+			return rex.Render(pageTpl, book)
 		}
-		if book == nil {
-			return rex.Status(404, "book not found")
-		}
-		return rex.Render(pageTpl, *book)
+		return rex.Status(404, "book not found")
 	})
 
 	fmt.Println("Server running on http://localhost:8080")
@@ -93,8 +81,7 @@ func main() {
 }
 
 func init() {
-	var err error
-	books, err = loadBooks("./books")
+	err := loadBooks("./books")
 	if err != nil {
 		panic("failed to load books: " + err.Error())
 	}
@@ -102,10 +89,10 @@ func init() {
 }
 
 // load books (md files) from the given path
-func loadBooks(path string) ([]Book, error) {
+func loadBooks(path string) error {
 	entries, err := os.ReadDir(path)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	for _, entry := range entries {
 		if entry.IsDir() {
@@ -116,16 +103,16 @@ func loadBooks(path string) ([]Book, error) {
 		}
 		data, err := os.ReadFile(path + "/" + entry.Name())
 		if err != nil {
-			return nil, err
+			return err
 		}
 		book, err := parseBook(data)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		book.Slug = strings.TrimSuffix(entry.Name(), ".md")
-		books = append(books, book)
+		books[book.Slug] = book
 	}
-	return books, nil
+	return nil
 }
 
 // parse book from markdown data
@@ -161,7 +148,6 @@ func parseBook(data []byte) (book Book, err error) {
 
 func mdToHtml(data []byte) (string, error) {
 	var html []string
-
 	scanner := bufio.NewScanner(bytes.NewReader(data))
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -174,7 +160,6 @@ func mdToHtml(data []byte) (string, error) {
 	if err := scanner.Err(); err != nil {
 		return "", err
 	}
-
 	return strings.Join(html, "\n"), nil
 }
 
