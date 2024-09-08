@@ -161,9 +161,9 @@ func (ctx *Context) enableCompression() {
 			h.Del("Content-Length")
 			switch encoding {
 			case "br":
-				w.compression = brotli.NewWriterLevel(w.httpWriter, brotli.BestSpeed)
+				w.compWriter = brotli.NewWriterLevel(w.httpWriter, brotli.BestSpeed)
 			case "gzip":
-				w.compression, _ = gzip.NewWriterLevel(w.httpWriter, gzip.BestSpeed)
+				w.compWriter, _ = gzip.NewWriterLevel(w.httpWriter, gzip.BestSpeed)
 			}
 		}
 	}

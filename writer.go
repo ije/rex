@@ -10,12 +10,12 @@ import (
 
 // A Writer implements the http.ResponseWriter interface.
 type rexWriter struct {
-	ctx         *Context
-	status      int
-	written     int
-	headerSent  bool
-	httpWriter  http.ResponseWriter
-	compression io.WriteCloser
+	ctx        *Context
+	status     int
+	written    int
+	headerSent bool
+	httpWriter http.ResponseWriter
+	compWriter io.WriteCloser
 }
 
 // Hijack lets the caller take over the connection.
@@ -56,8 +56,8 @@ func (w *rexWriter) Write(p []byte) (n int, err error) {
 		w.headerSent = true
 	}
 	var wr io.Writer = w.httpWriter
-	if w.compression != nil {
-		wr = w.compression
+	if w.compWriter != nil {
+		wr = w.compWriter
 	}
 	n, err = wr.Write(p)
 	if n > 0 {
@@ -68,8 +68,8 @@ func (w *rexWriter) Write(p []byte) (n int, err error) {
 
 // Close closes the underlying connection.
 func (w *rexWriter) Close() error {
-	if w.compression != nil {
-		return w.compression.Close()
+	if w.compWriter != nil {
+		return w.compWriter.Close()
 	}
 	return nil
 }
