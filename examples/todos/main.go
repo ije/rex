@@ -66,7 +66,7 @@ func main() {
 	})
 
 	// auth middleware
-	rex.Use(rex.ACLAuth(func(ctx *rex.Context) rex.ACLUser {
+	rex.Use(rex.AclAuth(func(ctx *rex.Context) rex.AclUser {
 		value := ctx.Session().Get("USER")
 		if value == nil {
 			return nil

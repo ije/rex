@@ -60,14 +60,14 @@ func Redirect(url string, status int) Response {
 	return &redirect{status, url}
 }
 
-type statusPlayload struct {
-	status  int
-	payload interface{}
+type statusd struct {
+	code    int
+	content interface{}
 }
 
 // Status replies to the request using the payload in the status.
-func Status(status int, payload interface{}) Response {
-	return &statusPlayload{status, payload}
+func Status(status int, content interface{}) Response {
+	return &statusd{status, content}
 }
 
 // HTML replies to the request with a html content.

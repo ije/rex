@@ -27,7 +27,7 @@ func main() {
   // use middlewares
   rex.Use(
     rex.Logger(log.Default()),
-    rex.Cors(rex.CorsAllowAll()),
+    rex.Cors(rex.CorsAll()),
     rex.Compress(),
   )
 

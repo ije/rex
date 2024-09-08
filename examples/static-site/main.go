@@ -8,7 +8,7 @@ import (
 
 func main() {
 	rex.Use(
-		rex.Compression(),
+		rex.Compress(),
 		rex.Static("./www", "e404.html"),
 	)
 

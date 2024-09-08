@@ -39,7 +39,7 @@ func (a *Mux) AddRoute(pattern string, handle Handle) {
 		if ok {
 			v := handle(wr.ctx)
 			if v != nil {
-				wr.ctx.end(v)
+				wr.ctx.respondWith(v)
 			}
 		}
 	})
@@ -91,7 +91,7 @@ func (a *Mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		if v := recover(); v != nil {
 			if err, ok := v.(*invalid); ok {
-				ctx.error(&Error{err.status, err.message})
+				ctx.respondWithError(&Error{err.status, err.message})
 				return
 			}
 
@@ -107,14 +107,14 @@ func (a *Mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			if ctx.logger != nil {
 				ctx.logger.Printf("[panic] %v\n%s", v, buf.String())
 			}
-			ctx.error(&Error{500, http.StatusText(500)})
+			ctx.respondWithError(&Error{500, http.StatusText(500)})
 		}
 	}()
 
 	for _, handle := range a.middlewares {
 		v := handle(ctx)
 		if v != nil {
-			ctx.end(v)
+			ctx.respondWith(v)
 			return
 		}
 	}
@@ -125,11 +125,11 @@ func (a *Mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == "GET" {
-		ctx.end(&statusPlayload{404, "Not Found"})
+		ctx.respondWith(&statusd{404, "Not Found"})
 		return
 	}
 
-	ctx.end(&statusPlayload{405, "Method Not Allowed"})
+	ctx.respondWith(&statusd{405, "Method Not Allowed"})
 }
 
 // PathValue returns the value for the named path wildcard in the [ServeMux] pattern

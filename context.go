@@ -19,13 +19,13 @@ import (
 	"github.com/ije/rex/session"
 )
 
-// A ACLUser interface contains the Permissions method that returns the permission IDs
-type ACLUser interface {
+// A AclUser interface contains the Permissions method that returns the permission IDs
+type AclUser interface {
 	Permissions() []string
 }
 
-// A Logger interface contains the Printf method.
-type Logger interface {
+// A ILogger interface contains the Printf method.
+type ILogger interface {
 	Printf(format string, v ...interface{})
 }
 
@@ -35,13 +35,18 @@ type Context struct {
 	R                *http.Request
 	Store            *Store
 	basicAuthUser    string
-	aclUser          ACLUser
+	aclUser          AclUser
 	session          *SessionStub
 	sessionPool      session.Pool
 	sessionIdHandler session.IdHandler
-	compression      bool
-	logger           Logger
-	accessLogger     Logger
+	compress         bool
+	logger           ILogger
+	accessLogger     ILogger
+}
+
+// Pathname returns the request pathname.
+func (ctx *Context) Pathname() string {
+	return ctx.R.URL.Path
 }
 
 // BasicAuthUser returns the BasicAuth username
@@ -50,7 +55,7 @@ func (ctx *Context) BasicAuthUser() string {
 }
 
 // ACLUser returns the acl user
-func (ctx *Context) ACLUser() ACLUser {
+func (ctx *Context) ACLUser() AclUser {
 	return ctx.aclUser
 }
 
@@ -123,8 +128,7 @@ func (ctx *Context) RemoteIP() string {
 	return ip
 }
 
-// SetCompressionWriter set the compression writer based on the Accept-Encoding header
-func (ctx *Context) SetCompressionWriter() {
+func (ctx *Context) enableCompression() {
 	var encoding string
 	for _, p := range strings.Split(ctx.R.Header.Get("Accept-Encoding"), ",") {
 		name, _ := utils.SplitByFirstByte(p, ';')
@@ -159,11 +163,11 @@ func (ctx *Context) SetCompressionWriter() {
 	}
 }
 
-func (ctx *Context) shouldCompress(contentType string, contentSize int) bool {
-	return ctx.compression && contentSize > 1024 && strings.HasPrefix(contentType, "text/") || strings.HasPrefix(contentType, "application/javascript") || strings.HasPrefix(contentType, "application/json") || strings.HasPrefix(contentType, "application/xml") || strings.HasPrefix(contentType, "application/wasm")
+func (ctx *Context) canBeCompressed(contentType string, contentSize int) bool {
+	return ctx.compress && contentSize > 1024 && strings.HasPrefix(contentType, "text/") || strings.HasPrefix(contentType, "application/javascript") || strings.HasPrefix(contentType, "application/json") || strings.HasPrefix(contentType, "application/xml") || strings.HasPrefix(contentType, "application/wasm")
 }
 
-func (ctx *Context) end(v interface{}) {
+func (ctx *Context) respondWith(v interface{}) {
 	s := 0
 	status := func() int {
 		if s > 0 {
@@ -195,8 +199,8 @@ Switch:
 		if header.Get("Content-Type") == "" {
 			header.Set("Content-Type", "text/plain; charset=utf-8")
 		}
-		if ctx.compression && len(data) > 1024 {
-			ctx.SetCompressionWriter()
+		if ctx.compress && len(data) > 1024 {
+			ctx.enableCompression()
 		} else {
 			header.Set("Content-Length", strconv.Itoa(len(data)))
 		}
@@ -204,14 +208,14 @@ Switch:
 		ctx.W.Write(data)
 
 	case bool, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64:
-		header.Set("Content-Type", "text/plain; charset=utf-8")
+		header.Set("Content-Type", "text/plain")
 		ctx.W.WriteHeader(status())
 		fmt.Fprintf(ctx.W, "%v", r)
 
 	case []byte:
 		cType := header.Get("Content-Type")
-		if ctx.shouldCompress(cType, len(r)) {
-			ctx.SetCompressionWriter()
+		if ctx.canBeCompressed(cType, len(r)) {
+			ctx.enableCompression()
 		} else {
 			header.Set("Content-Length", strconv.Itoa(len(r)))
 		}
@@ -231,20 +235,20 @@ Switch:
 		if s, ok := r.(io.Seeker); ok {
 			n, err := s.Seek(0, io.SeekEnd)
 			if err != nil {
-				ctx.error(&Error{500, err.Error()})
+				ctx.respondWithError(&Error{500, err.Error()})
 				return
 			}
 			_, err = s.Seek(0, io.SeekStart)
 			if err != nil {
-				ctx.error(&Error{500, err.Error()})
+				ctx.respondWithError(&Error{500, err.Error()})
 				return
 			}
 			size = int(n)
 		}
 		cType := header.Get("Content-Type")
-		if ctx.shouldCompress(cType, size) {
-			ctx.SetCompressionWriter()
-		} else {
+		if ctx.canBeCompressed(cType, size) {
+			ctx.enableCompression()
+		} else if size > 0 {
 			header.Set("Content-Length", strconv.Itoa(size))
 		}
 		if cType == "" {
@@ -259,25 +263,25 @@ Switch:
 				c.Close()
 			}
 		}()
-		if ctx.compression {
-			compressable := false
+		if ctx.compress {
+			isTextContent := false
 			switch strings.TrimPrefix(path.Ext(r.name), ".") {
 			case "html", "htm", "xml", "svg", "css", "less", "sass", "scss", "json", "json5", "map", "js", "jsx", "mjs", "cjs", "ts", "mts", "tsx", "md", "mdx", "yaml", "txt", "wasm":
-				compressable = true
+				isTextContent = true
 			}
-			if compressable {
+			if isTextContent {
 				size, err := r.content.Seek(0, io.SeekEnd)
 				if err != nil {
-					ctx.error(&Error{500, err.Error()})
+					ctx.respondWithError(&Error{500, err.Error()})
 					return
 				}
 				_, err = r.content.Seek(0, io.SeekStart)
 				if err != nil {
-					ctx.error(&Error{500, err.Error()})
+					ctx.respondWithError(&Error{500, err.Error()})
 					return
 				}
 				if size > 1024 {
-					ctx.SetCompressionWriter()
+					ctx.enableCompression()
 				}
 			}
 		}
@@ -289,9 +293,9 @@ Switch:
 		}
 		http.ServeContent(ctx.W, ctx.R, r.name, r.mtime, r.content)
 
-	case *statusPlayload:
-		s = r.status
-		v = r.payload
+	case *statusd:
+		s = r.code
+		v = r.content
 		goto Switch
 
 	case *fs:
@@ -307,9 +311,9 @@ Switch:
 		}
 		if err != nil {
 			if os.IsNotExist(err) {
-				ctx.error(&Error{404, "not found"})
+				ctx.respondWithError(&Error{404, "not found"})
 			} else {
-				ctx.error(&Error{500, err.Error()})
+				ctx.respondWithError(&Error{500, err.Error()})
 			}
 			return
 		}
@@ -318,23 +322,23 @@ Switch:
 
 	case error:
 		if s >= 400 {
-			ctx.error(&Error{s, r.Error()})
+			ctx.respondWithError(&Error{s, r.Error()})
 		} else {
-			ctx.error(&Error{500, r.Error()})
+			ctx.respondWithError(&Error{500, r.Error()})
 		}
 
 	case *Error:
-		ctx.error(r)
+		ctx.respondWithError(r)
 
 	case Error:
-		ctx.error(&r)
+		ctx.respondWithError(&r)
 
 	default:
-		ctx.json(r, status())
+		ctx.respondWithJson(r, status())
 	}
 }
 
-func (ctx *Context) json(v interface{}, status int) {
+func (ctx *Context) respondWithJson(v interface{}, status int) {
 	buf := bytes.NewBuffer(nil)
 	err := json.NewEncoder(buf).Encode(v)
 	ctx.W.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -343,8 +347,8 @@ func (ctx *Context) json(v interface{}, status int) {
 		ctx.W.Write([]byte(`{"error": {"status": 500, "message": "bad json"}}`))
 		return
 	}
-	if ctx.compression && buf.Len() > 1024 {
-		ctx.SetCompressionWriter()
+	if ctx.compress && buf.Len() > 1024 {
+		ctx.enableCompression()
 	} else {
 		ctx.W.Header().Set("Content-Length", strconv.Itoa(buf.Len()))
 	}
@@ -352,11 +356,11 @@ func (ctx *Context) json(v interface{}, status int) {
 	io.Copy(ctx.W, buf)
 }
 
-func (ctx *Context) error(err *Error) {
+func (ctx *Context) respondWithError(err *Error) {
 	if err.Status >= 500 && ctx.logger != nil {
 		ctx.logger.Printf("[error] %s", err.Message)
 	}
-	ctx.json(map[string]interface{}{
+	ctx.respondWithJson(map[string]interface{}{
 		"error": err,
 	}, err.Status)
 }

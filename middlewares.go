@@ -11,7 +11,7 @@ import (
 	"github.com/rs/cors"
 )
 
-// Header is REX middleware to set http header
+// Header is rex middleware to set http header for the current request.
 func Header(key string, value string) Handle {
 	return func(ctx *Context) interface{} {
 		if key != "" {
@@ -21,8 +21,8 @@ func Header(key string, value string) Handle {
 	}
 }
 
-// ErrorLogger returns a ErrorLogger middleware to sets the error logger.
-func ErrorLogger(logger Logger) Handle {
+// Logger returns a logger middleware to sets the error logger for the context.
+func Logger(logger ILogger) Handle {
 	return func(ctx *Context) interface{} {
 		if logger != nil {
 			ctx.logger = logger
@@ -31,19 +31,21 @@ func ErrorLogger(logger Logger) Handle {
 	}
 }
 
-// AccessLogger returns a AccessLogger middleware to sets the access logger.
-func AccessLogger(logger Logger) Handle {
+// AccessLogger returns a logger middleware to sets the access logger.
+func AccessLogger(logger ILogger) Handle {
 	return func(ctx *Context) interface{} {
 		ctx.accessLogger = logger
 		return nil
 	}
 }
 
+// SessionOptions contains the options for the session manager.
 type SessionOptions struct {
 	IdHandler session.IdHandler
 	Pool      session.Pool
 }
 
+// Session returns a session middleware to configure the session manager.
 func Session(opts SessionOptions) Handle {
 	return func(ctx *Context) interface{} {
 		if opts.IdHandler != nil {
@@ -56,8 +58,8 @@ func Session(opts SessionOptions) Handle {
 	}
 }
 
-// CORS is a configuration container to setup the CORS middleware.
-type CORS struct {
+// CorsOptions is a configuration container to setup the CorsOptions middleware.
+type CorsOptions struct {
 	// AllowedOrigins is a list of origins a cross-domain request can be executed from.
 	// If the special "*" value is present in the list, all origins will be allowed.
 	// An origin may contain a wildcard (*) to replace 0 or more characters
@@ -114,13 +116,13 @@ type CORS struct {
 	// Debugging flag adds additional output to debug server side CORS issues
 	Debug bool
 	// Adds a custom logger, implies Debug is true
-	Logger Logger
+	Logger ILogger
 }
 
-// CorsAllowAll create a new Cors handler with permissive configuration allowing all
+// CorsAll create a new Cors handler with permissive configuration allowing all
 // origins with all standard methods with any header and credentials.
-func CorsAllowAll() CORS {
-	return CORS{
+func CorsAll() CorsOptions {
+	return CorsOptions{
 		AllowedOrigins: []string{"*"},
 		AllowedMethods: []string{
 			http.MethodHead,
@@ -135,8 +137,8 @@ func CorsAllowAll() CORS {
 	}
 }
 
-// Cors returns a Cors middleware to handle CORS.
-func Cors(c CORS) Handle {
+// Cors returns a CORS middleware to handle CORS.
+func Cors(c CorsOptions) Handle {
 	cors := cors.New(cors.Options{
 		AllowedOrigins:             c.AllowedOrigins,
 		AllowOriginFunc:            c.AllowOriginFunc,
@@ -166,7 +168,7 @@ func Cors(c CORS) Handle {
 	}
 }
 
-// ACL returns a ACL middleware.
+// ACL returns a ACL middleware that sets the permission for the current request.
 func ACL(permission string) Handle {
 	return func(ctx *Context) interface{} {
 		if ctx.aclUser != nil {
@@ -181,12 +183,12 @@ func ACL(permission string) Handle {
 	}
 }
 
-// BasicAuth returns a Basic HTTP Authorization middleware.
+// BasicAuth returns a basic HTTP authorization middleware.
 func BasicAuth(auth func(name string, secret string) (ok bool, err error)) Handle {
 	return BasicAuthWithRealm("", auth)
 }
 
-// BasicAuthWithRealm returns a Basic HTTP Authorization middleware with realm.
+// BasicAuthWithRealm returns a basic HTTP authorization middleware with realm.
 func BasicAuthWithRealm(realm string, auth func(name string, secret string) (ok bool, err error)) Handle {
 	return func(ctx *Context) interface{} {
 		value := ctx.R.Header.Get("Authorization")
@@ -213,8 +215,8 @@ func BasicAuthWithRealm(realm string, auth func(name string, secret string) (ok 
 	}
 }
 
-// ACLAuth returns a ACL authentication middleware.
-func ACLAuth(auth func(ctx *Context) ACLUser) Handle {
+// AclAuth returns a ACL authorization middleware.
+func AclAuth(auth func(ctx *Context) AclUser) Handle {
 	return func(ctx *Context) interface{} {
 		user := auth(ctx)
 		ctx.aclUser = user
@@ -222,15 +224,15 @@ func ACLAuth(auth func(ctx *Context) ACLUser) Handle {
 	}
 }
 
-// Compression is REX middleware to enable compress by content type and client `Accept-Encoding`
-func Compression() Handle {
+// Compress returns a rex middleware to enable http compression.
+func Compress() Handle {
 	return func(ctx *Context) interface{} {
-		ctx.compression = true
+		ctx.compress = true
 		return nil
 	}
 }
 
-// Static returns a Static middleware handler.
+// Static returns a static file server middleware.
 func Static(root, fallback string) Handle {
 	return func(ctx *Context) interface{} {
 		return FS(root, fallback)
