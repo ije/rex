@@ -87,8 +87,8 @@ type Template interface {
 	Execute(wr io.Writer, data interface{}) error
 }
 
-func Tpl(ttype string, text string) Template {
-	return template.Must(template.New("index." + ttype).Parse(text))
+func Tpl(text string) Template {
+	return template.Must(template.New("index.html").Parse(text))
 }
 
 // Render renders the template with the given data.
