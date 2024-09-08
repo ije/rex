@@ -41,7 +41,7 @@ func main() {
   rex.GET("/posts/{id}", func(ctx *rex.Context) interface{} {
     post, ok := posts.Get(ctx.PathValue("id"))
     if !ok {
-      return &rex.Error{404, "post not found"}
+      return rex.Err(404, "post not found")
     }
     return post
   })
