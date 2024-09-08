@@ -75,7 +75,6 @@ func main() {
 
 	rex.GET("/p/{slug}", func(ctx *rex.Context) interface{} {
 		var book *Book
-		fmt.Println(ctx.PathValue("slug"))
 		slug := ctx.PathValue("slug")
 		for _, b := range books {
 			if b.Slug == slug {
@@ -95,11 +94,11 @@ func main() {
 
 func init() {
 	var err error
-	books, err = loadBooks("./posts")
+	books, err = loadBooks("./books")
 	if err != nil {
-		panic("failed to load posts: " + err.Error())
+		panic("failed to load books: " + err.Error())
 	}
-	fmt.Println("loaded", len(books), "books")
+	fmt.Println(len(books), "books loaded")
 }
 
 // load books (md files) from the given path
@@ -166,8 +165,8 @@ func mdToHtml(data []byte) (string, error) {
 	scanner := bufio.NewScanner(bytes.NewReader(data))
 	for scanner.Scan() {
 		line := scanner.Text()
-		if strings.HasPrefix(line, "##") {
-			html = append(html, "<h2>"+resolveAnchorLinks(line[2:])+"</h2>")
+		if strings.HasPrefix(line, "## ") {
+			html = append(html, "<h2>"+strings.TrimSpace(line[3:])+"</h2>")
 		} else {
 			html = append(html, "<p>"+resolveAnchorLinks(line)+"</p>")
 		}
