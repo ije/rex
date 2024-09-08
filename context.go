@@ -22,7 +22,7 @@ import (
 
 // A AclUser interface contains the Permissions method that returns the permission IDs
 type AclUser interface {
-	Permissions() []string
+	Perms() []string
 }
 
 // A ILogger interface contains the Printf method.
@@ -60,8 +60,8 @@ func (ctx *Context) BasicAuthUser() string {
 	return ctx.basicAuthUser
 }
 
-// ACLUser returns the acl user
-func (ctx *Context) ACLUser() AclUser {
+// AclUser returns the ACL user
+func (ctx *Context) AclUser() AclUser {
 	return ctx.aclUser
 }
 

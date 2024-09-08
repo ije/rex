@@ -46,12 +46,12 @@ const indexHTML = `
 var indexTpl = rex.Tpl("html", indexHTML)
 
 type user struct {
-	name        string
-	permissions []string
+	name  string
+	perms []string
 }
 
-func (u *user) Permissions() []string {
-	return u.permissions
+func (u *user) Perms() []string {
+	return u.perms
 }
 
 func main() {
@@ -74,18 +74,20 @@ func main() {
 		name := string(value)
 		if name == "admin" {
 			return &user{
-				name:        "admin",
-				permissions: []string{"add", "remove"},
+				name:  "admin",
+				perms: []string{"add", "remove"},
+			}
+		} else if name == "guest" {
+			return &user{
+				name: name,
 			}
 		}
-		return &user{
-			name: name,
-		}
+		return nil
 	}))
 
 	rex.GET("/{$}", func(ctx *rex.Context) interface{} {
 		data := map[string]interface{}{}
-		aclUser := ctx.ACLUser()
+		aclUser := ctx.AclUser()
 		if aclUser != nil {
 			data["user"] = aclUser.(*user).name
 			data["todos"] = todos
@@ -93,13 +95,13 @@ func main() {
 		return rex.Render(indexTpl, data)
 	})
 
-	rex.POST("/add-todo", rex.ACL("add"), func(ctx *rex.Context) interface{} {
+	rex.POST("/add-todo", rex.Perm("add"), func(ctx *rex.Context) interface{} {
 		todo := ctx.FormValue("todo")
 		todos = append(todos, todo)
 		return rex.Redirect("/", 302)
 	})
 
-	rex.DELETE("/delete-todo", rex.ACL("remove"), func(ctx *rex.Context) interface{} {
+	rex.DELETE("/delete-todo", rex.Perm("remove"), func(ctx *rex.Context) interface{} {
 		index, err := strconv.ParseInt(ctx.FormValue("index"), 10, 64)
 		if err != nil {
 			return err

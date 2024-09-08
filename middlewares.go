@@ -168,13 +168,17 @@ func Cors(c CorsOptions) Handle {
 	}
 }
 
-// ACL returns a ACL middleware that sets the permission for the current request.
-func ACL(permission string) Handle {
+// Perm returns a ACL middleware that sets the permission for the current request.
+func Perm(perms ...string) Handle {
+	permSet := make(map[string]bool, len(perms))
+	for _, p := range perms {
+		permSet[p] = true
+	}
 	return func(ctx *Context) interface{} {
 		if ctx.aclUser != nil {
-			permissions := ctx.aclUser.Permissions()
+			permissions := ctx.aclUser.Perms()
 			for _, p := range permissions {
-				if p == permission {
+				if permSet[p] {
 					return nil // next
 				}
 			}
