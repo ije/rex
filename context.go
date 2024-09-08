@@ -33,8 +33,6 @@ type Logger interface {
 type Context struct {
 	W                http.ResponseWriter
 	R                *http.Request
-	Path             *Path
-	Form             *Form
 	Store            *Store
 	basicAuthUser    string
 	aclUser          ACLUser
@@ -140,7 +138,7 @@ func (ctx *Context) SetCompressionWriter() {
 		}
 	}
 	if encoding != "" {
-		w, ok := ctx.W.(*responseWriter)
+		w, ok := ctx.W.(*rexWriter)
 		if ok && !w.headerSent {
 			h := w.Header()
 			vary := h.Get("Vary")
@@ -297,7 +295,7 @@ Switch:
 		goto Switch
 
 	case *fs:
-		filepath := path.Join(r.root, ctx.Path.String())
+		filepath := path.Join(r.root, ctx.R.URL.Path)
 		fi, err := os.Stat(filepath)
 		if err == nil && fi.IsDir() {
 			filepath = path.Join(filepath, "index.html")

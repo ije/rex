@@ -45,7 +45,7 @@ func serve(ctx context.Context, config *ServerConfig, c chan error) {
 	}
 	serv := &http.Server{
 		Addr:           fmt.Sprintf(("%s:%d"), config.Host, port),
-		Handler:        &mux{config.TLS.AutoRedirect},
+		Handler:        defaultMux,
 		ReadTimeout:    time.Duration(config.ReadTimeout) * time.Second,
 		WriteTimeout:   time.Duration(config.WriteTimeout) * time.Second,
 		MaxHeaderBytes: int(config.MaxHeaderBytes),
@@ -67,7 +67,7 @@ func serveTLS(ctx context.Context, config *ServerConfig, c chan error) {
 	}
 	serv := &http.Server{
 		Addr:           fmt.Sprintf(("%s:%d"), config.Host, port),
-		Handler:        &mux{},
+		Handler:        defaultMux,
 		ReadTimeout:    time.Duration(config.ReadTimeout) * time.Second,
 		WriteTimeout:   time.Duration(config.WriteTimeout) * time.Second,
 		MaxHeaderBytes: int(config.MaxHeaderBytes),

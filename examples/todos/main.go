@@ -37,6 +37,7 @@ const indexHTML = `
             <input name="user" type="text">
             <input value="Login" type="submit">
         </form>
+				<p>Try to login with <strong onclick="document.querySelector('input[name=user]').value='admin';" style="cursor:pointer;">admin</strong> or <strong onclick="document.querySelector('input[name=user]').value='guest';" style="cursor:pointer;">guest</strong>.</p>
     {{end}}
 </body>
 </html>
@@ -58,7 +59,7 @@ func main() {
 
 	// override http methods middleware
 	rex.Use(func(ctx *rex.Context) interface{} {
-		if ctx.R.Method == "POST" && ctx.Form.Value("_method") == "DELETE" {
+		if ctx.R.Method == "POST" && ctx.FormValue("_method") == "DELETE" {
 			ctx.R.Method = "DELETE"
 		}
 		return nil
@@ -82,7 +83,7 @@ func main() {
 		}
 	}))
 
-	rex.GET("/", func(ctx *rex.Context) interface{} {
+	rex.GET("/{$}", func(ctx *rex.Context) interface{} {
 		data := map[string]interface{}{}
 		aclUser := ctx.ACLUser()
 		if aclUser != nil {
@@ -93,13 +94,13 @@ func main() {
 	})
 
 	rex.POST("/add-todo", rex.ACL("add"), func(ctx *rex.Context) interface{} {
-		todo := ctx.Form.Require("todo")
+		todo := ctx.FormValue("todo")
 		todos = append(todos, todo)
 		return rex.Redirect("/", 302)
 	})
 
 	rex.DELETE("/delete-todo", rex.ACL("remove"), func(ctx *rex.Context) interface{} {
-		index, err := strconv.ParseInt(ctx.Form.Require("index"), 10, 64)
+		index, err := strconv.ParseInt(ctx.FormValue("index"), 10, 64)
 		if err != nil {
 			return err
 		}
@@ -114,9 +115,9 @@ func main() {
 	})
 
 	rex.POST("/login", func(ctx *rex.Context) interface{} {
-		user := ctx.Form.Value("user")
+		user := ctx.FormValue("user")
 		if user != "admin" && user != "guest" {
-			return rex.Status(403, rex.HTML("<p>Sorry, you are not allowed to login. <a href=\"/\">Go back</a></p>"))
+			return rex.Status(403, rex.HTML("<p>Oops, you are not allowed to login. <a href=\"/\">Go back</a></p>"))
 		}
 		ctx.Session().Set("USER", []byte(user))
 		return rex.Redirect("/", 302)

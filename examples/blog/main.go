@@ -65,7 +65,7 @@ var (
 func main() {
 	rex.Use(rex.Compression())
 
-	rex.GET("/", func(ctx *rex.Context) interface{} {
+	rex.GET("/{$}", func(ctx *rex.Context) interface{} {
 		return rex.Render(listTpl, books)
 	})
 
@@ -73,9 +73,10 @@ func main() {
 		return errors.New("boom")
 	})
 
-	rex.GET("/p/:slug", func(ctx *rex.Context) interface{} {
+	rex.GET("/p/{slug}", func(ctx *rex.Context) interface{} {
 		var book *Book
-		slug := ctx.Path.Params.Get("slug")
+		fmt.Println(ctx.PathValue("slug"))
+		slug := ctx.PathValue("slug")
 		for _, b := range books {
 			if b.Slug == slug {
 				book = &b

@@ -4,7 +4,7 @@ import (
 	"github.com/ije/rex/session"
 )
 
-// SessionStub is a stub for session
+// SessionStub is a stub for a session
 type SessionStub struct {
 	session.Session
 }

@@ -8,8 +8,9 @@ import (
 	"net/http"
 )
 
-// A responseWriter is used by rex.Context to construct a HTTP response.
-type responseWriter struct {
+// A Writer implements the http.ResponseWriter interface.
+type rexWriter struct {
+	ctx         *Context
 	status      int
 	written     int
 	headerSent  bool
@@ -18,7 +19,7 @@ type responseWriter struct {
 }
 
 // Hijack lets the caller take over the connection.
-func (w *responseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+func (w *rexWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	h, ok := w.httpWriter.(http.Hijacker)
 	if ok {
 		return h.Hijack()
@@ -28,7 +29,7 @@ func (w *responseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 }
 
 // Flush sends any buffered data to the client.
-func (w *responseWriter) Flush() {
+func (w *rexWriter) Flush() {
 	f, ok := w.httpWriter.(http.Flusher)
 	if ok {
 		f.Flush()
@@ -36,12 +37,12 @@ func (w *responseWriter) Flush() {
 }
 
 // Header returns the header map that will be sent by WriteHeader.
-func (w *responseWriter) Header() http.Header {
+func (w *rexWriter) Header() http.Header {
 	return w.httpWriter.Header()
 }
 
 // WriteHeader sends a HTTP response header with the provided status code.
-func (w *responseWriter) WriteHeader(status int) {
+func (w *rexWriter) WriteHeader(status int) {
 	if !w.headerSent {
 		w.status = status
 		w.httpWriter.WriteHeader(status)
@@ -50,7 +51,7 @@ func (w *responseWriter) WriteHeader(status int) {
 }
 
 // Write writes the data to the connection as part of an HTTP reply.
-func (w *responseWriter) Write(p []byte) (n int, err error) {
+func (w *rexWriter) Write(p []byte) (n int, err error) {
 	if !w.headerSent {
 		w.headerSent = true
 	}
@@ -66,7 +67,7 @@ func (w *responseWriter) Write(p []byte) (n int, err error) {
 }
 
 // Close closes the underlying connection.
-func (w *responseWriter) Close() error {
+func (w *rexWriter) Close() error {
 	if w.compression != nil {
 		return w.compression.Close()
 	}

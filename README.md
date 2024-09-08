@@ -4,7 +4,7 @@
 [![GoReport](https://goreportcard.com/badge/github.com/ije/rex)](https://goreportcard.com/report/github.com/ije/rex)
 [![MIT](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
 
-**REX** is a lightweight, high-performance, and middleware-extensible web framework in Go. Used by [esm.sh](https://esm.sh) CDN.
+**REX** is a lightweight, high-performance, and middleware-extensible web framework in Go. Used by [esm.sh](https://esm.sh) project.
 
 ## Installing
 
@@ -31,33 +31,27 @@ func main() {
     rex.Compress(),
   )
 
-  // GET / => Post list in HTML
-  rex.GET("/", func(ctx *rex.Context) interface{} {
+  rex.GET("/{$}", func(ctx *rex.Context) interface{} {
     return rex.Render(
       rex.Tpl("html", "<h1>My Blog</h1><ul>{{range .}}<li>{{.Title}}</li>{{end}}</ul>"),
-      posts.GetAll(),
+      posts.List(),
     )
   })
 
-  // GET /posts/foo-bar => Post in JSON if exists
-  rex.GET("/posts/:slug", func(ctx *rex.Context) interface{} {
-    post, ok := posts.Get(ctx.Path.Params.Get("slug"))
+  rex.GET("/posts/{id}", func(ctx *rex.Context) interface{} {
+    post, ok := posts.Get(ctx.PathValue("id"))
     if !ok {
       return &rex.Error{404, "post not found"}
     }
     return post
   })
 
-  // POST /posts {"title": "Hello World"} => Created Post in JSON
   rex.POST("/posts", func(ctx *rex.Context) interface{} {
-    post := Newpost(ctx.Form.Value("title"))
-    posts.Create(post)
-    return post
+    return posts.Add(ctx.FormValue("title"), ctx.FormValue("author"), ctx.FormValue("content"))
   })
 
-  // DELETE /posts/foo-bar => "true" if deleted
-  rex.DELETE("/posts/:slug", func(ctx *rex.Context) interface{} {
-    ok := posts.Delete(ctx.Path.Params.Get("slug"))
+  rex.DELETE("/posts/{id}", func(ctx *rex.Context) interface{} {
+    ok := posts.Delete(ctx.PathValue("id"))
     return ok
   })
 
@@ -87,21 +81,25 @@ rex.Use(func(ctx *rex.Context) interface{} {
 
 ## Router
 
-**REX** uses [httprouter](https://github.com/julienschmidt/httprouter) as the router, so you can use the same syntax as httprouter to define routes.
+**REX** uses [ServeMux Patterns](https://pkg.go.dev/net/http#hdr-Patterns) to match the request route.
 
-```go
-// static route
-rex.GET("/", func(ctx *rex.Context) interface{} {})
-// dynamic route
-rex.GET("/posts/:slug", func(ctx *rex.Context) interface{} {})
-// match all
-rex.GET("/posts/*path", func(ctx *rex.Context) interface{} {})
+Patterns can match the method, host and path of a request. Some examples:
+
+- `/index.html` matches the path `/index.html` for any host and method.
+- `GET /static/` matches a GET request whose path begins with `/static/`.
+- `example.com/` matches any request to the host `example.com`.
+- `example.com/{$}` matches requests with host `example.com` and path `/`.
+- `/b/{bucket}/o/{objectname...}` matches paths whose first segment is `b` and whose third segment is `o`. The name `bucket` denotes the second segment and `objectname` denotes the remainder of the path.
+
+In general, a pattern looks like:
+```
+[METHOD ][HOST]/[PATH]
 ```
 
-you can access the path params via `ctx.Path.Params`:
+you can access the path params via the `ctx.PathValue` method:
 
 ```go
-rex.GET("/posts/:slug", func(ctx *rex.Context) interface{} {
-  return fmt.Sprintf("slug is %s", ctx.Path.Params.Get("slug"))
+rex.GET("/posts/{id}", func(ctx *rex.Context) interface{} {
+  return fmt.Sprintf("id is %s", ctx.PathValue("id"))
 })
 ```
