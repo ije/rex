@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"strconv"
@@ -47,6 +48,11 @@ type Context struct {
 // Pathname returns the request pathname.
 func (ctx *Context) Pathname() string {
 	return ctx.R.URL.Path
+}
+
+// Query returns the request query values.
+func (ctx *Context) Query() url.Values {
+	return ctx.R.URL.Query()
 }
 
 // BasicAuthUser returns the BasicAuth username
