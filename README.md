@@ -6,20 +6,19 @@
 
 **REX** is a lightweight, high-performance, and middleware-extensible web framework in Go. Used by [esm.sh](https://esm.sh) project.
 
-## Installing
+## Installation
 
 ```bash
 go get -u github.com/ije/rex
 ```
 
-## Example
+## Usage
 
 ```go
 package main
 
 import (
   "log"
-
   "github.com/ije/rex"
 )
 
@@ -67,7 +66,7 @@ func main() {
 }
 ```
 
-More examples check [examples](./examples).
+More usages please check [examples/](./examples).
 
 ## Middleware
 
@@ -83,9 +82,9 @@ rex.Use(func(ctx *rex.Context) interface{} {
 })
 ```
 
-## Router
+## Routing
 
-**REX** uses [ServeMux Patterns](https://pkg.go.dev/net/http#hdr-Patterns) to match the request route.
+**REX** uses [ServeMux Patterns](https://pkg.go.dev/net/http#hdr-Patterns) (requires Go 1.22+) to define routes.
 
 Patterns can match the method, host and path of a request. Some examples:
 
@@ -100,10 +99,10 @@ In general, a pattern looks like:
 [METHOD ][HOST]/[PATH]
 ```
 
-you can access the path params via the `ctx.PathValue` method:
+You can access the path params via the `ctx.PathValue()`:
 
 ```go
 rex.GET("/posts/{id}", func(ctx *rex.Context) interface{} {
-  return fmt.Sprintf("id is %s", ctx.PathValue("id"))
+  return fmt.Sprintf("ID is %s", ctx.PathValue("id"))
 })
 ```
