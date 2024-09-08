@@ -75,7 +75,7 @@ func main() {
 		if name == "admin" {
 			return &user{
 				name:  "admin",
-				perms: []string{"add", "remove"},
+				perms: []string{"create", "delete"},
 			}
 		} else if name == "guest" {
 			return &user{
@@ -95,13 +95,13 @@ func main() {
 		return rex.Render(indexTpl, data)
 	})
 
-	rex.POST("/add-todo", rex.Perm("add"), func(ctx *rex.Context) interface{} {
+	rex.POST("/add-todo", rex.Perm("create"), func(ctx *rex.Context) interface{} {
 		todo := ctx.FormValue("todo")
 		todos = append(todos, todo)
 		return rex.Redirect("/", 302)
 	})
 
-	rex.DELETE("/delete-todo", rex.Perm("remove"), func(ctx *rex.Context) interface{} {
+	rex.DELETE("/delete-todo", rex.Perm("delete"), func(ctx *rex.Context) interface{} {
 		index, err := strconv.ParseInt(ctx.FormValue("index"), 10, 64)
 		if err != nil {
 			return err
