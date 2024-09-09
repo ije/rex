@@ -55,11 +55,6 @@ func (ctx *Context) Query() url.Values {
 	return ctx.R.URL.Query()
 }
 
-// SetHeader sets the response header.
-func (ctx *Context) SetHeader(key string, value string) {
-	ctx.W.Header().Set(key, value)
-}
-
 // BasicAuthUser returns the BasicAuth username
 func (ctx *Context) BasicAuthUser() string {
 	return ctx.basicAuthUser
@@ -95,13 +90,15 @@ func (ctx *Context) Session() *SessionStub {
 
 // UserAgent returns the request User-Agent.
 func (ctx *Context) UserAgent() string {
-	return ctx.R.UserAgent()
+	return ctx.R.Header.Get("User-Agent")
 }
 
-// Cookie returns the cookie by name.
-func (ctx *Context) Cookie(name string) (cookie *http.Cookie) {
-	cookie, _ = ctx.R.Cookie(name)
-	return
+// Cookie returns the named cookie provided in the request or
+// [ErrNoCookie] if not found.
+// If multiple cookies match the given name, only one cookie will
+// be returned.
+func (ctx *Context) Cookie(name string) (*http.Cookie, error) {
+	return ctx.R.Cookie(name)
 }
 
 // SetCookie sets a cookie.
