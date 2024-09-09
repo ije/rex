@@ -243,6 +243,17 @@ func Static(root, fallback string) Handle {
 	}
 }
 
+// Optional returns a middleware handler that executes the given handler only if the condition is true.
+func Optional(handle Handle, condition bool) Handle {
+	if condition {
+		return handle
+	}
+	return func(ctx *Context) interface{} {
+		// do nothing
+		return nil
+	}
+}
+
 // Chain returns a middleware handler that executes handlers in a chain.
 func Chain(handles ...Handle) Handle {
 	if len(handles) == 0 {
