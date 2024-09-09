@@ -56,7 +56,7 @@ func (a *Mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		sessionPool:      defaultSessionPool,
 		logger:           &log.Logger{},
 	}
-	wr := &rexWriter{ctx: ctx, status: 200, httpWriter: w}
+	wr := &rexWriter{ctx: ctx, code: 200, httpWriter: w, header: w.Header()}
 	ctx.W = wr
 
 	header := w.Header()
@@ -81,8 +81,8 @@ func (a *Mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				r.ContentLength,
 				ref,
 				strings.ReplaceAll(r.UserAgent(), `"`, `\"`),
-				wr.status,
-				wr.written,
+				wr.code,
+				wr.bytes,
 				time.Since(startTime)/time.Millisecond,
 			)
 		}

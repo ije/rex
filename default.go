@@ -15,6 +15,7 @@ func Use(middlewares ...Handle) {
 	defaultMux.Use(middlewares...)
 }
 
+// AddRoute adds a route.
 func AddRoute(pattern string, handle Handle) {
 	defaultMux.AddRoute(pattern, handle)
 }

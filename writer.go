@@ -11,8 +11,9 @@ import (
 // A Writer implements the http.ResponseWriter interface.
 type rexWriter struct {
 	ctx        *Context
-	status     int
-	written    int
+	code       int
+	bytes      int
+	header     http.Header
 	headerSent bool
 	httpWriter http.ResponseWriter
 	compWriter io.WriteCloser
@@ -38,14 +39,14 @@ func (w *rexWriter) Flush() {
 
 // Header returns the header map that will be sent by WriteHeader.
 func (w *rexWriter) Header() http.Header {
-	return w.httpWriter.Header()
+	return w.header
 }
 
 // WriteHeader sends a HTTP response header with the provided status code.
-func (w *rexWriter) WriteHeader(status int) {
+func (w *rexWriter) WriteHeader(code int) {
 	if !w.headerSent {
-		w.status = status
-		w.httpWriter.WriteHeader(status)
+		w.code = code
+		w.httpWriter.WriteHeader(code)
 		w.headerSent = true
 	}
 }
@@ -61,7 +62,7 @@ func (w *rexWriter) Write(p []byte) (n int, err error) {
 	}
 	n, err = wr.Write(p)
 	if n > 0 {
-		w.written += n
+		w.bytes += n
 	}
 	return
 }

@@ -57,7 +57,7 @@ func (ctx *Context) Query() url.Values {
 
 // SetHeader sets the response header.
 func (ctx *Context) SetHeader(key string, value string) {
-	ctx.W.Header().Set(key, value)
+	ctx.W.(*rexWriter).header.Set(key, value)
 }
 
 // BasicAuthUser returns the BasicAuth username
@@ -95,7 +95,7 @@ func (ctx *Context) Session() *SessionStub {
 
 // UserAgent returns the request User-Agent.
 func (ctx *Context) UserAgent() string {
-	return ctx.R.UserAgent()
+	return ctx.R.Header.Get("User-Agent")
 }
 
 // Cookie returns the cookie by name.
@@ -184,14 +184,8 @@ func (ctx *Context) canBeCompressed(contentType string, contentSize int) bool {
 }
 
 func (ctx *Context) respondWith(v interface{}) {
-	s := 0
-	status := func() int {
-		if s > 0 {
-			return s
-		}
-		return 200
-	}
-	header := ctx.W.Header()
+	header := ctx.W.(*rexWriter).header
+	code := 200
 
 Switch:
 	switch r := v.(type) {
@@ -220,12 +214,12 @@ Switch:
 		} else {
 			header.Set("Content-Length", strconv.Itoa(len(data)))
 		}
-		ctx.W.WriteHeader(status())
+		ctx.W.WriteHeader(code)
 		ctx.W.Write(data)
 
 	case bool, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64:
 		header.Set("Content-Type", "text/plain")
-		ctx.W.WriteHeader(status())
+		ctx.W.WriteHeader(code)
 		fmt.Fprintf(ctx.W, "%v", r)
 
 	case []byte:
@@ -238,7 +232,7 @@ Switch:
 		if cType == "" {
 			header.Set("Content-Type", "binary/octet-stream")
 		}
-		ctx.W.WriteHeader(status())
+		ctx.W.WriteHeader(code)
 		ctx.W.Write(r)
 
 	case io.Reader:
@@ -270,7 +264,7 @@ Switch:
 		if cType == "" {
 			header.Set("Content-Type", "binary/octet-stream")
 		}
-		ctx.W.WriteHeader(status())
+		ctx.W.WriteHeader(code)
 		io.Copy(ctx.W, r)
 
 	case *content:
@@ -310,7 +304,7 @@ Switch:
 		http.ServeContent(ctx.W, ctx.R, r.name, r.mtime, r.content)
 
 	case *statusd:
-		s = r.code
+		code = r.code
 		v = r.content
 		goto Switch
 
@@ -337,20 +331,20 @@ Switch:
 		goto Switch
 
 	case error:
-		if s >= 400 && s < 600 {
-			ctx.respondWithError(&Error{s, r.Error()})
+		if code >= 400 && code < 600 {
+			ctx.respondWithError(&Error{code, r.Error()})
 		} else {
 			ctx.respondWithError(&Error{500, r.Error()})
 		}
 
-	case *Error:
-		ctx.respondWithError(r)
-
 	case Error:
 		ctx.respondWithError(&r)
 
+	case *Error:
+		ctx.respondWithError(r)
+
 	default:
-		ctx.respondWithJson(r, status())
+		ctx.respondWithJson(r, code)
 	}
 }
 
