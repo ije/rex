@@ -12,7 +12,7 @@ import (
 )
 
 // Response defines the response interface.
-type Response interface{}
+type Response any
 
 type invalid struct {
 	status  int
@@ -32,7 +32,7 @@ func Err(status int, v ...string) Response {
 	}
 	var messsage string
 	if len(v) > 0 {
-		args := make([]interface{}, len(v))
+		args := make([]any, len(v))
 		for i, s := range v {
 			args[i] = s
 		}
@@ -65,11 +65,11 @@ func Redirect(url string, status int) Response {
 
 type statusd struct {
 	code    int
-	content interface{}
+	content any
 }
 
 // Status replies to the request using the payload in the status.
-func Status(status int, content interface{}) Response {
+func Status(status int, content any) Response {
 	return &statusd{status, content}
 }
 
@@ -84,7 +84,7 @@ func HTML(html string) Response {
 // Template is an interface for template.
 type Template interface {
 	Name() string
-	Execute(wr io.Writer, data interface{}) error
+	Execute(wr io.Writer, data any) error
 }
 
 func Tpl(text string) Template {
@@ -92,7 +92,7 @@ func Tpl(text string) Template {
 }
 
 // Render renders the template with the given data.
-func Render(t Template, data interface{}) Response {
+func Render(t Template, data any) Response {
 	buf := bytes.NewBuffer(nil)
 	if err := t.Execute(buf, data); err != nil {
 		panic(&invalid{500, err.Error()})

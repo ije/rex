@@ -27,7 +27,7 @@ type AclUser interface {
 
 // A ILogger interface contains the Printf method.
 type ILogger interface {
-	Printf(format string, v ...interface{})
+	Printf(format string, v ...any)
 }
 
 // A Context to handle http requests.
@@ -183,7 +183,7 @@ func (ctx *Context) canBeCompressed(contentType string, contentSize int) bool {
 	return ctx.compress && contentSize > 1024 && strings.HasPrefix(contentType, "text/") || strings.HasPrefix(contentType, "application/javascript") || strings.HasPrefix(contentType, "application/json") || strings.HasPrefix(contentType, "application/xml") || strings.HasPrefix(contentType, "application/wasm")
 }
 
-func (ctx *Context) respondWith(v interface{}) {
+func (ctx *Context) respondWith(v any) {
 	header := ctx.W.(*rexWriter).header
 	code := 200
 
@@ -348,7 +348,7 @@ Switch:
 	}
 }
 
-func (ctx *Context) respondWithJson(v interface{}, status int) {
+func (ctx *Context) respondWithJson(v any, status int) {
 	buf := bytes.NewBuffer(nil)
 	err := json.NewEncoder(buf).Encode(v)
 	ctx.W.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -370,7 +370,7 @@ func (ctx *Context) respondWithError(err *Error) {
 	if err.Status >= 500 && ctx.logger != nil {
 		ctx.logger.Printf("[error] %s", err.Message)
 	}
-	ctx.respondWithJson(map[string]interface{}{
+	ctx.respondWithJson(map[string]any{
 		"error": err,
 	}, err.Status)
 }

@@ -31,7 +31,7 @@ func main() {
   )
 
   // match "GET /" route
-  rex.GET("/{$}", func(ctx *rex.Context) interface{} {
+  rex.GET("/{$}", func(ctx *rex.Context) any {
     return rex.Render(
       rex.Tpl("<h1>My Blog</h1><ul>{{range .}}<li>{{.Title}}</li>{{end}}</ul>"),
       posts.List(),
@@ -39,7 +39,7 @@ func main() {
   })
 
   // match "GET /posts/:id" route
-  rex.GET("/posts/{id}", func(ctx *rex.Context) interface{} {
+  rex.GET("/posts/{id}", func(ctx *rex.Context) any {
     post, ok := posts.Get(ctx.PathValue("id"))
     if !ok {
       return rex.Err(404, "post not found")
@@ -48,12 +48,12 @@ func main() {
   })
 
   // match "POST /posts" route
-  rex.POST("/posts", func(ctx *rex.Context) interface{} {
+  rex.POST("/posts", func(ctx *rex.Context) any {
     return posts.Add(ctx.FormValue("title"), ctx.FormValue("author"), ctx.FormValue("content"))
   })
 
   // match "DELETE /posts/:id" route
-  rex.DELETE("/posts/{id}", func(ctx *rex.Context) interface{} {
+  rex.DELETE("/posts/{id}", func(ctx *rex.Context) any {
     ok := posts.Delete(ctx.PathValue("id"))
     return ok
   })
@@ -70,10 +70,10 @@ More usages please check [examples/](./examples).
 
 ## Middleware
 
-In **REX**, a middleware is a function that receives a `*rex.Context` and returns a `interface{}`. If the returned value is not `nil`, the middleware will return the value to the client, or continue to execute the next middleware.
+In **REX**, a middleware is a function that receives a `*rex.Context` and returns a `any`. If the returned value is not `nil`, the middleware will return the value to the client, or continue to execute the next middleware.
 
 ```go
-rex.Use(func(ctx *rex.Context) interface{} {
+rex.Use(func(ctx *rex.Context) any {
   // return a html response
   return rex.HTML("<h1>hello world</h1>")
 
@@ -102,7 +102,7 @@ In general, a pattern looks like:
 You can access the path params via the `ctx.PathValue()`:
 
 ```go
-rex.GET("/posts/{id}", func(ctx *rex.Context) interface{} {
+rex.GET("/posts/{id}", func(ctx *rex.Context) any {
   return fmt.Sprintf("ID is %s", ctx.PathValue("id"))
 })
 ```

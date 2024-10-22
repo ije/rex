@@ -12,7 +12,7 @@ import (
 )
 
 // Handle defines the API handle
-type Handle func(ctx *Context) interface{}
+type Handle func(ctx *Context) any
 
 // Mux is a http.Handler with middlewares and routes.
 type Mux struct {

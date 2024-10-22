@@ -58,7 +58,7 @@ func main() {
 	todos := []string{}
 
 	// override http methods middleware
-	rex.Use(func(ctx *rex.Context) interface{} {
+	rex.Use(func(ctx *rex.Context) any {
 		if ctx.R.Method == "POST" && ctx.FormValue("_method") == "DELETE" {
 			ctx.R.Method = "DELETE"
 		}
@@ -85,8 +85,8 @@ func main() {
 		return nil
 	}))
 
-	rex.GET("/{$}", func(ctx *rex.Context) interface{} {
-		data := map[string]interface{}{}
+	rex.GET("/{$}", func(ctx *rex.Context) any {
+		data := map[string]any{}
 		aclUser := ctx.AclUser()
 		if aclUser != nil {
 			data["user"] = aclUser.(*user).name
@@ -95,13 +95,13 @@ func main() {
 		return rex.Render(indexTpl, data)
 	})
 
-	rex.POST("/add-todo", rex.Perm("create"), func(ctx *rex.Context) interface{} {
+	rex.POST("/add-todo", rex.Perm("create"), func(ctx *rex.Context) any {
 		todo := ctx.FormValue("todo")
 		todos = append(todos, todo)
 		return rex.Redirect("/", 302)
 	})
 
-	rex.DELETE("/delete-todo", rex.Perm("delete"), func(ctx *rex.Context) interface{} {
+	rex.DELETE("/delete-todo", rex.Perm("delete"), func(ctx *rex.Context) any {
 		index, err := strconv.ParseInt(ctx.FormValue("index"), 10, 64)
 		if err != nil {
 			return err
@@ -116,7 +116,7 @@ func main() {
 		return rex.Redirect("/", 302)
 	})
 
-	rex.POST("/login", func(ctx *rex.Context) interface{} {
+	rex.POST("/login", func(ctx *rex.Context) any {
 		user := ctx.FormValue("user")
 		if user != "admin" && user != "guest" {
 			return rex.Status(403, rex.HTML("<p>Oops, you are not allowed to login. <a href=\"/\">Go back</a></p>"))
@@ -125,7 +125,7 @@ func main() {
 		return rex.Redirect("/", 302)
 	})
 
-	rex.POST("/logout", func(ctx *rex.Context) interface{} {
+	rex.POST("/logout", func(ctx *rex.Context) any {
 		ctx.Session().Delete("USER")
 		return rex.Redirect("/", 302)
 	})

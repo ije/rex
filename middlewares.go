@@ -13,7 +13,7 @@ import (
 
 // Header is rex middleware to set http header for the current request.
 func Header(key string, value string) Handle {
-	return func(ctx *Context) interface{} {
+	return func(ctx *Context) any {
 		if key != "" {
 			ctx.W.Header().Set(key, value)
 		}
@@ -23,7 +23,7 @@ func Header(key string, value string) Handle {
 
 // Logger returns a logger middleware to sets the error logger for the context.
 func Logger(logger ILogger) Handle {
-	return func(ctx *Context) interface{} {
+	return func(ctx *Context) any {
 		if logger != nil {
 			ctx.logger = logger
 		}
@@ -33,7 +33,7 @@ func Logger(logger ILogger) Handle {
 
 // AccessLogger returns a logger middleware to sets the access logger.
 func AccessLogger(logger ILogger) Handle {
-	return func(ctx *Context) interface{} {
+	return func(ctx *Context) any {
 		ctx.accessLogger = logger
 		return nil
 	}
@@ -47,7 +47,7 @@ type SessionOptions struct {
 
 // Session returns a session middleware to configure the session manager.
 func Session(opts SessionOptions) Handle {
-	return func(ctx *Context) interface{} {
+	return func(ctx *Context) any {
 		if opts.IdHandler != nil {
 			ctx.sessionIdHandler = opts.IdHandler
 		}
@@ -155,7 +155,7 @@ func Cors(c CorsOptions) Handle {
 		Debug:                      c.Debug,
 		Logger:                     c.Logger,
 	})
-	return func(ctx *Context) interface{} {
+	return func(ctx *Context) any {
 		optionPassthrough := false
 		h := func(w http.ResponseWriter, r *http.Request) {
 			optionPassthrough = true
@@ -174,7 +174,7 @@ func Perm(perms ...string) Handle {
 	for _, p := range perms {
 		permSet[p] = true
 	}
-	return func(ctx *Context) interface{} {
+	return func(ctx *Context) any {
 		if ctx.aclUser != nil {
 			permissions := ctx.aclUser.Perms()
 			for _, p := range permissions {
@@ -194,7 +194,7 @@ func BasicAuth(auth func(name string, secret string) (ok bool, err error)) Handl
 
 // BasicAuthWithRealm returns a basic HTTP authorization middleware with realm.
 func BasicAuthWithRealm(realm string, auth func(name string, secret string) (ok bool, err error)) Handle {
-	return func(ctx *Context) interface{} {
+	return func(ctx *Context) any {
 		value := ctx.R.Header.Get("Authorization")
 		if strings.HasPrefix(value, "Basic ") {
 			authInfo, err := base64.StdEncoding.DecodeString(value[6:])
@@ -221,7 +221,7 @@ func BasicAuthWithRealm(realm string, auth func(name string, secret string) (ok 
 
 // AclAuth returns a ACL authorization middleware.
 func AclAuth(auth func(ctx *Context) AclUser) Handle {
-	return func(ctx *Context) interface{} {
+	return func(ctx *Context) any {
 		user := auth(ctx)
 		ctx.aclUser = user
 		return nil
@@ -230,7 +230,7 @@ func AclAuth(auth func(ctx *Context) AclUser) Handle {
 
 // Compress returns a rex middleware to enable http compression.
 func Compress() Handle {
-	return func(ctx *Context) interface{} {
+	return func(ctx *Context) any {
 		ctx.compress = true
 		return nil
 	}
@@ -238,7 +238,7 @@ func Compress() Handle {
 
 // Static returns a static file server middleware.
 func Static(root, fallback string) Handle {
-	return func(ctx *Context) interface{} {
+	return func(ctx *Context) any {
 		return FS(root, fallback)
 	}
 }
@@ -248,7 +248,7 @@ func Optional(handle Handle, condition bool) Handle {
 	if condition {
 		return handle
 	}
-	return func(ctx *Context) interface{} {
+	return func(ctx *Context) any {
 		// do nothing
 		return nil
 	}
@@ -259,7 +259,7 @@ func Chain(handles ...Handle) Handle {
 	if len(handles) == 0 {
 		panic("no handles in the chain")
 	}
-	return func(ctx *Context) interface{} {
+	return func(ctx *Context) any {
 		for _, handle := range handles {
 			v := handle(ctx)
 			if v != nil {

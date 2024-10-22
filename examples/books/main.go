@@ -64,11 +64,11 @@ var (
 func main() {
 	rex.Use(rex.Compress())
 
-	rex.GET("/{$}", func(ctx *rex.Context) interface{} {
+	rex.GET("/{$}", func(ctx *rex.Context) any {
 		return rex.Render(listTpl, books)
 	})
 
-	rex.GET("/p/{slug}", func(ctx *rex.Context) interface{} {
+	rex.GET("/p/{slug}", func(ctx *rex.Context) any {
 		slug := ctx.PathValue("slug")
 		if book, ok := books[slug]; ok {
 			return rex.Render(pageTpl, book)
