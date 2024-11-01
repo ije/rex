@@ -107,11 +107,11 @@ func Render(t Template, data any) Response {
 type content struct {
 	name    string
 	mtime   time.Time
-	content io.ReadSeeker
+	content io.Reader
 }
 
-// Content replies to the request using the content in the provided ReadSeeker.
-func Content(name string, mtime time.Time, r io.ReadSeeker) Response {
+// Content replies to the request using the content in the provided Reader.
+func Content(name string, mtime time.Time, r io.Reader) Response {
 	return &content{name, mtime, r}
 }
 

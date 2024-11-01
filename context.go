@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"net/url"
 	"os"
@@ -274,34 +275,54 @@ Switch:
 			}
 		}()
 		if ctx.compress {
-			isTextContent := false
-			switch strings.TrimPrefix(path.Ext(r.name), ".") {
-			case "html", "htm", "xml", "svg", "css", "less", "sass", "scss", "json", "json5", "map", "js", "jsx", "mjs", "cjs", "ts", "mts", "tsx", "md", "mdx", "yaml", "txt", "wasm":
-				isTextContent = true
-			}
-			if isTextContent {
-				size, err := r.content.Seek(0, io.SeekEnd)
-				if err != nil {
-					ctx.respondWithError(&Error{500, err.Error()})
-					return
+			if seeker, ok := r.content.(io.Seeker); ok {
+				isTextContent := false
+				switch strings.TrimPrefix(path.Ext(r.name), ".") {
+				case "html", "htm", "xml", "svg", "css", "less", "sass", "scss", "json", "json5", "map", "js", "jsx", "mjs", "cjs", "ts", "mts", "tsx", "md", "mdx", "yaml", "txt", "wasm":
+					isTextContent = true
 				}
-				_, err = r.content.Seek(0, io.SeekStart)
-				if err != nil {
-					ctx.respondWithError(&Error{500, err.Error()})
-					return
-				}
-				if size > 1024 {
-					ctx.enableCompression()
+				if isTextContent {
+					size, err := seeker.Seek(0, io.SeekEnd)
+					if err != nil {
+						ctx.respondWithError(&Error{500, err.Error()})
+						return
+					}
+					_, err = seeker.Seek(0, io.SeekStart)
+					if err != nil {
+						ctx.respondWithError(&Error{500, err.Error()})
+						return
+					}
+					if size > 1024 {
+						ctx.enableCompression()
+					}
 				}
 			}
 		}
 		if r.mtime.IsZero() {
 			r.mtime = time.Now()
 			if header.Get("Cache-Control") == "" {
-				header.Set("Cache-Control", "no-cache, no-store, must-revalidate")
+				header.Set("Cache-Control", "public, max-age=0, must-revalidate")
 			}
 		}
-		http.ServeContent(ctx.W, ctx.R, r.name, r.mtime, r.content)
+		if readSeeker, ok := r.content.(io.ReadSeeker); ok {
+			http.ServeContent(ctx.W, ctx.R, r.name, r.mtime, readSeeker)
+		} else {
+			if checkIfModifiedSince(ctx.R, r.mtime) {
+				ctx.W.WriteHeader(304)
+				return
+			}
+			h := ctx.W.Header()
+			ctype := h.Get("Content-Type")
+			if ctype == "" {
+				ctype = mime.TypeByExtension(path.Ext(r.name))
+				if ctype != "" {
+					h.Set("Content-Type", ctype)
+				}
+			}
+			if ctx.R.Method != "HEAD" {
+				io.Copy(ctx.W, r.content)
+			}
+		}
 
 	case *statusd:
 		code = r.code
@@ -403,4 +424,22 @@ func hexEscapeNonASCII(s string) string {
 		b = append(b, s[pos:]...)
 	}
 	return string(b)
+}
+
+func checkIfModifiedSince(r *http.Request, modtime time.Time) bool {
+	if r.Method != "GET" && r.Method != "HEAD" {
+		return false
+	}
+	ims := r.Header.Get("If-Modified-Since")
+	if ims == "" || modtime.IsZero() || modtime.Equal(time.Unix(0, 0)) {
+		return false
+	}
+	t, err := http.ParseTime(ims)
+	if err != nil {
+		return false
+	}
+	// The Last-Modified header truncates sub-second precision so
+	// the modtime needs to be truncated too.
+	modtime = modtime.Truncate(time.Second)
+	return modtime.Compare(t) > 0
 }
