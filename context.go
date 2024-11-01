@@ -181,7 +181,11 @@ func (ctx *Context) enableCompression() {
 }
 
 func (ctx *Context) canBeCompressed(contentType string, contentSize int) bool {
-	return ctx.compress && contentSize > 1024 && strings.HasPrefix(contentType, "text/") || strings.HasPrefix(contentType, "application/javascript") || strings.HasPrefix(contentType, "application/json") || strings.HasPrefix(contentType, "application/xml") || strings.HasPrefix(contentType, "application/wasm")
+	return ctx.compress && contentSize > 1024 && (strings.HasPrefix(contentType, "text/") ||
+		strings.HasPrefix(contentType, "application/javascript") ||
+		strings.HasPrefix(contentType, "application/json") ||
+		strings.HasPrefix(contentType, "application/xml") ||
+		strings.HasPrefix(contentType, "application/wasm"))
 }
 
 func (ctx *Context) respondWith(v any) {
