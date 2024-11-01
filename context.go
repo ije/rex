@@ -275,13 +275,13 @@ Switch:
 			}
 		}()
 		if ctx.compress {
-			if seeker, ok := r.content.(io.Seeker); ok {
-				isTextContent := false
-				switch strings.TrimPrefix(path.Ext(r.name), ".") {
-				case "html", "htm", "xml", "svg", "css", "less", "sass", "scss", "json", "json5", "map", "js", "jsx", "mjs", "cjs", "ts", "mts", "tsx", "md", "mdx", "yaml", "txt", "wasm":
-					isTextContent = true
-				}
-				if isTextContent {
+			isText := false
+			switch strings.TrimPrefix(path.Ext(r.name), ".") {
+			case "html", "htm", "xml", "svg", "css", "less", "sass", "scss", "json", "json5", "map", "js", "jsx", "mjs", "cjs", "ts", "mts", "tsx", "md", "mdx", "yaml", "txt", "wasm":
+				isText = true
+			}
+			if isText {
+				if seeker, ok := r.content.(io.Seeker); ok {
 					size, err := seeker.Seek(0, io.SeekEnd)
 					if err != nil {
 						ctx.respondWithError(&Error{500, err.Error()})
@@ -295,6 +295,9 @@ Switch:
 					if size > 1024 {
 						ctx.enableCompression()
 					}
+				} else {
+					// unable to seek, so compress it anyway
+					ctx.enableCompression()
 				}
 			}
 		}
