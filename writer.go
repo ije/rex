@@ -12,9 +12,9 @@ import (
 type rexWriter struct {
 	ctx        *Context
 	code       int
-	bytes      int
 	header     http.Header
 	headerSent bool
+	writeN     int
 	httpWriter http.ResponseWriter
 	compWriter io.WriteCloser
 }
@@ -44,11 +44,12 @@ func (w *rexWriter) Header() http.Header {
 
 // WriteHeader sends a HTTP response header with the provided status code.
 func (w *rexWriter) WriteHeader(code int) {
-	if !w.headerSent {
-		w.code = code
-		w.httpWriter.WriteHeader(code)
-		w.headerSent = true
+	if w.headerSent {
+		return
 	}
+	w.code = code
+	w.httpWriter.WriteHeader(code)
+	w.headerSent = true
 }
 
 // Write writes the data to the connection as part of an HTTP reply.
@@ -62,7 +63,7 @@ func (w *rexWriter) Write(p []byte) (n int, err error) {
 	}
 	n, err = wr.Write(p)
 	if n > 0 {
-		w.bytes += n
+		w.writeN += n
 	}
 	return
 }

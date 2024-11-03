@@ -56,6 +56,11 @@ func (ctx *Context) Query() url.Values {
 	return ctx.R.URL.Query()
 }
 
+// GetHeader returns the request header by key.
+func (ctx *Context) GetHeader(key string) string {
+	return ctx.R.Header.Get(key)
+}
+
 // SetHeader sets the response header.
 func (ctx *Context) SetHeader(key string, value string) {
 	ctx.W.(*rexWriter).header.Set(key, value)
@@ -99,21 +104,21 @@ func (ctx *Context) UserAgent() string {
 	return ctx.R.Header.Get("User-Agent")
 }
 
-// Cookie returns the cookie by name.
+// Cookie returns the request cookie by name.
 func (ctx *Context) Cookie(name string) (cookie *http.Cookie) {
 	cookie, _ = ctx.R.Cookie(name)
 	return
 }
 
-// SetCookie sets a cookie.
+// SetCookie sets a cookie to the response.
 func (ctx *Context) SetCookie(cookie http.Cookie) {
 	if cookie.Name != "" {
 		ctx.W.Header().Add("Set-Cookie", cookie.String())
 	}
 }
 
-// RemoveCookie removes the cookie.
-func (ctx *Context) RemoveCookie(cookie http.Cookie) {
+// ClearCookie sets a cookie to the response with an expiration time in the past.
+func (ctx *Context) ClearCookie(cookie http.Cookie) {
 	if cookie.Name != "" {
 		cookie.Value = "-"
 		cookie.Expires = time.Unix(0, 0)
@@ -121,8 +126,8 @@ func (ctx *Context) RemoveCookie(cookie http.Cookie) {
 	}
 }
 
-// RemoveCookieByName removes the cookie by name.
-func (ctx *Context) RemoveCookieByName(name string) {
+// ClearCookieByName sets a cookie to the response with an expiration time in the past.
+func (ctx *Context) ClearCookieByName(name string) {
 	ctx.SetCookie(http.Cookie{
 		Name:    name,
 		Value:   "-",
@@ -147,33 +152,28 @@ func (ctx *Context) RemoteIP() string {
 
 func (ctx *Context) enableCompression() {
 	var encoding string
-	for _, p := range strings.Split(ctx.R.Header.Get("Accept-Encoding"), ",") {
-		name, _ := utils.SplitByFirstByte(p, ';')
-		switch strings.ToLower(strings.TrimSpace(name)) {
-		case "br":
-			encoding = "br"
-		case "gzip":
-			if encoding == "" {
-				encoding = "gzip"
-			}
-		}
+	if accectEncoding := ctx.R.Header.Get("Accept-Encoding"); accectEncoding != "" && strings.Contains(accectEncoding, "br") {
+		encoding = "br"
+	} else if accectEncoding != "" && strings.Contains(accectEncoding, "gzip") {
+		encoding = "gzip"
 	}
 	if encoding != "" {
 		w, ok := ctx.W.(*rexWriter)
-		if ok && !w.headerSent {
-			h := w.Header()
-			vary := h.Get("Vary")
-			if vary == "" {
-				h.Set("Vary", "Accept-Encoding")
-			} else if !strings.Contains(vary, "Accept-Encoding") {
-				h.Set("Vary", fmt.Sprintf("%s, Accept-Encoding", vary))
+		if ok {
+			if !w.headerSent {
+				h := w.Header()
+				vary := h.Get("Vary")
+				if vary == "" {
+					h.Set("Vary", "Accept-Encoding")
+				} else if !strings.Contains(vary, "Accept-Encoding") {
+					h.Set("Vary", fmt.Sprintf("%s, Accept-Encoding", vary))
+				}
+				h.Set("Content-Encoding", encoding)
+				h.Del("Content-Length")
 			}
-			h.Set("Content-Encoding", encoding)
-			h.Del("Content-Length")
-			switch encoding {
-			case "br":
+			if encoding == "br" {
 				w.compWriter = brotli.NewWriterLevel(w.httpWriter, brotli.BestSpeed)
-			case "gzip":
+			} else if encoding == "gzip" {
 				w.compWriter, _ = gzip.NewWriterLevel(w.httpWriter, gzip.BestSpeed)
 			}
 		}
@@ -331,7 +331,7 @@ Switch:
 			}
 		}
 
-	case *statusd:
+	case *status:
 		code = r.code
 		v = r.content
 		goto Switch

@@ -61,7 +61,6 @@ func (a *Mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	header := w.Header()
 	header.Set("Connection", "keep-alive")
-	header.Set("Server", "rex")
 
 	defer func() {
 		wr.Close()
@@ -82,7 +81,7 @@ func (a *Mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				ref,
 				strings.ReplaceAll(r.UserAgent(), `"`, `\"`),
 				wr.code,
-				wr.bytes,
+				wr.writeN,
 				time.Since(startTime)/time.Millisecond,
 			)
 		}
@@ -125,11 +124,11 @@ func (a *Mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == "GET" {
-		ctx.respondWith(&statusd{404, "Not Found"})
+		ctx.respondWith(&status{404, "Not Found"})
 		return
 	}
 
-	ctx.respondWith(&statusd{405, "Method Not Allowed"})
+	ctx.respondWith(&status{405, "Method Not Allowed"})
 }
 
 // PathValue returns the value for the named path wildcard in the [ServeMux] pattern

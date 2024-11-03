@@ -249,19 +249,19 @@ func Optional(handle Handle, condition bool) Handle {
 		return handle
 	}
 	return func(ctx *Context) any {
-		// do nothing
+		// dummy handler
 		return nil
 	}
 }
 
 // Chain returns a middleware handler that executes handlers in a chain.
-func Chain(handles ...Handle) Handle {
-	if len(handles) == 0 {
-		panic("no handles in the chain")
+func Chain(middlewares ...Handle) Handle {
+	if len(middlewares) == 0 {
+		panic("no middlewares in the chain")
 	}
 	return func(ctx *Context) any {
-		for _, handle := range handles {
-			v := handle(ctx)
+		for _, mw := range middlewares {
+			v := mw(ctx)
 			if v != nil {
 				return v
 			}
