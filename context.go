@@ -346,7 +346,7 @@ Switch:
 			_, err = os.Stat(filepath)
 		}
 		if err != nil && os.IsNotExist(err) && r.fallback != "" {
-			filepath = path.Join(r.root, utils.CleanPath(r.fallback))
+			filepath = path.Join(r.root, r.fallback)
 			_, err = os.Stat(filepath)
 		}
 		if err != nil {
