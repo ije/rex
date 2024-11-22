@@ -189,25 +189,26 @@ func (ctx *Context) isCompressible(contentType string, contentSize int) bool {
 }
 
 func (ctx *Context) respondWith(v any) {
-	header := ctx.W.(*rexWriter).header
+	w := ctx.W
+	header := w.(*rexWriter).header
 	code := 200
 
-Switch:
+SWITCH:
 	switch r := v.(type) {
 	case http.Handler:
-		r.ServeHTTP(ctx.W, ctx.R)
+		r.ServeHTTP(w, ctx.R)
 
 	case *http.Response:
 		for k, v := range r.Header {
 			header[k] = v
 		}
-		ctx.W.WriteHeader(r.StatusCode)
-		io.Copy(ctx.W, r.Body)
+		w.WriteHeader(r.StatusCode)
+		io.Copy(w, r.Body)
 		r.Body.Close()
 
 	case *redirect:
 		header.Set("Location", hexEscapeNonASCII(r.url))
-		ctx.W.WriteHeader(r.status)
+		w.WriteHeader(r.status)
 
 	case string:
 		data := []byte(r)
@@ -219,13 +220,15 @@ Switch:
 		} else {
 			header.Set("Content-Length", strconv.Itoa(len(data)))
 		}
-		ctx.W.WriteHeader(code)
-		ctx.W.Write(data)
+		w.WriteHeader(code)
+		w.Write(data)
 
 	case bool, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64:
-		header.Set("Content-Type", "text/plain")
-		ctx.W.WriteHeader(code)
-		fmt.Fprintf(ctx.W, "%v", r)
+		if header.Get("Content-Type") == "" {
+			header.Set("Content-Type", "text/plain")
+		}
+		w.WriteHeader(code)
+		fmt.Fprintf(w, "%v", r)
 
 	case []byte:
 		cType := header.Get("Content-Type")
@@ -237,8 +240,8 @@ Switch:
 		if cType == "" {
 			header.Set("Content-Type", "binary/octet-stream")
 		}
-		ctx.W.WriteHeader(code)
-		ctx.W.Write(r)
+		w.WriteHeader(code)
+		w.Write(r)
 
 	case io.Reader:
 		defer func() {
@@ -271,8 +274,8 @@ Switch:
 				header.Set("Content-Length", strconv.Itoa(size))
 			}
 		}
-		ctx.W.WriteHeader(code)
-		io.Copy(ctx.W, r)
+		w.WriteHeader(code)
+		io.Copy(w, r)
 
 	case *content:
 		defer func() {
@@ -314,13 +317,13 @@ Switch:
 			}
 		}
 		if readSeeker, ok := r.content.(io.ReadSeeker); ok {
-			http.ServeContent(ctx.W, ctx.R, r.name, r.mtime, readSeeker)
+			http.ServeContent(w, ctx.R, r.name, r.mtime, readSeeker)
 		} else {
 			if checkIfModifiedSince(ctx.R, r.mtime) {
-				ctx.W.WriteHeader(304)
+				w.WriteHeader(304)
 				return
 			}
-			h := ctx.W.Header()
+			h := w.Header()
 			ctype := h.Get("Content-Type")
 			if ctype == "" {
 				ctype = mime.TypeByExtension(path.Ext(r.name))
@@ -329,14 +332,18 @@ Switch:
 				}
 			}
 			if ctx.R.Method != "HEAD" {
-				io.Copy(ctx.W, r.content)
+				io.Copy(w, r.content)
 			}
 		}
 
 	case *status:
 		code = r.code
 		v = r.content
-		goto Switch
+		if v == nil {
+			w.WriteHeader(code)
+		} else {
+			goto SWITCH
+		}
 
 	case *fs:
 		filepath := path.Join(r.root, ctx.R.URL.Path)
@@ -358,7 +365,7 @@ Switch:
 			return
 		}
 		v = File(filepath)
-		goto Switch
+		goto SWITCH
 
 	case error:
 		if code >= 400 && code < 600 {
@@ -374,7 +381,7 @@ Switch:
 		ctx.respondWithError(r)
 
 	default:
-		ctx.respondWithJson(r, code)
+		ctx.respondWithJson(v, code)
 	}
 }
 
