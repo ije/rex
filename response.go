@@ -115,6 +115,13 @@ func Content(name string, mtime time.Time, r io.Reader) Response {
 	return &content{name, mtime, r}
 }
 
+type nocontent struct{}
+
+// NoContent replies to the request with no content.
+func NoContent() Response {
+	return &nocontent{}
+}
+
 // File replies to the request using the file content.
 func File(name string) Response {
 	fi, err := os.Stat(name)

@@ -336,6 +336,9 @@ SWITCH:
 			}
 		}
 
+	case *nocontent:
+		w.WriteHeader(http.StatusNoContent)
+
 	case *status:
 		code = r.code
 		v = r.content
