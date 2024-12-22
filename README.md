@@ -70,15 +70,15 @@ More usages please check [examples/](./examples).
 
 ## Middleware
 
-In **REX**, a middleware is a function that receives a `*rex.Context` and returns a `any`. If the returned value is not `nil`, the middleware will return the value to the client, or continue to execute the next middleware.
+In **REX**, a middleware is a function that receives a `*rex.Context` and returns a `any`. If the returned value is not `rex.Next()`, the middleware will return the value to the client, or continue to execute the next middleware.
 
 ```go
 rex.Use(func(ctx *rex.Context) any {
   // return a html response
   return rex.HTML("<h1>hello world</h1>")
 
-  // return nil to continue next handler
-  return nil
+  // continue next middleware
+  return rex.Next()
 })
 ```
 
