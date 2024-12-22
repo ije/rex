@@ -1,6 +1,6 @@
 package session
 
-// Session interface to handle session.
+// Session interface represents a http session.
 type Session interface {
 	// SID returns the sid.
 	SID() string
@@ -14,10 +14,4 @@ type Session interface {
 	Delete(key string) error
 	// Flush flushes all session values.
 	Flush() error
-}
-
-// A Pool to handle sessions.
-type Pool interface {
-	GetSession(sid string) (Session, error)
-	Destroy(sid string) error
 }

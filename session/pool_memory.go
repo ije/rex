@@ -67,14 +67,14 @@ func (ms *MemorySession) Flush() error {
 type MemorySessionPool struct {
 	lock     sync.RWMutex
 	sessions map[string]*MemorySession
-	lifetime time.Duration
+	ttl      time.Duration
 }
 
 // NewMemorySessionPool returns a new MemorySessionPool
 func NewMemorySessionPool(lifetime time.Duration) *MemorySessionPool {
 	pool := &MemorySessionPool{
 		sessions: map[string]*MemorySession{},
-		lifetime: lifetime,
+		ttl:      lifetime,
 	}
 	if lifetime > time.Second {
 		go pool.gcLoop()
@@ -108,14 +108,14 @@ func (pool *MemorySessionPool) GetSession(sid string) (session Session, err erro
 
 		ms = &MemorySession{
 			sid:     sid,
-			expires: now.Add(pool.lifetime),
+			expires: now.Add(pool.ttl),
 			store:   map[string][]byte{},
 		}
 		pool.lock.Lock()
 		pool.sessions[sid] = ms
 		pool.lock.Unlock()
 	} else {
-		ms.expires = now.Add(pool.lifetime)
+		ms.expires = now.Add(pool.ttl)
 	}
 
 	session = ms
@@ -132,7 +132,7 @@ func (pool *MemorySessionPool) Destroy(sid string) error {
 }
 
 func (pool *MemorySessionPool) gcLoop() {
-	t := time.NewTicker(pool.lifetime)
+	t := time.NewTicker(pool.ttl)
 	for {
 		<-t.C
 		pool.gc()

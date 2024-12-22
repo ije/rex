@@ -7,8 +7,6 @@ import (
 	"runtime"
 	"strings"
 	"time"
-
-	"github.com/ije/gox/log"
 )
 
 // Handle defines the API handle
@@ -17,7 +15,7 @@ type Handle func(ctx *Context) any
 // Mux is a http.Handler with middlewares and routes.
 type Mux struct {
 	middlewares []Handle
-	mux         *http.ServeMux
+	router      *http.ServeMux
 }
 
 // Use appends middlewares to current APIS middleware stack.
@@ -31,10 +29,10 @@ func (a *Mux) Use(middlewares ...Handle) {
 
 // AddRoute adds a route.
 func (a *Mux) AddRoute(pattern string, handle Handle) {
-	if a.mux == nil {
-		a.mux = http.NewServeMux()
+	if a.router == nil {
+		a.router = http.NewServeMux()
 	}
-	a.mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
+	a.router.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
 		wr, ok := w.(*rexWriter)
 		if ok {
 			v := handle(wr.ctx)
@@ -47,21 +45,17 @@ func (a *Mux) AddRoute(pattern string, handle Handle) {
 
 // ServeHTTP implements the http Handler.
 func (a *Mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	startTime := time.Now()
-	store := &Store{}
-	ctx := &Context{
-		R:                r,
-		Store:            store,
-		sessionIdHandler: defaultSessionIdHandler,
-		sessionPool:      defaultSessionPool,
-		logger:           &log.Logger{},
-	}
-	wr := &rexWriter{ctx: ctx, code: 200, httpWriter: w, header: w.Header()}
+	ctx, recycleCtx := newContext(r)
+	defer recycleCtx()
+
+	wr, recycleWr := newWriter(ctx, w)
+	defer recycleWr()
 	ctx.W = wr
 
 	header := w.Header()
 	header.Set("Connection", "keep-alive")
 
+	startTime := time.Now()
 	defer func() {
 		wr.Close()
 
@@ -112,14 +106,14 @@ func (a *Mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	for _, handle := range a.middlewares {
 		v := handle(ctx)
-		if v != nil {
+		if v != next {
 			ctx.respondWith(v)
 			return
 		}
 	}
 
-	if a.mux != nil {
-		a.mux.ServeHTTP(wr, r)
+	if a.router != nil {
+		a.router.ServeHTTP(wr, r)
 		return
 	}
 
@@ -129,18 +123,4 @@ func (a *Mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx.respondWith(&status{405, "Method Not Allowed"})
-}
-
-// PathValue returns the value for the named path wildcard in the [ServeMux] pattern
-// that matched the request.
-// It returns the empty string if the request was not matched against a pattern
-// or there is no such wildcard in the pattern.
-func (ctx *Context) PathValue(key string) string {
-	return ctx.R.PathValue(key)
-}
-
-// SetPathValue sets name to value, so that subsequent calls to r.PathValue(name)
-// return value.
-func (ctx *Context) SetPathValue(key string, value string) {
-	ctx.R.SetPathValue(key, value)
 }

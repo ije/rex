@@ -5,33 +5,33 @@ import (
 	"strings"
 )
 
-// A IdHandler to handle session id
-type IdHandler interface {
+// A SidHandler to handle session id
+type SidHandler interface {
 	Get(r *http.Request) string
 	Put(w http.ResponseWriter, id string)
 }
 
-// A CookieIdHandler to handle session id by http cookie header
-type CookieIdHandler struct {
+// A CookieSidHandler to handle session id by http cookie header
+type CookieSidHandler struct {
 	cookieName string
 }
 
-// NewCookieIdHandler returns a new CookieIdHandler
-func NewCookieIdHandler(cookieName string) *CookieIdHandler {
-	return &CookieIdHandler{cookieName: strings.TrimSpace(cookieName)}
+// NewCookieSidHandler returns a new CookieIdHandler
+func NewCookieSidHandler(cookieName string) *CookieSidHandler {
+	return &CookieSidHandler{cookieName: strings.TrimSpace(cookieName)}
 }
 
 // CookieName returns cookie name
-func (s *CookieIdHandler) CookieName() string {
+func (s *CookieSidHandler) CookieName() string {
 	name := strings.TrimSpace(s.cookieName)
 	if name == "" {
-		name = "x-session"
+		name = "SID"
 	}
 	return name
 }
 
 // Get return seesion id by http cookie
-func (s *CookieIdHandler) Get(r *http.Request) string {
+func (s *CookieSidHandler) Get(r *http.Request) string {
 	cookie, err := r.Cookie(s.CookieName())
 	if err != nil {
 		return ""
@@ -40,7 +40,7 @@ func (s *CookieIdHandler) Get(r *http.Request) string {
 }
 
 // Put sets seesion id by http cookie
-func (s *CookieIdHandler) Put(w http.ResponseWriter, id string) {
+func (s *CookieSidHandler) Put(w http.ResponseWriter, id string) {
 	cookie := &http.Cookie{
 		Name:     s.CookieName(),
 		Value:    id,

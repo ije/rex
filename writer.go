@@ -12,16 +12,15 @@ import (
 type rexWriter struct {
 	ctx        *Context
 	code       int
-	header     http.Header
 	headerSent bool
 	writeN     int
-	httpWriter http.ResponseWriter
-	compWriter io.WriteCloser
+	rawWriter  http.ResponseWriter
+	zWriter    io.WriteCloser
 }
 
 // Hijack lets the caller take over the connection.
 func (w *rexWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
-	h, ok := w.httpWriter.(http.Hijacker)
+	h, ok := w.rawWriter.(http.Hijacker)
 	if ok {
 		return h.Hijack()
 	}
@@ -31,7 +30,7 @@ func (w *rexWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 
 // Flush sends any buffered data to the client.
 func (w *rexWriter) Flush() {
-	f, ok := w.httpWriter.(http.Flusher)
+	f, ok := w.rawWriter.(http.Flusher)
 	if ok {
 		f.Flush()
 	}
@@ -39,17 +38,16 @@ func (w *rexWriter) Flush() {
 
 // Header returns the header map that will be sent by WriteHeader.
 func (w *rexWriter) Header() http.Header {
-	return w.header
+	return w.rawWriter.Header()
 }
 
 // WriteHeader sends a HTTP response header with the provided status code.
 func (w *rexWriter) WriteHeader(code int) {
-	if w.headerSent {
-		return
+	if !w.headerSent {
+		w.rawWriter.WriteHeader(code)
+		w.code = code
+		w.headerSent = true
 	}
-	w.code = code
-	w.httpWriter.WriteHeader(code)
-	w.headerSent = true
 }
 
 // Write writes the data to the connection as part of an HTTP reply.
@@ -57,9 +55,9 @@ func (w *rexWriter) Write(p []byte) (n int, err error) {
 	if !w.headerSent {
 		w.headerSent = true
 	}
-	var wr io.Writer = w.httpWriter
-	if w.compWriter != nil {
-		wr = w.compWriter
+	var wr io.Writer = w.rawWriter
+	if w.zWriter != nil {
+		wr = w.zWriter
 	}
 	n, err = wr.Write(p)
 	if n > 0 {
@@ -70,8 +68,8 @@ func (w *rexWriter) Write(p []byte) (n int, err error) {
 
 // Close closes the underlying connection.
 func (w *rexWriter) Close() error {
-	if w.compWriter != nil {
-		return w.compWriter.Close()
+	if w.zWriter != nil {
+		return w.zWriter.Close()
 	}
 	return nil
 }

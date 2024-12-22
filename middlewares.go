@@ -11,13 +11,20 @@ import (
 	"github.com/rs/cors"
 )
 
+var next = &struct{}{}
+
+// Next executes the next middleware in the chain.
+func Next() any {
+	return next
+}
+
 // Header is rex middleware to set http header for the current request.
 func Header(key string, value string) Handle {
 	return func(ctx *Context) any {
 		if key != "" {
 			ctx.W.Header().Set(key, value)
 		}
-		return nil
+		return next
 	}
 }
 
@@ -27,7 +34,7 @@ func Logger(logger ILogger) Handle {
 		if logger != nil {
 			ctx.logger = logger
 		}
-		return nil
+		return next
 	}
 }
 
@@ -35,13 +42,13 @@ func Logger(logger ILogger) Handle {
 func AccessLogger(logger ILogger) Handle {
 	return func(ctx *Context) any {
 		ctx.accessLogger = logger
-		return nil
+		return next
 	}
 }
 
 // SessionOptions contains the options for the session manager.
 type SessionOptions struct {
-	IdHandler session.IdHandler
+	IdHandler session.SidHandler
 	Pool      session.Pool
 }
 
@@ -54,7 +61,7 @@ func Session(opts SessionOptions) Handle {
 		if opts.Pool != nil {
 			ctx.sessionPool = opts.Pool
 		}
-		return nil
+		return next
 	}
 }
 
@@ -162,7 +169,7 @@ func Cors(c CorsOptions) Handle {
 		}
 		cors.ServeHTTP(ctx.W, ctx.R, h)
 		if optionPassthrough {
-			return nil // next
+			return next
 		}
 		return h // end
 	}
@@ -170,16 +177,16 @@ func Cors(c CorsOptions) Handle {
 
 // Perm returns a ACL middleware that sets the permission for the current request.
 func Perm(perms ...string) Handle {
-	permSet := make(map[string]bool, len(perms))
+	permSet := make(map[string]struct{}, len(perms))
 	for _, p := range perms {
-		permSet[p] = true
+		permSet[p] = struct{}{}
 	}
 	return func(ctx *Context) any {
 		if ctx.aclUser != nil {
 			permissions := ctx.aclUser.Perms()
 			for _, p := range permissions {
-				if permSet[p] {
-					return nil // next
+				if _, ok := permSet[p]; ok {
+					return next
 				}
 			}
 		}
@@ -206,7 +213,7 @@ func BasicAuthWithRealm(realm string, auth func(name string, secret string) (ok 
 				}
 				if ok {
 					ctx.basicAuthUser = name
-					return nil
+					return next
 				}
 			}
 		}
@@ -222,9 +229,8 @@ func BasicAuthWithRealm(realm string, auth func(name string, secret string) (ok 
 // AclAuth returns a ACL authorization middleware.
 func AclAuth(auth func(ctx *Context) AclUser) Handle {
 	return func(ctx *Context) any {
-		user := auth(ctx)
-		ctx.aclUser = user
-		return nil
+		ctx.aclUser = auth(ctx)
+		return next
 	}
 }
 
@@ -232,7 +238,7 @@ func AclAuth(auth func(ctx *Context) AclUser) Handle {
 func Compress() Handle {
 	return func(ctx *Context) any {
 		ctx.compress = true
-		return nil
+		return next
 	}
 }
 
@@ -250,7 +256,7 @@ func Optional(handle Handle, condition bool) Handle {
 	}
 	return func(ctx *Context) any {
 		// dummy handler
-		return nil
+		return next
 	}
 }
 
@@ -262,10 +268,10 @@ func Chain(middlewares ...Handle) Handle {
 	return func(ctx *Context) any {
 		for _, mw := range middlewares {
 			v := mw(ctx)
-			if v != nil {
+			if v != next {
 				return v
 			}
 		}
-		return nil
+		return next
 	}
 }

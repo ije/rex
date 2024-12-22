@@ -11,9 +11,6 @@ import (
 	"time"
 )
 
-// Response defines the response interface.
-type Response any
-
 type invalid struct {
 	status  int
 	message string
@@ -26,7 +23,7 @@ type Error struct {
 }
 
 // Err returns an error with status.
-func Err(status int, v ...string) Response {
+func Err(status int, v ...string) any {
 	if status < 400 || status >= 600 {
 		panic("invalid status code")
 	}
@@ -53,7 +50,7 @@ type redirect struct {
 
 // Redirect replies to the request with a redirect to url,
 // which may be a path relative to the request path.
-func Redirect(url string, status int) Response {
+func Redirect(url string, status int) any {
 	if url == "" {
 		url = "/"
 	}
@@ -69,12 +66,12 @@ type status struct {
 }
 
 // Status replies to the request using the payload in the status.
-func Status(code int, content any) Response {
+func Status(code int, content any) any {
 	return &status{code, content}
 }
 
 // HTML replies to the request with a html content.
-func HTML(html string) Response {
+func HTML(html string) any {
 	return &content{
 		name:    "index.html",
 		content: bytes.NewReader([]byte(html)),
@@ -92,7 +89,7 @@ func Tpl(text string) Template {
 }
 
 // Render renders the template with the given data.
-func Render(t Template, data any) Response {
+func Render(t Template, data any) any {
 	buf := bytes.NewBuffer(nil)
 	if err := t.Execute(buf, data); err != nil {
 		panic(&invalid{500, err.Error()})
@@ -111,19 +108,19 @@ type content struct {
 }
 
 // Content replies to the request using the content in the provided Reader.
-func Content(name string, mtime time.Time, r io.Reader) Response {
+func Content(name string, mtime time.Time, r io.Reader) any {
 	return &content{name, mtime, r}
 }
 
-type nocontent struct{}
+type noContent struct{}
 
 // NoContent replies to the request with no content.
-func NoContent() Response {
-	return &nocontent{}
+func NoContent() any {
+	return &noContent{}
 }
 
 // File replies to the request using the file content.
-func File(name string) Response {
+func File(name string) any {
 	fi, err := os.Stat(name)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -149,7 +146,7 @@ type fs struct {
 }
 
 // FS replies to the request with the contents of the file system rooted at root.
-func FS(root string, fallback string) Response {
+func FS(root string, fallback string) any {
 	fi, err := os.Lstat(root)
 	if err != nil {
 		panic(&invalid{500, err.Error()})

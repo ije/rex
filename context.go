@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"mime"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"os"
@@ -33,17 +34,99 @@ type ILogger interface {
 
 // A Context to handle http requests.
 type Context struct {
-	W                http.ResponseWriter
 	R                *http.Request
-	Store            *Store
+	W                http.ResponseWriter
 	basicAuthUser    string
 	aclUser          AclUser
 	session          *SessionStub
 	sessionPool      session.Pool
-	sessionIdHandler session.IdHandler
-	compress         bool
+	sessionIdHandler session.SidHandler
 	logger           ILogger
 	accessLogger     ILogger
+	compress         bool
+}
+
+// Next executes the next middleware in the chain.
+func (ctx *Context) Next() any {
+	return next
+}
+
+// PathValue returns the value for the named path wildcard in the [ServeMux] pattern
+// that matched the request.
+// It returns the empty string if the request was not matched against a pattern
+// or there is no such wildcard in the pattern.
+func (ctx *Context) PathValue(key string) string {
+	return ctx.R.PathValue(key)
+}
+
+// SetPathValue sets name to value, so that subsequent calls to r.PathValue(name)
+// return value.
+func (ctx *Context) SetPathValue(key string, value string) {
+	ctx.R.SetPathValue(key, value)
+}
+
+// ParseForm populates r.Form and r.PostForm.
+//
+// For all requests, ParseForm parses the raw query from the URL and updates
+// r.Form.
+//
+// For POST, PUT, and PATCH requests, it also reads the request body, parses it
+// as a form and puts the results into both r.PostForm and r.Form. Request body
+// parameters take precedence over URL query string values in r.Form.
+//
+// If the request Body's size has not already been limited by [MaxBytesReader],
+// the size is capped at 10MB.
+//
+// For other HTTP methods, or when the Content-Type is not
+// application/x-www-form-urlencoded, the request Body is not read, and
+// r.PostForm is initialized to a non-nil, empty value.
+//
+// [Request.ParseMultipartForm] calls ParseForm automatically.
+// ParseForm is idempotent.
+func (ctx *Context) ParseForm() error {
+	return ctx.R.ParseForm()
+}
+
+// ParseMultipartForm parses a request body as multipart/form-data.
+// The whole request body is parsed and up to a total of maxMemory bytes of
+// its file parts are stored in memory, with the remainder stored on
+// disk in temporary files.
+// ParseMultipartForm calls [Request.ParseForm] if necessary.
+// If ParseForm returns an error, ParseMultipartForm returns it but also
+// continues parsing the request body.
+// After one call to ParseMultipartForm, subsequent calls have no effect.
+func (ctx *Context) ParseMultipartForm(maxMemory int64) error {
+	return ctx.R.ParseMultipartForm(maxMemory)
+}
+
+// FormValue returns the first value for the named component of the query.
+// The precedence order:
+//  1. application/x-www-form-urlencoded form body (POST, PUT, PATCH only)
+//  2. query parameters (always)
+//  3. multipart/form-data form body (always)
+//
+// FormValue calls [Request.ParseMultipartForm] and [Request.ParseForm]
+// if necessary and ignores any errors returned by these functions.
+// If key is not present, FormValue returns the empty string.
+// To access multiple values of the same key, call ParseForm and
+// then inspect [Request.Form] directly.
+func (ctx *Context) FormValue(key string) string {
+	return ctx.R.FormValue(key)
+}
+
+// PostFormValue returns the first value for the named component of the POST,
+// PUT, or PATCH request body. URL query parameters are ignored.
+// PostFormValue calls [Request.ParseMultipartForm] and [Request.ParseForm] if necessary and ignores
+// any errors returned by these functions.
+// If key is not present, PostFormValue returns the empty string.
+func (ctx *Context) PostFormValue(key string) string {
+	return ctx.R.PostFormValue(key)
+}
+
+// FormFile returns the first file for the provided form key.
+// FormFile calls [Request.ParseMultipartForm] and [Request.ParseForm] if necessary.
+func (ctx *Context) FormFile(key string) (multipart.File, *multipart.FileHeader, error) {
+	return ctx.R.FormFile(key)
 }
 
 // Pathname returns the request pathname.
@@ -56,14 +139,9 @@ func (ctx *Context) Query() url.Values {
 	return ctx.R.URL.Query()
 }
 
-// GetHeader returns the request header by key.
-func (ctx *Context) GetHeader(key string) string {
-	return ctx.R.Header.Get(key)
-}
-
 // SetHeader sets the response header.
 func (ctx *Context) SetHeader(key string, value string) {
-	ctx.W.(*rexWriter).header.Set(key, value)
+	ctx.W.Header().Set(key, value)
 }
 
 // BasicAuthUser returns the BasicAuth username
@@ -117,8 +195,8 @@ func (ctx *Context) SetCookie(cookie http.Cookie) {
 	}
 }
 
-// ClearCookie sets a cookie to the response with an expiration time in the past.
-func (ctx *Context) ClearCookie(cookie http.Cookie) {
+// DeleteCookie sets a cookie to the response with an expiration time in the past.
+func (ctx *Context) DeleteCookie(cookie http.Cookie) {
 	if cookie.Name != "" {
 		cookie.Value = "-"
 		cookie.Expires = time.Unix(0, 0)
@@ -126,8 +204,8 @@ func (ctx *Context) ClearCookie(cookie http.Cookie) {
 	}
 }
 
-// ClearCookieByName sets a cookie to the response with an expiration time in the past.
-func (ctx *Context) ClearCookieByName(name string) {
+// DeleteCookieByName sets a cookie to the response with an expiration time in the past.
+func (ctx *Context) DeleteCookieByName(name string) {
 	ctx.SetCookie(http.Cookie{
 		Name:    name,
 		Value:   "-",
@@ -150,7 +228,7 @@ func (ctx *Context) RemoteIP() string {
 	return ip
 }
 
-func (ctx *Context) setCompressWriter() {
+func (ctx *Context) enableCompression() {
 	var encoding string
 	if accectEncoding := ctx.R.Header.Get("Accept-Encoding"); accectEncoding != "" && strings.Contains(accectEncoding, "br") {
 		encoding = "br"
@@ -172,9 +250,9 @@ func (ctx *Context) setCompressWriter() {
 				h.Del("Content-Length")
 			}
 			if encoding == "br" {
-				w.compWriter = brotli.NewWriterLevel(w.httpWriter, brotli.BestSpeed)
+				w.zWriter = brotli.NewWriterLevel(w.rawWriter, brotli.BestSpeed)
 			} else if encoding == "gzip" {
-				w.compWriter, _ = gzip.NewWriterLevel(w.httpWriter, gzip.BestSpeed)
+				w.zWriter, _ = gzip.NewWriterLevel(w.rawWriter, gzip.BestSpeed)
 			}
 		}
 	}
@@ -190,7 +268,7 @@ func (ctx *Context) isCompressible(contentType string, contentSize int) bool {
 
 func (ctx *Context) respondWith(v any) {
 	w := ctx.W
-	header := w.(*rexWriter).header
+	header := w.Header()
 	code := 200
 
 SWITCH:
@@ -216,7 +294,7 @@ SWITCH:
 			header.Set("Content-Type", "text/plain; charset=utf-8")
 		}
 		if ctx.compress && len(data) > 1024 {
-			ctx.setCompressWriter()
+			ctx.enableCompression()
 		} else {
 			header.Set("Content-Length", strconv.Itoa(len(data)))
 		}
@@ -233,7 +311,7 @@ SWITCH:
 	case []byte:
 		cType := header.Get("Content-Type")
 		if ctx.isCompressible(cType, len(r)) {
-			ctx.setCompressWriter()
+			ctx.enableCompression()
 		} else {
 			header.Set("Content-Length", strconv.Itoa(len(r)))
 		}
@@ -269,7 +347,7 @@ SWITCH:
 		}
 		if size >= 0 {
 			if ctx.isCompressible(cType, size) {
-				ctx.setCompressWriter()
+				ctx.enableCompression()
 			} else {
 				header.Set("Content-Length", strconv.Itoa(size))
 			}
@@ -302,11 +380,11 @@ SWITCH:
 						return
 					}
 					if size > 1024 {
-						ctx.setCompressWriter()
+						ctx.enableCompression()
 					}
 				} else {
-					// unable to seek, so compress it anyway
-					ctx.setCompressWriter()
+					// unable to seek, compress it anyway
+					ctx.enableCompression()
 				}
 			}
 		}
@@ -323,12 +401,11 @@ SWITCH:
 				w.WriteHeader(304)
 				return
 			}
-			h := w.Header()
-			ctype := h.Get("Content-Type")
+			ctype := header.Get("Content-Type")
 			if ctype == "" {
 				ctype = mime.TypeByExtension(path.Ext(r.name))
 				if ctype != "" {
-					h.Set("Content-Type", ctype)
+					header.Set("Content-Type", ctype)
 				}
 			}
 			if ctx.R.Method != "HEAD" {
@@ -336,7 +413,7 @@ SWITCH:
 			}
 		}
 
-	case *nocontent:
+	case *noContent:
 		w.WriteHeader(http.StatusNoContent)
 
 	case *status:
@@ -398,7 +475,7 @@ func (ctx *Context) respondWithJson(v any, status int) {
 		return
 	}
 	if ctx.compress && buf.Len() > 1024 {
-		ctx.setCompressWriter()
+		ctx.enableCompression()
 	} else {
 		ctx.W.Header().Set("Content-Length", strconv.Itoa(buf.Len()))
 	}
@@ -410,9 +487,7 @@ func (ctx *Context) respondWithError(err *Error) {
 	if err.Status >= 500 && ctx.logger != nil {
 		ctx.logger.Printf("[error] %s", err.Message)
 	}
-	ctx.respondWithJson(map[string]any{
-		"error": err,
-	}, err.Status)
+	ctx.respondWithJson(map[string]any{"error": err}, err.Status)
 }
 
 func hexEscapeNonASCII(s string) string {

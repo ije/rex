@@ -1,6 +1,7 @@
 package rex
 
 import (
+	"log"
 	"time"
 
 	"github.com/ije/rex/session"
@@ -8,7 +9,8 @@ import (
 
 var defaultMux = &Mux{}
 var defaultSessionPool = session.NewMemorySessionPool(time.Hour / 2)
-var defaultSessionIdHandler = session.NewCookieIdHandler("")
+var defaultSessionIdHandler = session.NewCookieSidHandler("SID")
+var defaultLogger = &log.Logger{}
 
 // Use appends middlewares to current APIS middleware stack.
 func Use(middlewares ...Handle) {

@@ -62,7 +62,7 @@ func main() {
 		if ctx.R.Method == "POST" && ctx.FormValue("_method") == "DELETE" {
 			ctx.R.Method = "DELETE"
 		}
-		return nil
+		return ctx.Next()
 	})
 
 	// auth middleware
