@@ -19,34 +19,46 @@ var (
 )
 
 // newContext returns a new Context from the pool.
-func newContext(r *http.Request) (ctx *Context, recycle func()) {
+func newContext(r *http.Request) (ctx *Context) {
 	ctx = contextPool.Get().(*Context)
-	recycle = func() {
-		contextPool.Put(ctx)
-	}
 	ctx.R = r
-	ctx.basicAuthUser = ""
-	ctx.aclUser = nil
-	ctx.session = nil
 	ctx.sessionPool = defaultSessionPool
 	ctx.sessionIdHandler = defaultSessionIdHandler
 	ctx.logger = defaultLogger
-	ctx.accessLogger = nil
-	ctx.compress = false
 	return
 }
 
+// recycleContext puts a Context back to the pool.
+func recycleContext(ctx *Context) {
+	ctx.R = nil
+	ctx.W = nil
+	ctx.Header = nil
+	ctx.basicAuthUser = ""
+	ctx.aclUser = nil
+	ctx.session = nil
+	ctx.sessionPool = nil
+	ctx.sessionIdHandler = nil
+	ctx.logger = nil
+	ctx.accessLogger = nil
+	ctx.compress = false
+	contextPool.Put(ctx)
+}
+
 // newWriter returns a new Writer from the pool.
-func newWriter(ctx *Context, w http.ResponseWriter) (wr *rexWriter, recycle func()) {
+func newWriter(ctx *Context, w http.ResponseWriter) (wr *rexWriter) {
 	wr = writerPool.Get().(*rexWriter)
-	recycle = func() {
-		writerPool.Put(wr)
-	}
 	wr.ctx = ctx
 	wr.rawWriter = w
 	wr.code = 200
-	wr.headerSent = false
+	return
+}
+
+// recycleWriter puts a Writer back to the pool.
+func recycleWriter(wr *rexWriter) {
+	wr.ctx = nil
+	wr.rawWriter = nil
+	wr.isHeaderSent = false
 	wr.writeN = 0
 	wr.zWriter = nil
-	return
+	writerPool.Put(wr)
 }

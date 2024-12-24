@@ -10,12 +10,12 @@ import (
 
 // A Writer implements the http.ResponseWriter interface.
 type rexWriter struct {
-	ctx        *Context
-	code       int
-	headerSent bool
-	writeN     int
-	rawWriter  http.ResponseWriter
-	zWriter    io.WriteCloser
+	ctx          *Context
+	code         int
+	isHeaderSent bool
+	writeN       int
+	rawWriter    http.ResponseWriter
+	zWriter      io.WriteCloser
 }
 
 // Hijack lets the caller take over the connection.
@@ -43,17 +43,17 @@ func (w *rexWriter) Header() http.Header {
 
 // WriteHeader sends a HTTP response header with the provided status code.
 func (w *rexWriter) WriteHeader(code int) {
-	if !w.headerSent {
+	if !w.isHeaderSent {
 		w.rawWriter.WriteHeader(code)
 		w.code = code
-		w.headerSent = true
+		w.isHeaderSent = true
 	}
 }
 
 // Write writes the data to the connection as part of an HTTP reply.
 func (w *rexWriter) Write(p []byte) (n int, err error) {
-	if !w.headerSent {
-		w.headerSent = true
+	if !w.isHeaderSent {
+		w.isHeaderSent = true
 	}
 	var wr io.Writer = w.rawWriter
 	if w.zWriter != nil {

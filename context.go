@@ -36,6 +36,7 @@ type ILogger interface {
 type Context struct {
 	R                *http.Request
 	W                http.ResponseWriter
+	Header           http.Header
 	basicAuthUser    string
 	aclUser          AclUser
 	session          *SessionStub
@@ -139,11 +140,6 @@ func (ctx *Context) Query() url.Values {
 	return ctx.R.URL.Query()
 }
 
-// SetHeader sets the response header.
-func (ctx *Context) SetHeader(key string, value string) {
-	ctx.W.Header().Set(key, value)
-}
-
 // BasicAuthUser returns the BasicAuth username
 func (ctx *Context) BasicAuthUser() string {
 	return ctx.basicAuthUser
@@ -191,7 +187,7 @@ func (ctx *Context) Cookie(name string) (cookie *http.Cookie) {
 // SetCookie sets a cookie to the response.
 func (ctx *Context) SetCookie(cookie http.Cookie) {
 	if cookie.Name != "" {
-		ctx.W.Header().Add("Set-Cookie", cookie.String())
+		ctx.Header.Add("Set-Cookie", cookie.String())
 	}
 }
 
@@ -238,7 +234,7 @@ func (ctx *Context) enableCompression() {
 	if encoding != "" {
 		w, ok := ctx.W.(*rexWriter)
 		if ok {
-			if !w.headerSent {
+			if !w.isHeaderSent {
 				h := w.Header()
 				vary := h.Get("Vary")
 				if vary == "" {
@@ -258,7 +254,7 @@ func (ctx *Context) enableCompression() {
 	}
 }
 
-func (ctx *Context) isCompressible(contentType string, contentSize int) bool {
+func (ctx *Context) isContentCompressible(contentType string, contentSize int) bool {
 	return ctx.compress && contentSize > 1024 && contentType != "" && (strings.HasPrefix(contentType, "text/") ||
 		strings.HasPrefix(contentType, "application/javascript") ||
 		strings.HasPrefix(contentType, "application/json") ||
@@ -268,7 +264,7 @@ func (ctx *Context) isCompressible(contentType string, contentSize int) bool {
 
 func (ctx *Context) respondWith(v any) {
 	w := ctx.W
-	header := w.Header()
+	h := w.Header()
 	code := 200
 
 SWITCH:
@@ -278,45 +274,45 @@ SWITCH:
 
 	case *http.Response:
 		for k, v := range r.Header {
-			header[k] = v
+			h[k] = v
 		}
 		w.WriteHeader(r.StatusCode)
 		io.Copy(w, r.Body)
 		r.Body.Close()
 
 	case *redirect:
-		header.Set("Location", hexEscapeNonASCII(r.url))
+		h.Set("Location", hexEscapeNonASCII(r.url))
 		w.WriteHeader(r.status)
 
 	case string:
 		data := []byte(r)
-		if header.Get("Content-Type") == "" {
-			header.Set("Content-Type", "text/plain; charset=utf-8")
+		if h.Get("Content-Type") == "" {
+			h.Set("Content-Type", "text/plain; charset=utf-8")
 		}
 		if ctx.compress && len(data) > 1024 {
 			ctx.enableCompression()
 		} else {
-			header.Set("Content-Length", strconv.Itoa(len(data)))
+			h.Set("Content-Length", strconv.Itoa(len(data)))
 		}
 		w.WriteHeader(code)
 		w.Write(data)
 
 	case bool, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64:
-		if header.Get("Content-Type") == "" {
-			header.Set("Content-Type", "text/plain")
+		if h.Get("Content-Type") == "" {
+			h.Set("Content-Type", "text/plain")
 		}
 		w.WriteHeader(code)
 		fmt.Fprintf(w, "%v", r)
 
 	case []byte:
-		cType := header.Get("Content-Type")
-		if ctx.isCompressible(cType, len(r)) {
+		cType := h.Get("Content-Type")
+		if ctx.isContentCompressible(cType, len(r)) {
 			ctx.enableCompression()
 		} else {
-			header.Set("Content-Length", strconv.Itoa(len(r)))
+			h.Set("Content-Length", strconv.Itoa(len(r)))
 		}
 		if cType == "" {
-			header.Set("Content-Type", "binary/octet-stream")
+			h.Set("Content-Type", "binary/octet-stream")
 		}
 		w.WriteHeader(code)
 		w.Write(r)
@@ -341,26 +337,29 @@ SWITCH:
 			}
 			size = int(n)
 		}
-		cType := header.Get("Content-Type")
+		cType := h.Get("Content-Type")
 		if cType == "" {
-			header.Set("Content-Type", "binary/octet-stream")
+			h.Set("Content-Type", "binary/octet-stream")
 		}
 		if size >= 0 {
-			if ctx.isCompressible(cType, size) {
+			if ctx.isContentCompressible(cType, size) {
 				ctx.enableCompression()
 			} else {
-				header.Set("Content-Length", strconv.Itoa(size))
+				h.Set("Content-Length", strconv.Itoa(size))
 			}
 		}
 		w.WriteHeader(code)
 		io.Copy(w, r)
 
 	case *content:
-		defer func() {
-			if c, ok := r.content.(io.Closer); ok {
-				c.Close()
-			}
-		}()
+		if c, ok := r.content.(io.Closer); ok {
+			defer c.Close()
+		}
+		etag := h.Get("ETag")
+		if etag != "" && etag == ctx.R.Header.Get("If-None-Match") {
+			w.WriteHeader(304)
+			return
+		}
 		if ctx.compress {
 			isText := false
 			switch strings.TrimPrefix(path.Ext(r.name), ".") {
@@ -390,8 +389,8 @@ SWITCH:
 		}
 		if r.mtime.IsZero() {
 			r.mtime = time.Now()
-			if header.Get("Cache-Control") == "" {
-				header.Set("Cache-Control", "public, max-age=0, must-revalidate")
+			if h.Get("Cache-Control") == "" {
+				h.Set("Cache-Control", "public, max-age=0, must-revalidate")
 			}
 		}
 		if readSeeker, ok := r.content.(io.ReadSeeker); ok {
@@ -401,11 +400,11 @@ SWITCH:
 				w.WriteHeader(304)
 				return
 			}
-			ctype := header.Get("Content-Type")
+			ctype := h.Get("Content-Type")
 			if ctype == "" {
 				ctype = mime.TypeByExtension(path.Ext(r.name))
 				if ctype != "" {
-					header.Set("Content-Type", ctype)
+					h.Set("Content-Type", ctype)
 				}
 			}
 			if ctx.R.Method != "HEAD" {
@@ -468,7 +467,7 @@ SWITCH:
 func (ctx *Context) respondWithJson(v any, status int) {
 	buf := bytes.NewBuffer(nil)
 	err := json.NewEncoder(buf).Encode(v)
-	ctx.W.Header().Set("Content-Type", "application/json; charset=utf-8")
+	ctx.Header.Set("Content-Type", "application/json; charset=utf-8")
 	if err != nil {
 		ctx.W.WriteHeader(500)
 		ctx.W.Write([]byte(`{"error": {"status": 500, "message": "bad json"}}`))
@@ -477,7 +476,7 @@ func (ctx *Context) respondWithJson(v any, status int) {
 	if ctx.compress && buf.Len() > 1024 {
 		ctx.enableCompression()
 	} else {
-		ctx.W.Header().Set("Content-Length", strconv.Itoa(buf.Len()))
+		ctx.Header.Set("Content-Length", strconv.Itoa(buf.Len()))
 	}
 	ctx.W.WriteHeader(status)
 	io.Copy(ctx.W, buf)

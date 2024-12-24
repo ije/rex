@@ -45,15 +45,15 @@ func (a *Mux) AddRoute(pattern string, handle Handle) {
 
 // ServeHTTP implements the http Handler.
 func (a *Mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	ctx, recycleCtx := newContext(r)
-	defer recycleCtx()
+	ctx := newContext(r)
+	defer recycleContext(ctx)
 
-	wr, recycleWr := newWriter(ctx, w)
-	defer recycleWr()
+	wr := newWriter(ctx, w)
+	defer recycleWriter(wr)
+
 	ctx.W = wr
-
-	header := w.Header()
-	header.Set("Connection", "keep-alive")
+	ctx.Header = w.Header()
+	ctx.Header.Set("Connection", "keep-alive")
 
 	startTime := time.Now()
 	defer func() {
