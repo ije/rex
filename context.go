@@ -236,6 +236,11 @@ func (ctx *Context) enableCompression() bool {
 		w, ok := ctx.W.(*rexWriter)
 		if ok {
 			h := w.Header()
+			if v := h.Get("Vary"); v == "" {
+				h.Set("Vary", "Accept-Encoding")
+			} else if !strings.Contains(v, "Accept-Encoding") && !strings.Contains(v, "accept-encoding") {
+				h.Set("Vary", v+", Accept-Encoding")
+			}
 			h.Set("Content-Encoding", encoding)
 			h.Del("Content-Length")
 			if encoding == "br" {
@@ -277,7 +282,6 @@ SWITCH:
 			h.Set("Content-Type", "text/plain; charset=utf-8")
 		}
 		if ctx.compress {
-			appendVaryHeader(ctx.Header, "Accept-Encoding")
 			if len(data) < compressMinSize || !ctx.enableCompression() {
 				h.Set("Content-Length", strconv.Itoa(len(data)))
 			}
@@ -297,7 +301,6 @@ SWITCH:
 	case []byte:
 		cType := h.Get("Content-Type")
 		if ctx.compress && isTextContent(cType) {
-			appendVaryHeader(h, "Accept-Encoding")
 			if len(r) < compressMinSize || !ctx.enableCompression() {
 				h.Set("Content-Length", strconv.Itoa(len(r)))
 			}
@@ -335,7 +338,6 @@ SWITCH:
 			h.Set("Content-Type", "binary/octet-stream")
 		}
 		if ctx.compress && isTextContent(cType) {
-			appendVaryHeader(h, "Accept-Encoding")
 			if size < compressMinSize || !ctx.enableCompression() {
 				h.Set("Content-Length", strconv.Itoa(size))
 			}
@@ -350,7 +352,6 @@ SWITCH:
 			defer c.Close()
 		}
 		if ctx.compress && isTextFile(r.name) {
-			appendVaryHeader(h, "Accept-Encoding")
 			if seeker, ok := r.content.(io.Seeker); ok {
 				size, err := seeker.Seek(0, io.SeekEnd)
 				if err != nil {
@@ -459,9 +460,6 @@ func (ctx *Context) respondWithJson(v any, status int) {
 	buf := bytes.NewBuffer(nil)
 	err := json.NewEncoder(buf).Encode(v)
 	ctx.Header.Set("Content-Type", "application/json; charset=utf-8")
-	if ctx.compress {
-		appendVaryHeader(ctx.Header, "Accept-Encoding")
-	}
 	if err != nil {
 		ctx.W.WriteHeader(500)
 		ctx.W.Write([]byte(`{"error": {"status": 500, "message": "bad json"}}`))
@@ -526,15 +524,6 @@ func hexEscapeNonASCII(s string) string {
 		b = append(b, s[pos:]...)
 	}
 	return string(b)
-}
-
-func appendVaryHeader(h http.Header, name string) {
-	vary := h.Get("Vary")
-	if vary == "" {
-		h.Set("Vary", name)
-	} else if !strings.Contains(vary, name) {
-		h.Set("Vary", vary+", "+name)
-	}
 }
 
 func checkIfModifiedSince(r *http.Request, modtime time.Time) bool {
