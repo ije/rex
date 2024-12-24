@@ -7,6 +7,8 @@ import (
 	"github.com/ije/rex/session"
 )
 
+const compressMinSize = 1024
+
 var defaultMux = &Mux{}
 var defaultSessionPool = session.NewMemorySessionPool(time.Hour / 2)
 var defaultSessionIdHandler = session.NewCookieSidHandler("SID")

@@ -224,9 +224,10 @@ func (ctx *Context) RemoteIP() string {
 	return ip
 }
 
-func (ctx *Context) enableCompression() {
+func (ctx *Context) enableCompression() bool {
 	var encoding string
-	if accectEncoding := ctx.R.Header.Get("Accept-Encoding"); accectEncoding != "" && strings.Contains(accectEncoding, "br") {
+	accectEncoding := ctx.R.Header.Get("Accept-Encoding")
+	if accectEncoding != "" && strings.Contains(accectEncoding, "br") {
 		encoding = "br"
 	} else if accectEncoding != "" && strings.Contains(accectEncoding, "gzip") {
 		encoding = "gzip"
@@ -234,32 +235,18 @@ func (ctx *Context) enableCompression() {
 	if encoding != "" {
 		w, ok := ctx.W.(*rexWriter)
 		if ok {
-			if !w.isHeaderSent {
-				h := w.Header()
-				vary := h.Get("Vary")
-				if vary == "" {
-					h.Set("Vary", "Accept-Encoding")
-				} else if !strings.Contains(vary, "Accept-Encoding") {
-					h.Set("Vary", fmt.Sprintf("%s, Accept-Encoding", vary))
-				}
-				h.Set("Content-Encoding", encoding)
-				h.Del("Content-Length")
-			}
+			h := w.Header()
+			h.Set("Content-Encoding", encoding)
+			h.Del("Content-Length")
 			if encoding == "br" {
 				w.zWriter = brotli.NewWriterLevel(w.rawWriter, brotli.BestSpeed)
 			} else if encoding == "gzip" {
 				w.zWriter, _ = gzip.NewWriterLevel(w.rawWriter, gzip.BestSpeed)
 			}
+			return true
 		}
 	}
-}
-
-func (ctx *Context) isContentCompressible(contentType string, contentSize int) bool {
-	return ctx.compress && contentSize > 1024 && contentType != "" && (strings.HasPrefix(contentType, "text/") ||
-		strings.HasPrefix(contentType, "application/javascript") ||
-		strings.HasPrefix(contentType, "application/json") ||
-		strings.HasPrefix(contentType, "application/xml") ||
-		strings.HasPrefix(contentType, "application/wasm"))
+	return false
 }
 
 func (ctx *Context) respondWith(v any) {
@@ -289,8 +276,11 @@ SWITCH:
 		if h.Get("Content-Type") == "" {
 			h.Set("Content-Type", "text/plain; charset=utf-8")
 		}
-		if ctx.compress && len(data) > 1024 {
-			ctx.enableCompression()
+		if ctx.compress {
+			appendVaryHeader(ctx.Header, "Accept-Encoding")
+			if len(data) < compressMinSize || !ctx.enableCompression() {
+				h.Set("Content-Length", strconv.Itoa(len(data)))
+			}
 		} else {
 			h.Set("Content-Length", strconv.Itoa(len(data)))
 		}
@@ -306,8 +296,11 @@ SWITCH:
 
 	case []byte:
 		cType := h.Get("Content-Type")
-		if ctx.isContentCompressible(cType, len(r)) {
-			ctx.enableCompression()
+		if ctx.compress && isTextContent(cType) {
+			appendVaryHeader(h, "Accept-Encoding")
+			if len(r) < compressMinSize || !ctx.enableCompression() {
+				h.Set("Content-Length", strconv.Itoa(len(r)))
+			}
 		} else {
 			h.Set("Content-Length", strconv.Itoa(len(r)))
 		}
@@ -341,12 +334,13 @@ SWITCH:
 		if cType == "" {
 			h.Set("Content-Type", "binary/octet-stream")
 		}
-		if size >= 0 {
-			if ctx.isContentCompressible(cType, size) {
-				ctx.enableCompression()
-			} else {
+		if ctx.compress && isTextContent(cType) {
+			appendVaryHeader(h, "Accept-Encoding")
+			if size < compressMinSize || !ctx.enableCompression() {
 				h.Set("Content-Length", strconv.Itoa(size))
 			}
+		} else {
+			h.Set("Content-Length", strconv.Itoa(size))
 		}
 		w.WriteHeader(code)
 		io.Copy(w, r)
@@ -355,61 +349,58 @@ SWITCH:
 		if c, ok := r.content.(io.Closer); ok {
 			defer c.Close()
 		}
+		if ctx.compress && isTextFile(r.name) {
+			appendVaryHeader(h, "Accept-Encoding")
+			if seeker, ok := r.content.(io.Seeker); ok {
+				size, err := seeker.Seek(0, io.SeekEnd)
+				if err != nil {
+					ctx.respondWithError(&Error{500, err.Error()})
+					return
+				}
+				_, err = seeker.Seek(0, io.SeekStart)
+				if err != nil {
+					ctx.respondWithError(&Error{500, err.Error()})
+					return
+				}
+				// if the content size is larger than 1GB, return 413
+				if size > 1*(1<<30) {
+					ctx.respondWithError(&Error{413, "request entity too large"})
+					return
+				}
+				if size < compressMinSize || !ctx.enableCompression() {
+					h.Set("Content-Length", strconv.Itoa(int(size)))
+				}
+			} else {
+				// unable to seek, compress the content anyway
+				ctx.enableCompression()
+			}
+		}
 		etag := h.Get("ETag")
 		if etag != "" && etag == ctx.R.Header.Get("If-None-Match") {
 			w.WriteHeader(304)
 			return
 		}
-		if ctx.compress {
-			isText := false
-			switch strings.TrimPrefix(path.Ext(r.name), ".") {
-			case "html", "htm", "xml", "svg", "css", "less", "sass", "scss", "json", "json5", "map", "js", "jsx", "mjs", "cjs", "ts", "mts", "tsx", "md", "mdx", "yaml", "txt", "wasm":
-				isText = true
-			}
-			if isText {
-				if seeker, ok := r.content.(io.Seeker); ok {
-					size, err := seeker.Seek(0, io.SeekEnd)
-					if err != nil {
-						ctx.respondWithError(&Error{500, err.Error()})
-						return
-					}
-					_, err = seeker.Seek(0, io.SeekStart)
-					if err != nil {
-						ctx.respondWithError(&Error{500, err.Error()})
-						return
-					}
-					if size > 1024 {
-						ctx.enableCompression()
-					}
-				} else {
-					// unable to seek, compress it anyway
-					ctx.enableCompression()
-				}
-			}
-		}
 		if r.mtime.IsZero() {
-			r.mtime = time.Now()
 			if h.Get("Cache-Control") == "" {
 				h.Set("Cache-Control", "public, max-age=0, must-revalidate")
 			}
-		}
-		if readSeeker, ok := r.content.(io.ReadSeeker); ok {
-			http.ServeContent(w, ctx.R, r.name, r.mtime, readSeeker)
 		} else {
 			if checkIfModifiedSince(ctx.R, r.mtime) {
 				w.WriteHeader(304)
 				return
 			}
-			ctype := h.Get("Content-Type")
-			if ctype == "" {
-				ctype = mime.TypeByExtension(path.Ext(r.name))
-				if ctype != "" {
-					h.Set("Content-Type", ctype)
-				}
+			h.Set("Last-Modified", r.mtime.UTC().Format(http.TimeFormat))
+		}
+		ctype := h.Get("Content-Type")
+		if ctype == "" {
+			ctype = mime.TypeByExtension(path.Ext(r.name))
+			if ctype != "" {
+				h.Set("Content-Type", ctype)
 			}
-			if ctx.R.Method != "HEAD" {
-				io.Copy(w, r.content)
-			}
+		}
+		w.WriteHeader(code)
+		if ctx.R.Method != "HEAD" {
+			io.Copy(w, r.content)
 		}
 
 	case *noContent:
@@ -468,14 +459,15 @@ func (ctx *Context) respondWithJson(v any, status int) {
 	buf := bytes.NewBuffer(nil)
 	err := json.NewEncoder(buf).Encode(v)
 	ctx.Header.Set("Content-Type", "application/json; charset=utf-8")
+	if ctx.compress {
+		appendVaryHeader(ctx.Header, "Accept-Encoding")
+	}
 	if err != nil {
 		ctx.W.WriteHeader(500)
 		ctx.W.Write([]byte(`{"error": {"status": 500, "message": "bad json"}}`))
 		return
 	}
-	if ctx.compress && buf.Len() > 1024 {
-		ctx.enableCompression()
-	} else {
+	if !ctx.compress || buf.Len() < compressMinSize || !ctx.enableCompression() {
 		ctx.Header.Set("Content-Length", strconv.Itoa(buf.Len()))
 	}
 	ctx.W.WriteHeader(status)
@@ -487,6 +479,23 @@ func (ctx *Context) respondWithError(err *Error) {
 		ctx.logger.Printf("[error] %s", err.Message)
 	}
 	ctx.respondWithJson(map[string]any{"error": err}, err.Status)
+}
+
+func isTextFile(filename string) bool {
+	switch strings.TrimPrefix(path.Ext(filename), ".") {
+	case "html", "htm", "xml", "svg", "css", "less", "sass", "scss", "json", "json5", "map", "js", "jsx", "mjs", "cjs", "ts", "mts", "tsx", "md", "mdx", "yaml", "txt", "wasm":
+		return true
+	default:
+		return false
+	}
+}
+
+func isTextContent(contentType string) bool {
+	return contentType != "" && (strings.HasPrefix(contentType, "text/") ||
+		strings.HasPrefix(contentType, "application/javascript") ||
+		strings.HasPrefix(contentType, "application/json") ||
+		strings.HasPrefix(contentType, "application/xml") ||
+		strings.HasPrefix(contentType, "application/wasm"))
 }
 
 func hexEscapeNonASCII(s string) string {
@@ -517,6 +526,15 @@ func hexEscapeNonASCII(s string) string {
 		b = append(b, s[pos:]...)
 	}
 	return string(b)
+}
+
+func appendVaryHeader(h http.Header, name string) {
+	vary := h.Get("Vary")
+	if vary == "" {
+		h.Set("Vary", name)
+	} else if !strings.Contains(vary, name) {
+		h.Set("Vary", vary+", "+name)
+	}
 }
 
 func checkIfModifiedSince(r *http.Request, modtime time.Time) bool {
