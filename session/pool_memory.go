@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ije/gox/crypto/rs"
+	"github.com/ije/gox/crypto/rand"
 )
 
 type MemorySession struct {
@@ -98,7 +98,7 @@ func (pool *MemorySessionPool) GetSession(sid string) (session Session, err erro
 
 	if !ok {
 	RE:
-		sid = rs.Base64.String(64)
+		sid = rand.Base64.String(64)
 		pool.lock.RLock()
 		_, ok := pool.sessions[sid]
 		pool.lock.RUnlock()
