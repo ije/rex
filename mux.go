@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -14,8 +15,26 @@ type Handle func(ctx *Context) any
 
 // Mux is a http.Handler with middlewares and routes.
 type Mux struct {
+	contextPool sync.Pool
+	writerPool  sync.Pool
 	middlewares []Handle
 	router      *http.ServeMux
+}
+
+// New returns a new Mux.
+func New() *Mux {
+	return &Mux{
+		contextPool: sync.Pool{
+			New: func() any {
+				return &Context{}
+			},
+		},
+		writerPool: sync.Pool{
+			New: func() any {
+				return &rexWriter{}
+			},
+		},
+	}
 }
 
 // Use appends middlewares to current APIS middleware stack.
@@ -29,6 +48,7 @@ func (a *Mux) Use(middlewares ...Handle) {
 
 // AddRoute adds a route.
 func (a *Mux) AddRoute(pattern string, handle Handle) {
+	// create the router on demand
 	if a.router == nil {
 		a.router = http.NewServeMux()
 	}
@@ -45,21 +65,20 @@ func (a *Mux) AddRoute(pattern string, handle Handle) {
 
 // ServeHTTP implements the http Handler.
 func (a *Mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r)
-	defer recycleContext(ctx)
+	ctx := a.newContext(r)
+	defer a.recycleContext(ctx)
 
-	wr := newWriter(ctx, w)
-	defer recycleWriter(wr)
+	wr := a.newWriter(ctx, w)
+	defer a.recycleWriter(wr)
+	defer wr.Close()
 
 	ctx.W = wr
 	ctx.Header = w.Header()
 	ctx.Header.Set("Connection", "keep-alive")
 
-	startTime := time.Now()
-	defer func() {
-		wr.Close()
-
-		if ctx.accessLogger != nil && r.Method != "OPTIONS" {
+	if ctx.accessLogger != nil && r.Method != "OPTIONS" {
+		startTime := time.Now()
+		defer func() {
 			ref := r.Referer()
 			if ref == "" {
 				ref = "-"
@@ -78,8 +97,8 @@ func (a *Mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				wr.writeN,
 				time.Since(startTime)/time.Millisecond,
 			)
-		}
-	}()
+		}()
+	}
 
 	defer func() {
 		if v := recover(); v != nil {
@@ -123,4 +142,50 @@ func (a *Mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx.respondWith(&status{405, "Method Not Allowed"})
+}
+
+// newContext returns a new Context from the pool.
+func (a *Mux) newContext(r *http.Request) (ctx *Context) {
+	ctx = a.contextPool.Get().(*Context)
+	ctx.R = r
+	ctx.sessionPool = defaultSessionPool
+	ctx.sessionIdHandler = defaultSessionIdHandler
+	ctx.logger = defaultLogger
+	return
+}
+
+// recycleContext puts a Context back to the pool.
+func (a *Mux) recycleContext(ctx *Context) {
+	ctx.R = nil
+	ctx.W = nil
+	ctx.Header = nil
+	ctx.basicAuthUser = ""
+	ctx.aclUser = nil
+	ctx.session = nil
+	ctx.sessionPool = nil
+	ctx.sessionIdHandler = nil
+	ctx.logger = nil
+	ctx.accessLogger = nil
+	ctx.compress = false
+	a.contextPool.Put(ctx)
+}
+
+// newWriter returns a new Writer from the pool.
+func (a *Mux) newWriter(ctx *Context, w http.ResponseWriter) (wr *rexWriter) {
+	wr = a.writerPool.Get().(*rexWriter)
+	wr.ctx = ctx
+	wr.rawWriter = w
+	wr.code = 200
+	return
+}
+
+// recycleWriter puts a Writer back to the pool.
+func (a *Mux) recycleWriter(wr *rexWriter) {
+	wr.ctx = nil
+	wr.code = 0
+	wr.isHeaderSent = false
+	wr.writeN = 0
+	wr.rawWriter = nil
+	wr.zWriter = nil
+	a.writerPool.Put(wr)
 }

@@ -38,6 +38,7 @@ type AutoTLSConfig struct {
 	Cache     autocert.Cache `json:"-"`
 }
 
+// serve starts a REX server.
 func serve(ctx context.Context, config *ServerConfig, c chan error) {
 	port := config.Port
 	if port == 0 {
@@ -59,6 +60,7 @@ func serve(ctx context.Context, config *ServerConfig, c chan error) {
 	c <- serv.ListenAndServe()
 }
 
+// serveTLS starts a REX server with TLS.
 func serveTLS(ctx context.Context, config *ServerConfig, c chan error) {
 	tls := config.TLS
 	port := tls.Port
@@ -107,7 +109,7 @@ func serveTLS(ctx context.Context, config *ServerConfig, c chan error) {
 	c <- serv.ListenAndServeTLS(tls.CertFile, tls.KeyFile)
 }
 
-// Serve serves a rex server.
+// Serve serves a REX server.
 func Serve(config ServerConfig) chan error {
 	c := make(chan error, 1)
 

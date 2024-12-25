@@ -9,7 +9,7 @@ import (
 
 const compressMinSize = 1024
 
-var defaultMux = &Mux{}
+var defaultMux = New()
 var defaultSessionPool = session.NewMemorySessionPool(time.Hour / 2)
 var defaultSessionIdHandler = session.NewCookieSidHandler("SID")
 var defaultLogger = &log.Logger{}
