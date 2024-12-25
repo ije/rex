@@ -322,26 +322,29 @@ SWITCH:
 		size := -1
 		if s, ok := r.(io.Seeker); ok {
 			n, err := s.Seek(0, io.SeekEnd)
-			if err != nil {
-				ctx.respondWithError(&Error{500, err.Error()})
-				return
+			if err == nil {
+				_, err = s.Seek(0, io.SeekStart)
+				if err != nil {
+					ctx.respondWithError(&Error{500, err.Error()})
+					return
+				}
+				size = int(n)
 			}
-			_, err = s.Seek(0, io.SeekStart)
-			if err != nil {
-				ctx.respondWithError(&Error{500, err.Error()})
-				return
-			}
-			size = int(n)
 		}
 		cType := h.Get("Content-Type")
 		if cType == "" {
 			h.Set("Content-Type", "binary/octet-stream")
 		}
 		if ctx.compress && isTextContent(cType) {
-			if size < compressMinSize || !ctx.enableCompression() {
-				h.Set("Content-Length", strconv.Itoa(size))
+			if size >= 0 {
+				if size < compressMinSize || !ctx.enableCompression() {
+					h.Set("Content-Length", strconv.Itoa(size))
+				}
+			} else {
+				// unable to seek, compress the content anyway
+				ctx.enableCompression()
 			}
-		} else {
+		} else if size >= 0 {
 			h.Set("Content-Length", strconv.Itoa(size))
 		}
 		w.WriteHeader(code)
@@ -351,23 +354,20 @@ SWITCH:
 		if c, ok := r.content.(io.Closer); ok {
 			defer c.Close()
 		}
+		size := -1
+		if s, ok := r.content.(io.Seeker); ok {
+			n, err := s.Seek(0, io.SeekEnd)
+			if err == nil {
+				_, err = s.Seek(0, io.SeekStart)
+				if err != nil {
+					ctx.respondWithError(&Error{500, err.Error()})
+					return
+				}
+				size = int(n)
+			}
+		}
 		if ctx.compress && isTextFile(r.name) {
-			if seeker, ok := r.content.(io.Seeker); ok {
-				size, err := seeker.Seek(0, io.SeekEnd)
-				if err != nil {
-					ctx.respondWithError(&Error{500, err.Error()})
-					return
-				}
-				_, err = seeker.Seek(0, io.SeekStart)
-				if err != nil {
-					ctx.respondWithError(&Error{500, err.Error()})
-					return
-				}
-				// if the content size is larger than 1GB, return 413
-				if size > 1*(1<<30) {
-					ctx.respondWithError(&Error{413, "request entity too large"})
-					return
-				}
+			if size >= 0 {
 				if size < compressMinSize || !ctx.enableCompression() {
 					h.Set("Content-Length", strconv.Itoa(int(size)))
 				}
@@ -375,6 +375,8 @@ SWITCH:
 				// unable to seek, compress the content anyway
 				ctx.enableCompression()
 			}
+		} else if size >= 0 {
+			h.Set("Content-Length", strconv.Itoa(size))
 		}
 		etag := h.Get("ETag")
 		if etag != "" && etag == ctx.R.Header.Get("If-None-Match") {
