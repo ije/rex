@@ -61,7 +61,7 @@ func main() {
   // Starts the server
   <-rex.Start(80)
 
-  // Starts the server with TLS (powered by Let's Encrypt)
+  // Starts the server with TLS using Let's Encrypt certificates
   <-rex.StartWithAutoTLS(443)
 }
 ```
@@ -74,11 +74,19 @@ In **REX**, a middleware is a function that receives a `*rex.Context` and return
 
 ```go
 rex.Use(func(ctx *rex.Context) any {
-  // return a html response
-  return rex.HTML("<h1>hello world</h1>")
+  t := time.Now()
+  defer func() {
+    // Log the request
+    log.Printf("%s %s %s", ctx.Method(), ctx.Pathname(), time.Since(t))
+  }()
 
-  // continue next middleware
-  return rex.Next()
+  if ctx.Pathname() == "/hello" {
+    // return a html response
+    return rex.HTML("<h1>hello world</h1>")
+  }
+
+  // use next handler
+  return ctx.Next()
 })
 ```
 
@@ -99,7 +107,7 @@ In general, a pattern looks like:
 [METHOD ][HOST]/[PATH]
 ```
 
-You can access the path params via the `ctx.PathValue()`:
+You can access the path params via calling `ctx.PathValue(paramName)`:
 
 ```go
 rex.GET("/posts/{id}", func(ctx *rex.Context) any {
