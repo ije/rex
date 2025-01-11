@@ -190,7 +190,7 @@ func Perm(perms ...string) Handle {
 				}
 			}
 		}
-		return &Error{403, "Forbidden"}
+		return &invalid{403, "Forbidden"}
 	}
 }
 
@@ -209,7 +209,7 @@ func BasicAuthWithRealm(realm string, auth func(name string, secret string) (ok 
 				name, secret := utils.SplitByFirstByte(string(authInfo), ':')
 				ok, err := auth(name, secret)
 				if err != nil {
-					return &Error{500, err.Error()}
+					return err
 				}
 				if ok {
 					ctx.basicAuthUser = name

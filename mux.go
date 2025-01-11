@@ -103,7 +103,8 @@ func (a *Mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		if v := recover(); v != nil {
 			if err, ok := v.(*invalid); ok {
-				ctx.respondWithError(&Error{err.status, err.message})
+				ctx.W.WriteHeader(err.code)
+				ctx.W.Write([]byte(err.message))
 				return
 			}
 
@@ -119,7 +120,8 @@ func (a *Mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			if ctx.logger != nil {
 				ctx.logger.Printf("[panic] %v\n%s", v, buf.String())
 			}
-			ctx.respondWithError(&Error{500, http.StatusText(500)})
+			ctx.W.WriteHeader(500)
+			ctx.W.Write([]byte("Internal Server Error"))
 		}
 	}()
 

@@ -52,6 +52,16 @@ func (ctx *Context) Next() any {
 	return next
 }
 
+// Method returns the request method.
+func (ctx *Context) Method() string {
+	return ctx.R.Method
+}
+
+// Pathname returns the request pathname.
+func (ctx *Context) Pathname() string {
+	return ctx.R.URL.Path
+}
+
 // PathValue returns the value for the named path wildcard in the [ServeMux] pattern
 // that matched the request.
 // It returns the empty string if the request was not matched against a pattern
@@ -64,6 +74,100 @@ func (ctx *Context) PathValue(key string) string {
 // return value.
 func (ctx *Context) SetPathValue(key string, value string) {
 	ctx.R.SetPathValue(key, value)
+}
+
+// RawQuery returns the request raw query string.
+func (ctx *Context) RawQuery() string {
+	return ctx.R.URL.RawQuery
+}
+
+// Query returns the request query values.
+func (ctx *Context) Query() url.Values {
+	return ctx.R.URL.Query()
+}
+
+// BasicAuthUser returns the BasicAuth username
+func (ctx *Context) BasicAuthUser() string {
+	return ctx.basicAuthUser
+}
+
+// AclUser returns the ACL user
+func (ctx *Context) AclUser() AclUser {
+	return ctx.aclUser
+}
+
+// Session returns the session if it is undefined then create a new one.
+func (ctx *Context) Session() *SessionStub {
+	if ctx.sessionPool == nil {
+		panic(&invalid{500, "session pool is not set"})
+	}
+
+	if ctx.session == nil {
+		sid := ctx.sessionIdHandler.Get(ctx.R)
+		sess, err := ctx.sessionPool.GetSession(sid)
+		if err != nil {
+			panic(&invalid{500, err.Error()})
+		}
+
+		ctx.session = &SessionStub{sess}
+
+		if sess.SID() != sid {
+			ctx.sessionIdHandler.Put(ctx.W, sess.SID())
+		}
+	}
+
+	return ctx.session
+}
+
+// UserAgent returns the request User-Agent.
+func (ctx *Context) UserAgent() string {
+	return ctx.R.Header.Get("User-Agent")
+}
+
+// RemoteIP returns the remote client IP.
+func (ctx *Context) RemoteIP() string {
+	ip := ctx.R.Header.Get("X-Real-IP")
+	if ip == "" {
+		ip = ctx.R.Header.Get("X-Forwarded-For")
+		if ip != "" {
+			ip, _ = utils.SplitByFirstByte(ip, ',')
+		} else {
+			ip = ctx.R.RemoteAddr
+		}
+	}
+	ip, _ = utils.SplitByLastByte(ip, ':')
+	return ip
+}
+
+// Cookie returns the request cookie by name.
+func (ctx *Context) Cookie(name string) (cookie *http.Cookie) {
+	cookie, _ = ctx.R.Cookie(name)
+	return
+}
+
+// SetCookie sets a cookie to the response.
+func (ctx *Context) SetCookie(cookie http.Cookie) {
+	if cookie.Name != "" {
+		ctx.Header.Add("Set-Cookie", cookie.String())
+	}
+}
+
+// DeleteCookie sets a cookie to the response with an expiration time in the past.
+func (ctx *Context) DeleteCookie(cookie http.Cookie) {
+	if cookie.Name != "" {
+		cookie.Value = "-"
+		cookie.Expires = time.Unix(0, 0)
+		ctx.SetCookie(cookie)
+	}
+}
+
+// DeleteCookieByName sets a cookie to the response with an expiration time in the past.
+func (ctx *Context) DeleteCookieByName(name string) {
+	ctx.SetCookie(http.Cookie{
+		Name:    name,
+		Value:   "-",
+		Expires: time.Unix(0, 0),
+	})
 }
 
 // ParseForm populates r.Form and r.PostForm.
@@ -128,100 +232,6 @@ func (ctx *Context) PostFormValue(key string) string {
 // FormFile calls [Request.ParseMultipartForm] and [Request.ParseForm] if necessary.
 func (ctx *Context) FormFile(key string) (multipart.File, *multipart.FileHeader, error) {
 	return ctx.R.FormFile(key)
-}
-
-// Pathname returns the request pathname.
-func (ctx *Context) Pathname() string {
-	return ctx.R.URL.Path
-}
-
-// Query returns the request query values.
-func (ctx *Context) Query() url.Values {
-	return ctx.R.URL.Query()
-}
-
-// BasicAuthUser returns the BasicAuth username
-func (ctx *Context) BasicAuthUser() string {
-	return ctx.basicAuthUser
-}
-
-// AclUser returns the ACL user
-func (ctx *Context) AclUser() AclUser {
-	return ctx.aclUser
-}
-
-// Session returns the session if it is undefined then create a new one.
-func (ctx *Context) Session() *SessionStub {
-	if ctx.sessionPool == nil {
-		panic(&invalid{500, "session pool is nil"})
-	}
-
-	if ctx.session == nil {
-		sid := ctx.sessionIdHandler.Get(ctx.R)
-		sess, err := ctx.sessionPool.GetSession(sid)
-		if err != nil {
-			panic(&invalid{500, err.Error()})
-		}
-
-		ctx.session = &SessionStub{sess}
-
-		if sess.SID() != sid {
-			ctx.sessionIdHandler.Put(ctx.W, sess.SID())
-		}
-	}
-
-	return ctx.session
-}
-
-// UserAgent returns the request User-Agent.
-func (ctx *Context) UserAgent() string {
-	return ctx.R.Header.Get("User-Agent")
-}
-
-// Cookie returns the request cookie by name.
-func (ctx *Context) Cookie(name string) (cookie *http.Cookie) {
-	cookie, _ = ctx.R.Cookie(name)
-	return
-}
-
-// SetCookie sets a cookie to the response.
-func (ctx *Context) SetCookie(cookie http.Cookie) {
-	if cookie.Name != "" {
-		ctx.Header.Add("Set-Cookie", cookie.String())
-	}
-}
-
-// DeleteCookie sets a cookie to the response with an expiration time in the past.
-func (ctx *Context) DeleteCookie(cookie http.Cookie) {
-	if cookie.Name != "" {
-		cookie.Value = "-"
-		cookie.Expires = time.Unix(0, 0)
-		ctx.SetCookie(cookie)
-	}
-}
-
-// DeleteCookieByName sets a cookie to the response with an expiration time in the past.
-func (ctx *Context) DeleteCookieByName(name string) {
-	ctx.SetCookie(http.Cookie{
-		Name:    name,
-		Value:   "-",
-		Expires: time.Unix(0, 0),
-	})
-}
-
-// RemoteIP returns the remote client IP.
-func (ctx *Context) RemoteIP() string {
-	ip := ctx.R.Header.Get("X-Real-IP")
-	if ip == "" {
-		ip = ctx.R.Header.Get("X-Forwarded-For")
-		if ip != "" {
-			ip, _ = utils.SplitByFirstByte(ip, ',')
-		} else {
-			ip = ctx.R.RemoteAddr
-		}
-	}
-	ip, _ = utils.SplitByLastByte(ip, ':')
-	return ip
 }
 
 func (ctx *Context) enableCompression() bool {
@@ -325,7 +335,7 @@ SWITCH:
 			if err == nil {
 				_, err = s.Seek(0, io.SeekStart)
 				if err != nil {
-					ctx.respondWithError(&Error{500, err.Error()})
+					ctx.respondWithError(err)
 					return
 				}
 				size = int(n)
@@ -360,7 +370,7 @@ SWITCH:
 			if err == nil {
 				_, err = s.Seek(0, io.SeekStart)
 				if err != nil {
-					ctx.respondWithError(&Error{500, err.Error()})
+					ctx.respondWithError(err)
 					return
 				}
 				size = int(n)
@@ -431,54 +441,60 @@ SWITCH:
 		}
 		if err != nil {
 			if os.IsNotExist(err) {
-				ctx.respondWithError(&Error{404, "not found"})
+				w.WriteHeader(404)
+				w.Write([]byte("Not Found"))
 			} else {
-				ctx.respondWithError(&Error{500, err.Error()})
+				ctx.respondWithError(err)
 			}
 			return
 		}
 		v = File(filepath)
 		goto SWITCH
 
-	case error:
-		if code >= 400 && code < 600 {
-			ctx.respondWithError(&Error{code, r.Error()})
-		} else {
-			ctx.respondWithError(&Error{500, r.Error()})
-		}
+	case *invalid:
+		h.Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(r.code)
+		w.Write([]byte(r.message))
 
 	case Error:
-		ctx.respondWithError(&r)
+		h.Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(r.Code)
+		json.NewEncoder(w).Encode(r)
 
 	case *Error:
+		h.Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(r.Code)
+		json.NewEncoder(w).Encode(r)
+
+	case error:
 		ctx.respondWithError(r)
 
 	default:
-		ctx.respondWithJson(v, code)
+		buf := bytes.NewBuffer(nil)
+		err := json.NewEncoder(buf).Encode(v)
+		h.Set("Content-Type", "application/json; charset=utf-8")
+		if err != nil {
+			w.WriteHeader(500)
+			w.Write([]byte(`{"error": {"status": 500, "message": "bad json"}}`))
+			return
+		}
+		if !ctx.compress || buf.Len() < compressMinSize || !ctx.enableCompression() {
+			h.Set("Content-Length", strconv.Itoa(buf.Len()))
+		}
+		w.WriteHeader(code)
+		io.Copy(w, buf)
 	}
 }
 
-func (ctx *Context) respondWithJson(v any, status int) {
-	buf := bytes.NewBuffer(nil)
-	err := json.NewEncoder(buf).Encode(v)
-	ctx.Header.Set("Content-Type", "application/json; charset=utf-8")
-	if err != nil {
-		ctx.W.WriteHeader(500)
-		ctx.W.Write([]byte(`{"error": {"status": 500, "message": "bad json"}}`))
-		return
+func (ctx *Context) respondWithError(err error) {
+	w := ctx.W
+	message := err.Error()
+	if ctx.logger != nil {
+		ctx.logger.Printf("[error] %s", message)
 	}
-	if !ctx.compress || buf.Len() < compressMinSize || !ctx.enableCompression() {
-		ctx.Header.Set("Content-Length", strconv.Itoa(buf.Len()))
-	}
-	ctx.W.WriteHeader(status)
-	io.Copy(ctx.W, buf)
-}
-
-func (ctx *Context) respondWithError(err *Error) {
-	if err.Status >= 500 && ctx.logger != nil {
-		ctx.logger.Printf("[error] %s", err.Message)
-	}
-	ctx.respondWithJson(map[string]any{"error": err}, err.Status)
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.WriteHeader(500)
+	w.Write([]byte(message))
 }
 
 func isTextFile(filename string) bool {

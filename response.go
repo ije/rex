@@ -2,43 +2,54 @@ package rex
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path"
+	"strings"
 	"text/template"
 	"time"
 )
 
 type invalid struct {
-	status  int
+	code    int
 	message string
 }
 
-// Error defines an error with status.
+// Invalid returns an invalid error with code and message.
+func Invalid(code int, v ...string) any {
+	var messsage string
+	if len(v) > 0 {
+		messsage = strings.Join(v, " ")
+	} else {
+		messsage = http.StatusText(code)
+	}
+	return &invalid{code, messsage}
+}
+
+// Error defines an error with code and message.
 type Error struct {
-	Status  int    `json:"status"`
+	Code    int    `json:"code"`
 	Message string `json:"message"`
 }
 
-// Err returns an error with status.
-func Err(status int, v ...string) any {
-	if status < 400 || status >= 600 {
+func (e *Error) Error() string {
+	return e.Message
+}
+
+// Err returns an error with code and message.
+func Err(code int, v ...string) any {
+	if code < 400 || code >= 600 {
 		panic("invalid status code")
 	}
 	var messsage string
 	if len(v) > 0 {
-		args := make([]any, len(v))
-		for i, s := range v {
-			args[i] = s
-		}
-		messsage = fmt.Sprint(args...)
+		messsage = strings.Join(v, " ")
 	} else {
-		messsage = http.StatusText(status)
+		messsage = http.StatusText(code)
 	}
 	return &Error{
-		Status:  status,
+		Code:    code,
 		Message: messsage,
 	}
 }
@@ -70,14 +81,6 @@ func Status(code int, content any) any {
 	return &status{code, content}
 }
 
-// HTML replies to the request with a html content.
-func HTML(html string) any {
-	return &content{
-		name:    "index.html",
-		content: bytes.NewReader([]byte(html)),
-	}
-}
-
 // Template is an interface for template.
 type Template interface {
 	Name() string
@@ -101,6 +104,13 @@ func Render(t Template, data any) any {
 	}
 }
 
+type noContent struct{}
+
+// NoContent replies to the request with no content.
+func NoContent() any {
+	return &noContent{}
+}
+
 type content struct {
 	name    string
 	mtime   time.Time
@@ -112,11 +122,12 @@ func Content(name string, mtime time.Time, r io.Reader) any {
 	return &content{name, mtime, r}
 }
 
-type noContent struct{}
-
-// NoContent replies to the request with no content.
-func NoContent() any {
-	return &noContent{}
+// HTML replies to the request with a html content.
+func HTML(html string) any {
+	return &content{
+		name:    "index.html",
+		content: bytes.NewReader([]byte(html)),
+	}
 }
 
 // File replies to the request using the file content.
