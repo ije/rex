@@ -39,6 +39,7 @@ type Context struct {
 	Header           http.Header
 	basicAuthUser    string
 	aclUser          AclUser
+	cache            CacheStorage
 	session          *SessionStub
 	sessionPool      session.Pool
 	sessionIdHandler session.SidHandler
