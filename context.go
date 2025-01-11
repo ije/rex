@@ -36,7 +36,7 @@ type ILogger interface {
 type Context struct {
 	R                *http.Request
 	W                http.ResponseWriter
-	Header           http.Header
+	header           http.Header
 	basicAuthUser    string
 	aclUser          AclUser
 	session          *SessionStub
@@ -68,12 +68,6 @@ func (ctx *Context) Pathname() string {
 // or there is no such wildcard in the pattern.
 func (ctx *Context) PathValue(key string) string {
 	return ctx.R.PathValue(key)
-}
-
-// SetPathValue sets name to value, so that subsequent calls to r.PathValue(name)
-// return value.
-func (ctx *Context) SetPathValue(key string, value string) {
-	ctx.R.SetPathValue(key, value)
 }
 
 // RawQuery returns the request raw query string.
@@ -139,7 +133,19 @@ func (ctx *Context) RemoteIP() string {
 	return ip
 }
 
-// Cookie returns the request cookie by name.
+// Set sets the header entries associated with key to the
+// single element value. It replaces any existing values
+// associated with key. The key is case insensitive; it is
+// canonicalized by [textproto.CanonicalMIMEHeaderKey].
+// To use non-canonical keys, assign to the map directly.
+func (ctx *Context) SetHeader(key, value string) {
+	ctx.header.Set(key, value)
+}
+
+// Cookie returns the named cookie provided in the request or
+// [ErrNoCookie] if not found.
+// If multiple cookies match the given name, only one cookie will
+// be returned.
 func (ctx *Context) Cookie(name string) (cookie *http.Cookie) {
 	cookie, _ = ctx.R.Cookie(name)
 	return
@@ -148,17 +154,15 @@ func (ctx *Context) Cookie(name string) (cookie *http.Cookie) {
 // SetCookie sets a cookie to the response.
 func (ctx *Context) SetCookie(cookie http.Cookie) {
 	if cookie.Name != "" {
-		ctx.Header.Add("Set-Cookie", cookie.String())
+		ctx.header.Add("Set-Cookie", cookie.String())
 	}
 }
 
 // DeleteCookie sets a cookie to the response with an expiration time in the past.
 func (ctx *Context) DeleteCookie(cookie http.Cookie) {
-	if cookie.Name != "" {
-		cookie.Value = "-"
-		cookie.Expires = time.Unix(0, 0)
-		ctx.SetCookie(cookie)
-	}
+	cookie.Value = "-"
+	cookie.Expires = time.Unix(0, 0)
+	ctx.SetCookie(cookie)
 }
 
 // DeleteCookieByName sets a cookie to the response with an expiration time in the past.
@@ -168,40 +172,6 @@ func (ctx *Context) DeleteCookieByName(name string) {
 		Value:   "-",
 		Expires: time.Unix(0, 0),
 	})
-}
-
-// ParseForm populates r.Form and r.PostForm.
-//
-// For all requests, ParseForm parses the raw query from the URL and updates
-// r.Form.
-//
-// For POST, PUT, and PATCH requests, it also reads the request body, parses it
-// as a form and puts the results into both r.PostForm and r.Form. Request body
-// parameters take precedence over URL query string values in r.Form.
-//
-// If the request Body's size has not already been limited by [MaxBytesReader],
-// the size is capped at 10MB.
-//
-// For other HTTP methods, or when the Content-Type is not
-// application/x-www-form-urlencoded, the request Body is not read, and
-// r.PostForm is initialized to a non-nil, empty value.
-//
-// [Request.ParseMultipartForm] calls ParseForm automatically.
-// ParseForm is idempotent.
-func (ctx *Context) ParseForm() error {
-	return ctx.R.ParseForm()
-}
-
-// ParseMultipartForm parses a request body as multipart/form-data.
-// The whole request body is parsed and up to a total of maxMemory bytes of
-// its file parts are stored in memory, with the remainder stored on
-// disk in temporary files.
-// ParseMultipartForm calls [Request.ParseForm] if necessary.
-// If ParseForm returns an error, ParseMultipartForm returns it but also
-// continues parsing the request body.
-// After one call to ParseMultipartForm, subsequent calls have no effect.
-func (ctx *Context) ParseMultipartForm(maxMemory int64) error {
-	return ctx.R.ParseMultipartForm(maxMemory)
 }
 
 // FormValue returns the first value for the named component of the query.

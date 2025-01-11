@@ -22,7 +22,7 @@ func Next() any {
 func Header(key string, value string) Handle {
 	return func(ctx *Context) any {
 		if key != "" {
-			ctx.Header.Set(key, value)
+			ctx.header.Set(key, value)
 		}
 		return next
 	}
@@ -221,7 +221,7 @@ func BasicAuthWithRealm(realm string, auth func(name string, secret string) (ok 
 		if realm == "" {
 			realm = "Authorization Required"
 		}
-		ctx.Header.Set("WWW-Authenticate", fmt.Sprintf(`Basic realm="%s"`, realm))
+		ctx.header.Set("WWW-Authenticate", fmt.Sprintf(`Basic realm="%s"`, realm))
 		return Status(401, "")
 	}
 }

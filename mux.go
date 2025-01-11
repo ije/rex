@@ -73,8 +73,8 @@ func (a *Mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer wr.Close()
 
 	ctx.W = wr
-	ctx.Header = w.Header()
-	ctx.Header.Set("Connection", "keep-alive")
+	ctx.header = w.Header()
+	ctx.header.Set("Connection", "keep-alive")
 
 	if ctx.accessLogger != nil && r.Method != "OPTIONS" {
 		startTime := time.Now()
@@ -160,7 +160,7 @@ func (a *Mux) newContext(r *http.Request) (ctx *Context) {
 func (a *Mux) recycleContext(ctx *Context) {
 	ctx.R = nil
 	ctx.W = nil
-	ctx.Header = nil
+	ctx.header = nil
 	ctx.basicAuthUser = ""
 	ctx.aclUser = nil
 	ctx.session = nil
