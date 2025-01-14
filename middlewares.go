@@ -21,7 +21,7 @@ func Next() any {
 // Header is rex middleware to set http header for the current request.
 func Header(key string, value string) Handle {
 	return func(ctx *Context) any {
-		if key != "" {
+		if key != "" && value != "" {
 			ctx.header.Set(key, value)
 		}
 		return next
@@ -31,9 +31,7 @@ func Header(key string, value string) Handle {
 // Logger returns a logger middleware to sets the error logger for the context.
 func Logger(logger ILogger) Handle {
 	return func(ctx *Context) any {
-		if logger != nil {
-			ctx.logger = logger
-		}
+		ctx.logger = logger
 		return next
 	}
 }
