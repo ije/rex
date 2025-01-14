@@ -2,7 +2,7 @@ package rex
 
 import (
 	"bufio"
-	"fmt"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -25,7 +25,7 @@ func (w *rexWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 		return h.Hijack()
 	}
 
-	return nil, nil, fmt.Errorf("the raw response writer does not implement the http.Hijacker")
+	return nil, nil, errors.New("the raw response writer does not implement the http.Hijacker")
 }
 
 // Flush sends any buffered data to the client.

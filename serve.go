@@ -13,29 +13,29 @@ import (
 
 // ServerConfig contains options to run the REX server.
 type ServerConfig struct {
-	Host           string    `json:"host"`
-	Port           uint16    `json:"port"`
-	TLS            TLSConfig `json:"tls"`
-	ReadTimeout    uint32    `json:"readTimeout"`
-	WriteTimeout   uint32    `json:"writeTimeout"`
-	MaxHeaderBytes uint32    `json:"maxHeaderBytes"`
+	Host           string
+	Port           uint16
+	TLS            TLSConfig
+	ReadTimeout    uint32
+	WriteTimeout   uint32
+	MaxHeaderBytes uint32
 }
 
 // TLSConfig contains options to support https.
 type TLSConfig struct {
-	Port         uint16        `json:"port"`
-	CertFile     string        `json:"certFile"`
-	KeyFile      string        `json:"keyFile"`
-	AutoTLS      AutoTLSConfig `json:"autotls"`
-	AutoRedirect bool          `json:"autoRedirect"`
+	Port         uint16
+	CertFile     string
+	KeyFile      string
+	AutoTLS      AutoTLSConfig
+	AutoRedirect bool
 }
 
 // AutoTLSConfig contains options to support autocert by Let's Encrypto SSL.
 type AutoTLSConfig struct {
-	AcceptTOS bool           `json:"acceptTOS"`
-	Hosts     []string       `json:"hosts"`
-	CacheDir  string         `json:"cacheDir"`
-	Cache     autocert.Cache `json:"-"`
+	AcceptTOS bool
+	Hosts     []string
+	CacheDir  string
+	Cache     autocert.Cache
 }
 
 // serve starts a REX server.

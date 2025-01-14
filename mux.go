@@ -76,27 +76,29 @@ func (a *Mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx.header = w.Header()
 	ctx.header.Set("Connection", "keep-alive")
 
-	if ctx.accessLogger != nil && r.Method != "OPTIONS" {
+	if r.Method != "OPTIONS" {
 		startTime := time.Now()
 		defer func() {
-			ref := r.Referer()
-			if ref == "" {
-				ref = "-"
+			if ctx.accessLogger != nil {
+				ref := r.Referer()
+				if ref == "" {
+					ref = "-"
+				}
+				ctx.accessLogger.Printf(
+					`%s %s %s %s %s %d %s "%s" %d %d %dms`,
+					ctx.RemoteIP(),
+					r.Host,
+					r.Proto,
+					r.Method,
+					r.RequestURI,
+					r.ContentLength,
+					ref,
+					strings.ReplaceAll(r.UserAgent(), `"`, `\"`),
+					wr.code,
+					wr.writeN,
+					time.Since(startTime)/time.Millisecond,
+				)
 			}
-			ctx.accessLogger.Printf(
-				`%s %s %s %s %s %d %s "%s" %d %d %dms`,
-				ctx.RemoteIP(),
-				r.Host,
-				r.Proto,
-				r.Method,
-				r.RequestURI,
-				r.ContentLength,
-				ref,
-				strings.ReplaceAll(r.UserAgent(), `"`, `\"`),
-				wr.code,
-				wr.writeN,
-				time.Since(startTime)/time.Millisecond,
-			)
 		}()
 	}
 
