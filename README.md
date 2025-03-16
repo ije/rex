@@ -61,7 +61,7 @@ func main() {
   // Starts the server
   <-rex.Start(80)
 
-  // Starts the server with TLS using Let's Encrypt certificates
+  // Starts the server with autoTLS
   <-rex.StartWithAutoTLS(443)
 }
 ```
@@ -86,7 +86,7 @@ rex.Use(func(ctx *rex.Context) any {
 
 ## Routing
 
-**REX** uses [ServeMux Patterns](https://pkg.go.dev/net/http#hdr-Patterns) (requires Go 1.22+) to define routes.
+**REX** uses [ServeMux Patterns](https://pkg.go.dev/net/http#ServeMux) (requires Go 1.22+) to define routes.
 
 Patterns can match the method, host and path of a request. Some examples:
 
