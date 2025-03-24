@@ -4,7 +4,7 @@
 [![GoReport](https://goreportcard.com/badge/github.com/ije/rex)](https://goreportcard.com/report/github.com/ije/rex)
 [![MIT](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
 
-Just another web framework in Go.
+Yet another web framework in Go.
 
 ## Installation
 
