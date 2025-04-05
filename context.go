@@ -36,6 +36,8 @@ type ILogger interface {
 type Context struct {
 	R                *http.Request
 	W                http.ResponseWriter
+	queryRaw         string
+	query            url.Values
 	header           http.Header
 	basicAuthUser    string
 	aclUser          AclUser
@@ -75,9 +77,13 @@ func (ctx *Context) RawQuery() string {
 	return ctx.R.URL.RawQuery
 }
 
-// Query returns the request query values.
+// Query parses RawQuery and returns the corresponding values. It silently discards malformed value pairs.
 func (ctx *Context) Query() url.Values {
-	return ctx.R.URL.Query()
+	if url := ctx.R.URL; ctx.query == nil || ctx.queryRaw != url.RawQuery {
+		ctx.queryRaw = url.RawQuery
+		ctx.query = url.Query()
+	}
+	return ctx.query
 }
 
 // BasicAuthUser returns the BasicAuth username
