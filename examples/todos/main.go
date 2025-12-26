@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 
@@ -72,12 +73,13 @@ func main() {
 			return nil
 		}
 		name := string(value)
-		if name == "admin" {
+		switch name {
+		case "admin":
 			return &user{
 				name:  "admin",
 				perms: []string{"create", "delete"},
 			}
-		} else if name == "guest" {
+		case "guest":
 			return &user{
 				name: name,
 			}
@@ -130,6 +132,7 @@ func main() {
 		return rex.Redirect("/", 302)
 	})
 
-	fmt.Println("Server running on http://localhost:8080")
-	<-rex.Start(8080)
+	<-rex.Start(context.TODO(), 8080, func(port uint16) {
+		fmt.Printf("Server running on http://localhost:%d\n", port)
+	})
 }

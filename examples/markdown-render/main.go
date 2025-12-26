@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"regexp"
@@ -76,8 +77,9 @@ func main() {
 		return rex.Status(404, "book not found")
 	})
 
-	fmt.Println("Server running on http://localhost:8080")
-	<-rex.Start(8080)
+	<-rex.Start(context.Background(), 8080, func(port uint16) {
+		fmt.Printf("Server running on http://localhost:%d\n", port)
+	})
 }
 
 func init() {

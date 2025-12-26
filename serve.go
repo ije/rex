@@ -4,6 +4,7 @@ package rex
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"time"
@@ -39,7 +40,7 @@ type AutoTLSConfig struct {
 }
 
 // serve starts a REX server.
-func serve(ctx context.Context, config *ServerConfig, c chan error) {
+func serve(ctx context.Context, config *ServerConfig, c chan error) error {
 	port := config.Port
 	if port == 0 {
 		port = 80
@@ -57,11 +58,22 @@ func serve(ctx context.Context, config *ServerConfig, c chan error) {
 			serv.Close()
 		}()
 	}
-	c <- serv.ListenAndServe()
+
+	ln, err := net.Listen("tcp", serv.Addr)
+	if err != nil {
+		close(c)
+		return err
+	}
+
+	go func() {
+		defer ln.Close()
+		c <- serv.Serve(ln)
+	}()
+	return nil
 }
 
 // serveTLS starts a REX server with TLS.
-func serveTLS(ctx context.Context, config *ServerConfig, c chan error) {
+func serveTLS(ctx context.Context, config *ServerConfig, c chan error) error {
 	tls := config.TLS
 	port := tls.Port
 	if port == 0 {
@@ -83,14 +95,16 @@ func serveTLS(ctx context.Context, config *ServerConfig, c chan error) {
 		} else if cacheDir := tls.AutoTLS.CacheDir; cacheDir != "" {
 			fi, err := os.Stat(cacheDir)
 			if err == nil && !fi.IsDir() {
-				c <- fmt.Errorf("AutoTLS: invalid cache dir '%s'", cacheDir)
-				return
+				err = fmt.Errorf("AutoTLS: invalid cache dir '%s'", cacheDir)
+				close(c)
+				return err
 			}
 			if err != nil && os.IsNotExist(err) {
 				err = os.MkdirAll(cacheDir, 0755)
 				if err != nil {
-					c <- fmt.Errorf("AutoTLS: can't create the cache dir '%s'", cacheDir)
-					return
+					err = fmt.Errorf("AutoTLS: can't create the cache dir '%s'", cacheDir)
+					close(c)
+					return err
 				}
 			}
 			m.Cache = autocert.DirCache(cacheDir)
@@ -106,62 +120,106 @@ func serveTLS(ctx context.Context, config *ServerConfig, c chan error) {
 			serv.Close()
 		}()
 	}
-	c <- serv.ListenAndServeTLS(tls.CertFile, tls.KeyFile)
+
+	ln, err := net.Listen("tcp", serv.Addr)
+	if err != nil {
+		close(c)
+		return err
+	}
+
+	go func() {
+		defer ln.Close()
+		c <- serv.ServeTLS(ln, tls.CertFile, tls.KeyFile)
+	}()
+	return nil
 }
 
 // Serve serves a REX server.
-func Serve(config ServerConfig) chan error {
-	c := make(chan error, 1)
+func Serve(ctx context.Context, config ServerConfig, onStart func(port uint16)) (c chan error) {
+	c = make(chan error, 1)
 
 	if tls := config.TLS; tls.AutoTLS.AcceptTOS || (tls.CertFile != "" && tls.KeyFile != "") {
-		c2 := make(chan error, 1)
-		ctx, cancel := context.WithCancel(context.Background())
-		go serve(ctx, &config, c2)
-		go serveTLS(ctx, &config, c2)
-		err := <-c2
-		cancel()
-		c <- err
-	} else {
-		go serve(context.Background(), &config, c)
+		ctx, cancel := context.WithCancel(ctx)
+		defer cancel()
+		errc := make(chan error, 1)
+		err := serve(ctx, &config, errc)
+		if err != nil {
+			c <- err
+			return
+		}
+		err = serveTLS(ctx, &config, errc)
+		if err != nil {
+			c <- err
+			return
+		}
+		c <- <-errc
+		return
 	}
 
-	return c
+	errc := make(chan error, 1)
+	err := serve(ctx, &config, errc)
+	if err != nil {
+		c <- err
+		return
+	}
+	c <- <-errc
+	return
 }
 
 // Start starts a REX server.
-func Start(port uint16) chan error {
+func Start(ctx context.Context, port uint16, onStart func(port uint16)) chan error {
 	c := make(chan error, 1)
-	go serve(context.Background(), &ServerConfig{
+	err := serve(ctx, &ServerConfig{
 		Port: port,
 	}, c)
+	if err != nil {
+		c <- err
+		return c
+	}
+	if onStart != nil {
+		onStart(port)
+	}
 	return c
 }
 
 // StartWithTLS starts a REX server with TLS.
-func StartWithTLS(port uint16, certFile string, keyFile string) chan error {
+func StartWithTLS(ctx context.Context, port uint16, certFile string, keyFile string, onStart func(port uint16)) chan error {
 	c := make(chan error, 1)
-	go serveTLS(context.Background(), &ServerConfig{
+	err := serveTLS(ctx, &ServerConfig{
 		TLS: TLSConfig{
 			Port:     port,
 			CertFile: certFile,
 			KeyFile:  keyFile,
 		},
 	}, c)
+	if err != nil {
+		c <- err
+		return c
+	}
+	if onStart != nil {
+		onStart(port)
+	}
 	return c
 }
 
 // StartWithAutoTLS starts a REX server with autocert powered by Let's Encrypto SSL
-func StartWithAutoTLS(port uint16, hosts ...string) chan error {
+func StartWithAutoTLS(ctx context.Context, port uint16, onStart func(port uint16)) chan error {
 	c := make(chan error, 1)
-	go serveTLS(context.Background(), &ServerConfig{
+	err := serveTLS(ctx, &ServerConfig{
 		TLS: TLSConfig{
 			Port: port,
 			AutoTLS: AutoTLSConfig{
 				AcceptTOS: true,
-				Hosts:     hosts,
 				CacheDir:  "/var/rex/autotls",
 			},
 		},
 	}, c)
+	if err != nil {
+		c <- err
+		return c
+	}
+	if onStart != nil {
+		onStart(port)
+	}
 	return c
 }
