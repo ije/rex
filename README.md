@@ -18,6 +18,7 @@ go get -u github.com/ije/rex
 package main
 
 import (
+  "context"
   "log"
   "github.com/ije/rex"
 )
@@ -59,10 +60,10 @@ func main() {
   })
 
   // Starts the server
-  <-rex.Start(80)
+  <-rex.Start(context.Background(),80, nil)
 
   // Starts the server with autoTLS
-  <-rex.StartWithAutoTLS(443)
+  <-rex.StartWithAutoTLS(context.Background(), 443, nil)
 }
 ```
 
