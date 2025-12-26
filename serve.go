@@ -135,7 +135,7 @@ func serveTLS(ctx context.Context, config *ServerConfig, c chan error) error {
 }
 
 // Serve serves a REX server.
-func Serve(ctx context.Context, config ServerConfig, onStart func(port uint16)) (c chan error) {
+func Serve(ctx context.Context, config ServerConfig, onStart func(port, tlsPort uint16)) (c chan error) {
 	c = make(chan error, 1)
 
 	if tls := config.TLS; tls.AutoTLS.AcceptTOS || (tls.CertFile != "" && tls.KeyFile != "") {
@@ -152,6 +152,9 @@ func Serve(ctx context.Context, config ServerConfig, onStart func(port uint16)) 
 			c <- err
 			return
 		}
+		if onStart != nil {
+			onStart(config.Port, config.TLS.Port)
+		}
 		c <- <-errc
 		return
 	}
@@ -161,6 +164,9 @@ func Serve(ctx context.Context, config ServerConfig, onStart func(port uint16)) 
 	if err != nil {
 		c <- err
 		return
+	}
+	if onStart != nil {
+		onStart(config.Port, 0)
 	}
 	c <- <-errc
 	return
