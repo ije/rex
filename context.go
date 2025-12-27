@@ -246,7 +246,7 @@ func (ctx *Context) respondWith(v any) {
 	h := w.Header()
 	code := 200
 
-SWITCH:
+Route:
 	switch r := v.(type) {
 	case http.Handler:
 		r.ServeHTTP(w, ctx.R)
@@ -402,7 +402,7 @@ SWITCH:
 		if v == nil {
 			w.WriteHeader(code)
 		} else {
-			goto SWITCH
+			goto Route
 		}
 
 	case *fs:
@@ -412,9 +412,13 @@ SWITCH:
 			filepath = path.Join(filepath, "index.html")
 			_, err = os.Stat(filepath)
 		}
+		if err != nil && os.IsNotExist(err) && !strings.HasSuffix(filepath, ".html") {
+			filepath = filepath + ".html"
+			fi, err = os.Stat(filepath)
+		}
 		if err != nil && os.IsNotExist(err) && r.fallback != "" {
 			filepath = path.Join(r.root, r.fallback)
-			_, err = os.Stat(filepath)
+			fi, err = os.Stat(filepath)
 		}
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -425,8 +429,14 @@ SWITCH:
 			}
 			return
 		}
-		v = File(filepath)
-		goto SWITCH
+		file, err := os.Open(filepath)
+		if err != nil {
+			ctx.respondWithError(err)
+			return
+		}
+		// auto closed
+		v = &content{path.Base(filepath), fi.ModTime(), file}
+		goto Route
 
 	case *invalid:
 		h.Set("Content-Type", "text/plain; charset=utf-8")
