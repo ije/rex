@@ -46,6 +46,9 @@ a {
     -ms-tap-highlight-color: rgba(0, 0, 0, 0);
     -o-tap-highlight-color: rgba(0, 0, 0, 0);
 }
+a:hover {
+    text-decoration: underline;
+}
 
 body {
     padding: 50px;
