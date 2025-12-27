@@ -229,9 +229,10 @@ func (ctx *Context) enableCompression() bool {
 			}
 			h.Set("Content-Encoding", encoding)
 			h.Del("Content-Length")
-			if encoding == "br" {
+			switch encoding {
+			case "br":
 				w.zWriter = brotli.NewWriterLevel(w.rawWriter, brotli.BestSpeed)
-			} else if encoding == "gzip" {
+			case "gzip":
 				w.zWriter, _ = gzip.NewWriterLevel(w.rawWriter, gzip.BestSpeed)
 			}
 			return true
